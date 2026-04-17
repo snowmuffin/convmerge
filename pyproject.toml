@@ -29,10 +29,6 @@ dev = ["pytest>=8.0", "ruff>=0.4"]
 [project.scripts]
 convmerge = "convmerge.cli:main"
 
-[project.urls]
-Homepage = "https://github.com/convmerge/convmerge"
-Repository = "https://github.com/convmerge/convmerge"
-
 [tool.hatch.build.targets.wheel]
 packages = ["src/convmerge"]
 
