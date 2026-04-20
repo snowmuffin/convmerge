@@ -1,10 +1,16 @@
 # convmerge
 
-Fetch, normalize, and convert heterogeneous chat / instruct datasets into a
-**single LLM training format** (JSONL).
+`convmerge` is a **data-preparation library** for supervised fine-tuning (SFT)
+datasets. It fetches, normalizes, and merges heterogeneous chat / instruct
+sources into a single newline-delimited JSON Lines layout that training code
+can consume directly.
+
+It is intentionally scoped to the **pre-training-loop** step: no model
+loading, no inference, no labeling, no training orchestration. See
+[Out of scope](#out-of-scope) below.
 
 **Repository:** [github.com/snowmuffin/convmerge](https://github.com/snowmuffin/convmerge)  
-**Status:** pre-1.0; APIs and CLI may change between minor versions.
+**Status:** pre-1.0; APIs and CLI may change between minor versions until 1.0.
 
 ## Install
 
@@ -28,6 +34,12 @@ pip install -e ".[dev,fetch-all,parquet]"
 ## The four use cases
 
 ### 1. `fetch` — pull raw data from HF + GitHub via a YAML manifest
+
+> HuggingFace entries delegate to `datasets.load_dataset(...).to_json(...)`,
+> i.e. the output is a **JSONL dump** of the selected split. GitHub entries
+> support a single raw URL, recursive Trees API fetch with an extension
+> filter, or `git clone` (with optional `git lfs pull`). `fetch` is a
+> reproducible downloader, not a mirror of HuggingFace's Arrow cache.
 
 ```yaml
 # manifest.yaml
@@ -77,6 +89,13 @@ convmerge convert -i ./jsonl/mixed.jsonl -o ./train/mixed.messages.jsonl \
 Adapters: `alpaca`, `sharegpt`, `chat` (alias `auto`).  
 Emitters: `messages`, `alpaca`.
 
+> `chat` / `auto` is a **heuristic** adapter: it inspects the keys of each
+> input record (`messages`, `conversation(s)`, `text`, `conversation_a`/`_b`,
+> `instruction`/`input`/`output`, …) and routes to the right branch with a
+> configurable role map. For unusual schemas, pin an explicit adapter
+> (`alpaca`, `sharegpt`) or override keys programmatically — see
+> [docs/format.md](docs/format.md).
+
 ### 4. `dedupe` / `turns` — final cleanup + train/eval split hook
 
 ```bash
@@ -88,6 +107,30 @@ convmerge turns  -i ./train/mixed.dedup.jsonl \
 
 See [docs/format.md](docs/format.md) for adapter / emitter schemas and
 [docs/fetch.md](docs/fetch.md) for manifest details.
+
+## Out of scope
+
+To keep the package lean and dependency-free at its core, `convmerge` does
+**not** include — and has no plans to include — the following:
+
+- **Model loading / inference / training.** No PyTorch, Transformers, vLLM,
+  or similar runtime is imported by the core or any shipped extra.
+- **Automatic labeling or classification of samples** (e.g. topic tagging,
+  quality scoring, safety classification). These are left to upstream tools
+  or private pipelines.
+- **RLHF / DPO / preference-dataset construction** beyond passing through
+  existing pairwise rows via the `chat` adapter's `pairwise_mode`.
+- **Training-job orchestration** (SkyPilot, RunPod, Modal, K8s operators).
+- **Prompt templating / chat-template rendering** for specific model
+  families. Output JSONL uses the standard `messages` / `alpaca` shapes;
+  downstream trainers apply their own template.
+- **Tokenizer-aware length filtering, packing, or curriculum scheduling.**
+  Those live in the training stack, not here.
+- **Scraping HTML pages or running browser automation.** Structured JSON /
+  JSONL / Parquet inputs only.
+
+If any of these are important to your workflow, wire `convmerge` in as one
+step of a larger pipeline rather than expecting it to grow into those areas.
 
 ## Development
 
@@ -103,13 +146,18 @@ pytest -q
 
 Releases run from [`.github/workflows/publish.yml`](.github/workflows/publish.yml)
 on pushing a `v*` tag. Publishing authenticates via the **`PYPI_API_TOKEN`**
-GitHub Actions secret (a PyPI API token scoped to the `convmerge` project).
+GitHub Actions secret.
 
-1. Create an API token on [pypi.org](https://pypi.org/manage/account/token/)
-   scoped to `convmerge`.
+1. Create an API token on [pypi.org](https://pypi.org/manage/account/token/).
+   - If the project already exists on PyPI, scope the token to the
+     `convmerge` project (principle of least privilege).
+   - For the very first upload (project not yet registered), PyPI does not
+     allow project-scoped tokens — use **Entire account** scope for the
+     first release, then rotate to a project-scoped token afterwards and
+     revoke the original.
 2. In the GitHub repo, *Settings → Secrets and variables → Actions → New
    repository secret*, add `PYPI_API_TOKEN` with the token value.
-3. Tag and push: `git tag v0.2.0 && git push origin v0.2.0`.
+3. Tag and push: `git tag vX.Y.Z && git push origin vX.Y.Z`.
 
 ## Changelog
 

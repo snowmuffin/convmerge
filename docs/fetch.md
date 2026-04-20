@@ -3,8 +3,20 @@
 The `convmerge fetch` subcommand reads a YAML manifest listing HuggingFace
 datasets and/or GitHub URLs and downloads each one into a per-source directory
 under a shared output root. It is intentionally a thin layer: HuggingFace
-entries delegate to `datasets.load_dataset`, and GitHub entries use either the
-stdlib HTTP client, the Trees API, or `git clone` depending on the entry.
+entries delegate to `datasets.load_dataset(...).to_json(...)`, and GitHub
+entries use either the stdlib HTTP client, the Trees API, or `git clone`
+depending on the entry.
+
+**What it is not:**
+
+- Not a parallel downloader, CDN, or mirror. It calls HuggingFace /
+  GitHub directly, one entry at a time, and honours their rate limits.
+- Not a replacement for HuggingFace's Arrow cache. Output is a **JSONL
+  dump** of the chosen split — convenient for downstream text pipelines,
+  but less efficient than `datasets.load_dataset` for repeated random
+  access.
+- Not a dataset discovery tool. You still name every source explicitly in
+  the manifest.
 
 ```bash
 pip install "convmerge[fetch-all]"   # YAML + HuggingFace datasets
