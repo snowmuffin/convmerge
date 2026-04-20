@@ -2,6 +2,7 @@
 
 Merge heterogeneous chat-oriented JSONL sources into a **single LLM training format** (JSONL).
 
+**Repository:** [github.com/snowmuffin/convmerge](https://github.com/snowmuffin/convmerge)  
 **Status:** early development; APIs and CLI may change before 1.0.
 
 ## Install
@@ -13,7 +14,7 @@ pip install convmerge
 (After the first release on PyPI. Until then, from a clone:)
 
 ```bash
-git clone https://github.com/<your-org>/convmerge.git
+git clone https://github.com/snowmuffin/convmerge.git
 cd convmerge
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
@@ -36,16 +37,12 @@ See [docs/format.md](docs/format.md) for schemas and how to add adapters.
 
 ## Development
 
-See [CONTRIBUTING.md](CONTRIBUTING.md).
+See [CONTRIBUTING.md](CONTRIBUTING.md). CI runs on every push to `main` (Ruff + pytest on Python 3.10–3.12).
 
-## Connect to GitHub
+## PyPI release (maintainers)
 
-```bash
-git remote add origin https://github.com/<org>/convmerge.git
-git push -u origin main
-```
-
-Enable **GitHub Actions** in the repo settings. For PyPI releases, register this repository as a **trusted publisher** on [pypi.org](https://pypi.org) for the `convmerge` project, then push a tag `v0.1.0` to trigger [`.github/workflows/publish.yml`](.github/workflows/publish.yml).
+1. On [pypi.org](https://pypi.org), create the `convmerge` project (or claim the name) and add **trusted publishing** for this GitHub repo (`snowmuffin/convmerge`, workflow `publish.yml`, environment optional per your PyPI settings).
+2. Tag and push: `git tag v0.1.0 && git push origin v0.1.0` — this runs [`.github/workflows/publish.yml`](.github/workflows/publish.yml).
 
 ## Changelog
 
