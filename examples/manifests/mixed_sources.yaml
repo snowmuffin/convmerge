@@ -9,7 +9,8 @@
 #       `git clone` (+ `git lfs pull` if `lfs: true`) for large repos or
 #       binary assets.
 #
-# Replace the placeholder org/repo values with sources you actually use.
+# Replace the placeholder ORG / REPO / HF_ORG / DATASET values with the
+# sources you actually use.
 version: 1
 
 defaults:
@@ -22,8 +23,8 @@ auth:
 
 datasets:
   # HuggingFace — any public SFT dataset works here.
-  - name: alpaca
-    hf: tatsu-lab/alpaca
+  - name: hf-sft
+    hf: <HF_ORG>/<DATASET>
     split: train
 
   # GitHub: single raw file.

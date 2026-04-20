@@ -1,5 +1,6 @@
-# Minimal HuggingFace-only manifest for the Alpaca instruction dataset.
-# See https://huggingface.co/datasets/tatsu-lab/alpaca for the source.
+# Minimal HuggingFace-only manifest for any Alpaca-style instruction
+# dataset. Replace <HF_ORG>/<DATASET> with a dataset that exposes the
+# ``instruction`` / ``input`` / ``output`` columns.
 #
 # Run:
 #   convmerge fetch examples/manifests/alpaca_hf.yaml -o ./raw
@@ -14,5 +15,5 @@ auth:
 
 datasets:
   - name: alpaca
-    hf: tatsu-lab/alpaca
+    hf: <HF_ORG>/<DATASET>
     split: train
