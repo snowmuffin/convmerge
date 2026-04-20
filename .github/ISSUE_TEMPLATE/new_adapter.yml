@@ -1,0 +1,59 @@
+name: New adapter / emitter
+description: Request support for a public chat / instruct schema
+labels: ["enhancement", "adapter"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this template to request a new **adapter** (input format) or
+        **emitter** (output format). Good requests include a concrete
+        reference schema and a small redacted sample.
+  - type: input
+    id: format_name
+    attributes:
+      label: Format name
+      description: The short name you would like for this adapter / emitter.
+      placeholder: e.g. "dolly", "openassistant", "chatml-record"
+    validations:
+      required: true
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Adapter or emitter?
+      options:
+        - Adapter (reads records into TrainingExample)
+        - Emitter (writes records from TrainingExample)
+        - Both
+    validations:
+      required: true
+  - type: input
+    id: reference
+    attributes:
+      label: Reference / public dataset using this schema
+      description: Link to a HuggingFace dataset, GitHub repo, or spec.
+      placeholder: https://huggingface.co/datasets/...
+    validations:
+      required: true
+  - type: textarea
+    id: input_sample
+    attributes:
+      label: Minimal input sample (redacted)
+      description: 2–3 representative JSON records, one per line.
+      render: json
+    validations:
+      required: true
+  - type: textarea
+    id: expected_output
+    attributes:
+      label: Expected output line(s)
+      description: Show what the corresponding `messages` / `alpaca` / custom emitter output should look like.
+      render: json
+    validations:
+      required: true
+  - type: textarea
+    id: notes
+    attributes:
+      label: Edge cases or notes
+      description: Multi-turn? Optional fields? Non-ASCII role names? Anything else reviewers should know.
+    validations:
+      required: false
