@@ -1,5 +1,6 @@
 # Publish to PyPI when a version tag is pushed (e.g. v0.1.0).
-# Register this GitHub repo as a trusted publisher on PyPI (project settings).
+# Uses a PyPI API token stored as the GitHub Actions secret ``PYPI_API_TOKEN``.
+# To rotate: regenerate the token on pypi.org and replace the secret value.
 
 name: Publish
 
@@ -12,7 +13,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      id-token: write
     steps:
       - uses: actions/checkout@v4
 
@@ -30,3 +30,4 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: dist/
+          password: ${{ secrets.PYPI_API_TOKEN }}
