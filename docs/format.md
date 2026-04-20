@@ -42,7 +42,14 @@ Emits one example per consecutive user→assistant pair.
 
 ### `chat` (alias: `auto`)
 
-Auto-detecting adapter for mixed / unknown chat schemas. Tries, in order:
+A **heuristic** auto-detecting adapter for mixed or unknown chat schemas.
+It does not read a schema descriptor — it inspects which keys are present on
+each record and routes to the matching branch. Unusual or ambiguous shapes
+may not be detected correctly; in that case either pin an explicit adapter
+(`alpaca`, `sharegpt`) or call `iter_from_chat_line` directly with overridden
+key lists (see below).
+
+Tries, in order:
 
 1. Pairwise preference rows (`conversation_a` / `conversation_b` with optional `winner`).
    - Default `pairwise_mode="winner"` emits only the winning branch; ties/unknown are skipped.
@@ -76,9 +83,23 @@ subcommands handle the pre-adapter cleanup step:
 
 ## Non-goals (current)
 
-- **HTML / raw web pages**: full-site scraping and boilerplate removal are out of scope for core; a future optional extra may wrap libraries like `trafilatura`.
-- **Binary / proprietary formats**: not supported unless added as explicit adapters.
-- **Guaranteed lossless round-trip** across all formats: not guaranteed; formats are views over the internal message list.
+- **Model loading, inference, or training.** `convmerge` never imports
+  PyTorch / Transformers / vLLM / etc. See the README's "Out of scope"
+  section.
+- **Automatic labeling or classification of samples.** No topic, quality,
+  or safety classifier ships with this package.
+- **Prompt-template rendering for specific model families.** Output JSONL
+  uses the standard `messages` / `alpaca` shapes; downstream trainers apply
+  their own chat template.
+- **Tokenizer-aware length filtering or packing.** These live in the
+  training stack.
+- **HTML / raw web pages.** Full-site scraping and boilerplate removal are
+  out of scope for core; a future optional extra may wrap libraries like
+  `trafilatura`.
+- **Binary / proprietary formats.** Not supported unless added as explicit
+  adapters.
+- **Guaranteed lossless round-trip** across all formats: not guaranteed;
+  formats are views over the internal message list.
 
 ## Adding an adapter
 
