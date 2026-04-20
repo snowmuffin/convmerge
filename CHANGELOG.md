@@ -5,6 +5,35 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-04-20
+
+### Added
+
+- `convmerge fetch`: YAML-manifest driven downloader for HuggingFace and GitHub
+  sources, with single-URL / `hf://` shortcut mode. See `docs/fetch.md`.
+  - GitHub: raw URL download, Trees API recursive fetch with extension filter,
+    `git clone` with optional `git lfs pull`.
+  - HuggingFace: thin wrapper over `datasets.load_dataset(...).to_json(...)`.
+  - Token resolution order: CLI flag → file → env var. URLs are redacted in logs.
+- `convmerge normalize`: parquet / JSON array / single-line concatenated JSON
+  → clean newline-delimited JSONL, batch over directories.
+- `convmerge dedupe`: streaming MD5/SHA256-based deduplication, optional key
+  projection.
+- `convmerge turns`: single-turn vs multi-turn distribution report and
+  deterministic file split.
+- `convmerge.adapters.chat` / `auto`: auto-detecting adapter for
+  `messages` / `conversation` / `conversations` / `text` / pairwise preference
+  rows with overridable role map.
+- Optional extras: `[fetch]` (pyyaml), `[fetch-hf]` (datasets),
+  `[fetch-all]`, `[parquet]` (pyarrow).
+
+### Changed
+
+- PyPI publish workflow now authenticates with the `PYPI_API_TOKEN` GitHub
+  Actions secret instead of OIDC trusted publishing.
+
+[0.2.0]: https://pypi.org/project/convmerge/0.2.0/
+
 ## [0.1.0] - 2026-04-17
 
 ### Added

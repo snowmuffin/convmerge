@@ -4,8 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "convmerge"
-version = "0.1.0"
-description = "Merge heterogeneous chat/text sources into a single LLM training format"
+version = "0.2.0"
+description = "Fetch, normalize, and convert heterogeneous chat/instruct datasets into a single LLM training format"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.10"
@@ -24,6 +24,14 @@ classifiers = [
 dependencies = []
 
 [project.optional-dependencies]
+# YAML manifest fetcher (GitHub raw / Trees API / git clone). Uses stdlib urllib for HTTP.
+fetch = ["pyyaml>=6.0"]
+# HuggingFace support for fetch (delegates to the ``datasets`` library).
+fetch-hf = ["pyyaml>=6.0", "datasets>=2.16"]
+# Alias: everything fetch-related.
+fetch-all = ["pyyaml>=6.0", "datasets>=2.16"]
+# Parquet streaming input for normalize.
+parquet = ["pyarrow>=14"]
 dev = ["pytest>=8.0", "ruff>=0.4"]
 
 [project.scripts]
