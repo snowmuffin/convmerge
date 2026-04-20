@@ -1,31 +1,40 @@
 # Examples
 
-End-to-end recipes that exercise the full `convmerge` pipeline against
-**public** datasets. Each recipe is small, copy-pasteable, and assumes only
-the installation from the top-level [README](../README.md):
+End-to-end recipe skeletons that exercise the full `convmerge` pipeline.
+Each recipe is small, copy-pasteable, and assumes only the installation
+from the top-level [README](../README.md):
 
 ```bash
 pip install "convmerge[fetch-all,parquet]"
 ```
 
-> These recipes download data from the public internet. Respect each
-> source's license. `convmerge` does not rehost any dataset.
+The manifests intentionally use `<HF_ORG>/<DATASET>` and `ORG/REPO`
+**placeholders** rather than pinning any specific public dataset or
+repository. `convmerge` does not endorse or commit to supporting any
+particular third-party source — plug in whichever dataset your project
+actually uses.
+
+> You are responsible for the license of any data you download. Respect
+> each source's terms. `convmerge` does not rehost any dataset.
 
 ## Directory layout
 
-- `manifests/` — ready-to-run `convmerge fetch` YAML manifests for various
-  public sources. Safe defaults (`resume: true`, tokens read from env).
-- Per-recipe READMEs below document the full `fetch → normalize → convert
-  → dedupe → turns` sequence for a given dataset family.
+- `manifests/` — ready-to-run `convmerge fetch` YAML manifests for the
+  common source patterns. Safe defaults (`resume: true`, tokens read
+  from env).
+- This README walks through the full
+  `fetch → normalize → convert → dedupe → turns` sequence for each
+  manifest shape.
 
 ## Recipes
 
 ### Alpaca-style instruction data (HuggingFace)
 
-Pull [`tatsu-lab/alpaca`](https://huggingface.co/datasets/tatsu-lab/alpaca)
-and emit a clean `messages` JSONL.
+Any HuggingFace dataset with `instruction` / `input` / `output` columns
+works with the built-in `alpaca` adapter.
 
 ```bash
+# Edit examples/manifests/alpaca_hf.yaml and set `hf:` to your dataset.
 convmerge fetch examples/manifests/alpaca_hf.yaml -o ./raw
 convmerge normalize -i ./raw/alpaca/train.jsonl -o ./jsonl/alpaca.jsonl
 convmerge convert   -i ./jsonl/alpaca.jsonl    -o ./train/alpaca.messages.jsonl \
@@ -36,11 +45,12 @@ convmerge dedupe    -i ./train/alpaca.messages.jsonl \
 
 ### ShareGPT-style multi-turn (HuggingFace)
 
-Pull
-[`anon8231489123/ShareGPT_Vicuna_unfiltered`](https://huggingface.co/datasets/anon8231489123/ShareGPT_Vicuna_unfiltered)
-(or any ShareGPT mirror of your choice) and split single-turn vs multi-turn.
+Any HuggingFace dataset whose rows look like
+`{"conversations": [{"from": ..., "value": ...}, ...]}` works with the
+built-in `sharegpt` adapter.
 
 ```bash
+# Edit examples/manifests/sharegpt_hf.yaml and set `hf:` to your dataset.
 convmerge fetch examples/manifests/sharegpt_hf.yaml -o ./raw
 convmerge normalize -i ./raw/sharegpt/train.jsonl -o ./jsonl/sharegpt.jsonl
 convmerge convert   -i ./jsonl/sharegpt.jsonl    -o ./train/sharegpt.messages.jsonl \
@@ -52,15 +62,15 @@ convmerge turns     -i ./train/sharegpt.messages.jsonl \
 
 ### Mixed sources, auto-detect (HuggingFace + GitHub)
 
-Combine a HuggingFace dataset with raw JSONL files hosted on GitHub, then
-let the heuristic `chat` / `auto` adapter pick the right branch per record.
+Combine a HuggingFace dataset with raw JSONL files hosted on GitHub,
+then let the heuristic `chat` / `auto` adapter pick the right branch
+per record.
 
 ```bash
 export HF_TOKEN=...     # only needed for gated datasets
 export GITHUB_TOKEN=... # only needed for private / rate-limited repos
 convmerge fetch examples/manifests/mixed_sources.yaml -o ./raw
 convmerge normalize -i ./raw -o ./jsonl
-# One conversion pass per file — use your shell of choice:
 for f in ./jsonl/**/*.jsonl; do
   out="./train/$(basename "$f" .jsonl).messages.jsonl"
   convmerge convert -i "$f" -o "$out" --from auto --format messages
@@ -70,12 +80,15 @@ convmerge dedupe -i ./train/*.messages.jsonl -o ./train/combined.messages.dedup.
 
 ## Contributing a recipe
 
-Recipes are a great first contribution. A good recipe:
+Recipes are a great documentation contribution. A good recipe:
 
-- Uses a **public** dataset with a clear license.
+- Illustrates a **pattern** (e.g. "alpaca-style on HuggingFace",
+  "a HF dataset plus raw JSONL on GitHub") rather than committing the
+  project to supporting a specific third-party dataset.
+- Keeps dataset / repository identifiers as placeholders
+  (`<HF_ORG>/<DATASET>`, `ORG/REPO`) unless a concrete name is
+  strictly necessary to demonstrate the pattern.
 - Is self-contained (one manifest + one shell snippet).
-- States the approximate **download size** and **record count** at the
-  top of the README section so readers know what to expect.
 - Does **not** commit the downloaded data — only the manifest and
   walkthrough.
 

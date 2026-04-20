@@ -1,6 +1,6 @@
-# HuggingFace-only manifest for a ShareGPT-style dataset.
-# Swap the `hf:` line for the mirror you prefer; any dataset with a
-# `conversations: [{from, value}, ...]` column will work.
+# HuggingFace-only manifest for any ShareGPT-style dataset. Any HF
+# dataset with a ``conversations: [{from, value}, ...]`` column works;
+# replace <HF_ORG>/<DATASET> with the one you want to fetch.
 version: 1
 
 defaults:
@@ -12,5 +12,5 @@ auth:
 
 datasets:
   - name: sharegpt
-    hf: anon8231489123/ShareGPT_Vicuna_unfiltered
+    hf: <HF_ORG>/<DATASET>
     split: train

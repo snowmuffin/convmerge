@@ -12,14 +12,15 @@ Upstream: [github.com/snowmuffin/convmerge](https://github.com/snowmuffin/convme
 
 **Good fits for a PR (no issue required):**
 
-- New **adapter** for a public chat / instruct schema with a clear reference
-  (ShareGPT variants, OpenOrca, Dolly, OpenAssistant, Firefly, WizardLM, …).
+- New **adapter** for a documented public chat / instruct record schema,
+  with a minimal redacted sample and the expected output line.
 - New **emitter** that reshapes the internal message list into another
-  standard JSONL layout (e.g. ChatML-like raw record).
-- New **fetch** backend for a public dataset host that can be implemented
-  with stdlib `urllib` or a thin optional dependency (GitLab, Zenodo,
-  Kaggle, …), behind an extras marker.
-- Docs / examples / recipes for real public datasets.
+  standard JSONL layout.
+- New **fetch** backend for an additional dataset host that can be
+  implemented with stdlib `urllib` or a thin optional dependency, behind
+  an extras marker.
+- Docs and recipe skeletons that illustrate a pattern (placeholders are
+  preferred over pinning specific third-party datasets / repos).
 - Bug fixes with a failing-then-passing test.
 - Performance improvements with a benchmark / rationale.
 
