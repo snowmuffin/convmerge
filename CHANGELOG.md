@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- `CODE_OF_CONDUCT.md` based on Contributor Covenant 2.1.
+- `examples/` directory with READMEs and ready-to-run `fetch` manifests
+  for Alpaca, ShareGPT, and mixed HF + GitHub sources.
+- New issue templates: `new_adapter.yml` (adapter / emitter request) and
+  `fetch_issue.yml` (fetch manifest problems). Existing config now links
+  to the contributing guide and docs.
+- `py.typed` marker in the distributed wheel, so downstream projects
+  pick up inline type hints via PEP 561.
+
+### Changed
+
+- Expanded `CONTRIBUTING.md`: scope expectations (what is / isn't
+  accepted), review SLA, end-to-end walkthrough for adding a new adapter,
+  clearer install / check steps with the `[fetch-all,parquet]` extras.
+- Richer `pyproject.toml` metadata: more `keywords` and `classifiers`
+  (topic, audience, typed), additional `project.urls` entries for
+  `Changelog` and `Documentation`, and `Development Status` bumped from
+  pre-alpha to alpha.
+- README: added PyPI / Python / CI / downloads / CoC badges, linked the
+  Code of Conduct, and pointed to `good first issue` for contributors.
+
 ## [0.2.0] - 2026-04-20
 
 ### Added

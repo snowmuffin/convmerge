@@ -1,5 +1,12 @@
 # convmerge
 
+[![PyPI](https://img.shields.io/pypi/v/convmerge.svg)](https://pypi.org/project/convmerge/)
+[![Python versions](https://img.shields.io/pypi/pyversions/convmerge.svg)](https://pypi.org/project/convmerge/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![CI](https://github.com/snowmuffin/convmerge/actions/workflows/ci.yml/badge.svg)](https://github.com/snowmuffin/convmerge/actions/workflows/ci.yml)
+[![PyPI downloads](https://img.shields.io/pypi/dm/convmerge.svg)](https://pypi.org/project/convmerge/)
+[![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-2.1-4baaaa.svg)](CODE_OF_CONDUCT.md)
+
 `convmerge` is a **data-preparation library** for supervised fine-tuning (SFT)
 datasets. It fetches, normalizes, and merges heterogeneous chat / instruct
 sources into a single newline-delimited JSON Lines layout that training code
@@ -134,13 +141,25 @@ step of a larger pipeline rather than expecting it to grow into those areas.
 
 ## Development
 
-See [CONTRIBUTING.md](CONTRIBUTING.md). CI runs Ruff + pytest on Python
-3.10 – 3.12.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the full guide — setup, local
+checks, code conventions, and a walkthrough for adding a new adapter /
+emitter. CI runs Ruff + pytest on Python 3.10 – 3.12.
 
 ```bash
+pip install -e ".[dev,fetch-all,parquet]"
 ruff check src tests
+ruff format --check src tests
 pytest -q
 ```
+
+Participation in this project is governed by the
+[Contributor Covenant Code of Conduct](CODE_OF_CONDUCT.md).
+
+Good first PRs: new adapters / emitters for public dataset schemas, new
+fetch backends (GitLab / Zenodo / Kaggle), recipe examples under
+[`examples/`](examples/), and docs improvements. Browse the
+[`good first issue`](https://github.com/snowmuffin/convmerge/issues?q=is%3Aopen+is%3Aissue+label%3A%22good+first+issue%22)
+label for concrete starting points.
 
 ## PyPI release (maintainers)
 

@@ -1,0 +1,61 @@
+name: Fetch (YAML manifest) issue
+description: Problems with `convmerge fetch` or a specific HuggingFace / GitHub source
+labels: ["bug", "fetch"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this template if `convmerge fetch` fails or produces unexpected
+        output for a specific source. If the issue is with the general
+        format of output JSONL, use the bug report template instead.
+  - type: input
+    id: version
+    attributes:
+      label: convmerge version
+      description: Output of `convmerge --version` (or the installed package version).
+      placeholder: e.g. 0.2.0
+    validations:
+      required: true
+  - type: dropdown
+    id: install
+    attributes:
+      label: Install extras
+      description: Which extras did you install? (select all that apply)
+      multiple: true
+      options:
+        - "[fetch] (GitHub only)"
+        - "[fetch-hf] (HuggingFace)"
+        - "[fetch-all]"
+        - "[parquet]"
+        - core only
+    validations:
+      required: true
+  - type: textarea
+    id: manifest
+    attributes:
+      label: Manifest snippet or CLI shortcut
+      description: Paste the relevant entry (or the `convmerge fetch hf://...` shortcut you ran). Redact tokens.
+      render: yaml
+    validations:
+      required: true
+  - type: textarea
+    id: command
+    attributes:
+      label: Full command
+      placeholder: convmerge fetch manifest.yaml -o ./raw
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: Log output
+      description: Paste the stderr / stdout of the failing run. Tokens in URLs are redacted automatically — double check before posting.
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected to happen
+    validations:
+      required: true

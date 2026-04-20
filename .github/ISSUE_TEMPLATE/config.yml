@@ -1,2 +1,8 @@
 blank_issues_enabled: true
-contact_links: []
+contact_links:
+  - name: Contributing guide
+    url: https://github.com/snowmuffin/convmerge/blob/main/CONTRIBUTING.md
+    about: Dev setup, adapter walkthrough, and what the project does / doesn't accept.
+  - name: Documentation
+    url: https://github.com/snowmuffin/convmerge#readme
+    about: README and docs for the CLI, adapters, emitters, and fetch manifest.
