@@ -73,8 +73,7 @@ def load_manifest(path: str | Path) -> Manifest:
         import yaml
     except ImportError as e:
         raise ImportError(
-            "pyyaml is required for fetch manifests. "
-            "Install with: pip install 'convmerge[fetch]'"
+            "pyyaml is required for fetch manifests. Install with: pip install 'convmerge[fetch]'"
         ) from e
 
     with open(path, encoding="utf-8") as f:
@@ -130,9 +129,7 @@ def _entry_from_dict(item: dict[str, Any], *, index: int) -> DatasetEntry:
     hf = item.get("hf")
     url = item.get("url")
     if bool(hf) == bool(url):
-        raise ValueError(
-            f"datasets[{index}] ({name!r}) must set exactly one of 'hf' or 'url'"
-        )
+        raise ValueError(f"datasets[{index}] ({name!r}) must set exactly one of 'hf' or 'url'")
 
     ext_raw = item.get("ext") or ()
     if isinstance(ext_raw, str):

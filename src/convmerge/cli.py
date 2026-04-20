@@ -319,9 +319,7 @@ def _cmd_fetch_shortcut(args: argparse.Namespace, source: str) -> None:
     lowered = source.lower()
     name = sanitize_name(lowered.rstrip("/").rsplit("/", 1)[-1] or "fetch")
 
-    if "raw.githubusercontent.com" in lowered or lowered.endswith(
-        (".json", ".jsonl", ".json.gz")
-    ):
+    if "raw.githubusercontent.com" in lowered or lowered.endswith((".json", ".jsonl", ".json.gz")):
         suffix = ".jsonl"
         for s in (".json.gz", ".jsonl", ".json"):
             if lowered.endswith(s):

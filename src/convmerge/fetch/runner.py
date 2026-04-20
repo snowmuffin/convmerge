@@ -76,9 +76,7 @@ def run_manifest(
             detail = f"{type(e).__name__}: {e}"
             trace_tail = traceback.format_exc(limit=2).strip().splitlines()[-1:]
             full = detail + (f" | {trace_tail[0]}" if trace_tail else "")
-            _record_error(
-                result, entry.name, full, on_error=manifest.defaults.on_error, log=log
-            )
+            _record_error(result, entry.name, full, on_error=manifest.defaults.on_error, log=log)
             continue
         result.succeeded.append(entry.name)
 

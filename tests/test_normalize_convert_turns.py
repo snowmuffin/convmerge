@@ -9,9 +9,7 @@ from convmerge.normalize.convert_turns import (
 
 
 def test_single_to_multi_basic() -> None:
-    r = single_turn_to_multi_turn_record(
-        {"instruction": "Q", "input": "ctx", "output": "A"}
-    )
+    r = single_turn_to_multi_turn_record({"instruction": "Q", "input": "ctx", "output": "A"})
     assert r is not None
     assert r["messages"][0]["role"] == "user"
     assert "Q" in r["messages"][0]["content"]

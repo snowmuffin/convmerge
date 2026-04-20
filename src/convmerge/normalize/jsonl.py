@@ -40,9 +40,7 @@ def load_jsonl(path: str | Path, *, max_rows: int | None = None) -> list[dict[st
     return out
 
 
-def iter_json_records(
-    path: str | Path, *, max_rows: int | None = None
-) -> Iterator[dict[str, Any]]:
+def iter_json_records(path: str | Path, *, max_rows: int | None = None) -> Iterator[dict[str, Any]]:
     """Iterate dict records from a ``.json`` or ``.jsonl`` file.
 
     For ``.json`` the file is expected to contain a top-level array of objects
