@@ -1,0 +1,23 @@
+name: Feature request
+description: Suggest a new adapter, format, or option
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / use case
+      description: What source or workflow is not covered?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+    validations:
+      required: true
+  - type: textarea
+    id: sample
+    attributes:
+      label: Example input (redacted) and desired output line
+    validations:
+      required: false
