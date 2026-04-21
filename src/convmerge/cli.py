@@ -27,14 +27,6 @@ def main(argv: list[str] | None = None) -> None:
         _cmd_turns(args)
     elif args.command == "fetch":
         _cmd_fetch(args)
-    elif args.command == "merge":
-        _cmd_merge(args)
-    elif args.command == "split":
-        _cmd_split(args)
-    elif args.command == "sample":
-        _cmd_sample(args)
-    elif args.command == "build":
-        _cmd_build(args)
     else:  # pragma: no cover - argparse enforces ``required=True``
         parser.error(f"unknown command: {args.command}")
 
@@ -55,10 +47,6 @@ def _build_parser() -> argparse.ArgumentParser:
     _add_dedupe(subparsers)
     _add_turns(subparsers)
     _add_fetch(subparsers)
-    _add_merge(subparsers)
-    _add_split(subparsers)
-    _add_sample(subparsers)
-    _add_build(subparsers)
 
     return parser
 
@@ -373,159 +361,6 @@ def _with_overridden_defaults(manifest, *, on_error, resume):
     if resume is not None:
         new_defaults = replace(new_defaults, resume=resume)
     return replace(manifest, defaults=new_defaults)
-
-
-def _add_merge(sub: argparse._SubParsersAction) -> None:
-    p = sub.add_parser(
-        "merge",
-        help="Concatenate JSONL files (or whole directory trees) into one JSONL",
-    )
-    p.add_argument(
-        "--input", "-i", type=Path, nargs="+", required=True, help="Files or directories"
-    )
-    p.add_argument("--output", "-o", type=Path, required=True)
-    p.add_argument(
-        "--validate",
-        action="store_true",
-        help="Drop lines that fail to parse as JSON instead of copying them verbatim",
-    )
-
-
-def _cmd_merge(args: argparse.Namespace) -> None:
-    from convmerge.normalize.merge import collect_jsonl_tree, merge_jsonl
-
-    sources: list[Path] = list(args.input)
-    dirs = [p for p in sources if p.is_dir()]
-    files = [p for p in sources if p.is_file()]
-
-    total = 0
-    if dirs:
-        written, skipped = collect_jsonl_tree(dirs, args.output, validate=args.validate)
-        total += written
-        if skipped:
-            print(f"[merge] skipped {skipped} unparsable lines from tree input", file=sys.stderr)
-    if files:
-        # Append file-based sources to the tree output by merging into a temp and concatenating.
-        if dirs:
-            # Append mode: read existing and extend.
-            with args.output.open("a", encoding="utf-8") as wf:
-                for fp in files:
-                    with fp.open(encoding="utf-8") as rf:
-                        for line in rf:
-                            raw = line.strip()
-                            if not raw:
-                                continue
-                            if args.validate:
-                                try:
-                                    import json as _json
-
-                                    _json.loads(raw)
-                                except Exception:
-                                    continue
-                            wf.write(raw + "\n")
-                            total += 1
-        else:
-            written = merge_jsonl(files, args.output, validate=args.validate)
-            total += written
-
-    print(f"[merge] wrote {total:,} lines -> {args.output}", file=sys.stderr)
-
-
-def _add_split(sub: argparse._SubParsersAction) -> None:
-    p = sub.add_parser(
-        "split",
-        help="Shuffle-split a JSONL file into train / test (pure Python, seeded)",
-    )
-    p.add_argument("--input", "-i", type=Path, required=True)
-    p.add_argument("--out-dir", "-o", type=Path, required=True)
-    p.add_argument("--train-ratio", type=float, default=0.98)
-    p.add_argument("--seed", type=int, default=42)
-    p.add_argument("--max-samples", type=int, default=None)
-    p.add_argument("--train-name", default="train.jsonl")
-    p.add_argument("--test-name", default="test.jsonl")
-
-
-def _cmd_split(args: argparse.Namespace) -> None:
-    from convmerge.normalize.split import train_test_split
-
-    train_path, test_path, n_tr, n_te = train_test_split(
-        args.input,
-        args.out_dir,
-        train_ratio=args.train_ratio,
-        seed=args.seed,
-        max_samples=args.max_samples,
-        train_name=args.train_name,
-        test_name=args.test_name,
-    )
-    print(f"[split] train: {n_tr:,} -> {train_path}", file=sys.stderr)
-    print(f"[split] test:  {n_te:,} -> {test_path}", file=sys.stderr)
-
-
-def _add_sample(sub: argparse._SubParsersAction) -> None:
-    p = sub.add_parser(
-        "sample",
-        help="Randomly sample k lines from a JSONL file",
-    )
-    p.add_argument("--input", "-i", type=Path, required=True)
-    p.add_argument("--output", "-o", type=Path, required=True)
-    p.add_argument("-k", type=int, required=True, help="Number of lines to sample")
-    p.add_argument("--seed", type=int, default=42)
-    p.add_argument(
-        "--reservoir",
-        action="store_true",
-        help="Use reservoir sampling (streaming, memory-bounded) instead of in-memory sampling",
-    )
-
-
-def _cmd_sample(args: argparse.Namespace) -> None:
-    from convmerge.normalize.sample import reservoir_sample, sample_random
-
-    fn = reservoir_sample if args.reservoir else sample_random
-    written, total = fn(args.input, args.output, k=args.k, seed=args.seed)
-    print(f"[sample] wrote {written:,} / {total:,} lines -> {args.output}", file=sys.stderr)
-
-
-def _add_build(sub: argparse._SubParsersAction) -> None:
-    p = sub.add_parser(
-        "build",
-        help=(
-            "End-to-end SFT prep: raw -> jsonl -> reshape -> convert -> merge "
-            "-> dedupe -> filter -> train/test split"
-        ),
-    )
-    p.add_argument("--raw", "-r", type=Path, required=True, help="Raw input directory")
-    p.add_argument("--out", "-o", type=Path, required=True, help="Output directory")
-    p.add_argument(
-        "--prune-suffix",
-        nargs="*",
-        default=(),
-        help="Drop files whose names end with these suffixes after normalize",
-    )
-    p.add_argument("--train-ratio", type=float, default=0.98)
-    p.add_argument("--seed", type=int, default=42)
-    p.add_argument("--min-turns", type=int, default=1)
-    p.add_argument("--max-samples", type=int, default=None)
-    p.add_argument("--dedupe-algorithm", default="md5", choices=("md5", "sha256"))
-
-
-def _cmd_build(args: argparse.Namespace) -> None:
-    from convmerge.pipeline import build_sft_jsonl
-
-    result = build_sft_jsonl(
-        raw_dir=args.raw,
-        out_dir=args.out,
-        prune_suffixes=tuple(args.prune_suffix),
-        train_ratio=args.train_ratio,
-        seed=args.seed,
-        min_turns=args.min_turns,
-        max_samples=args.max_samples,
-        dedupe_algorithm=args.dedupe_algorithm,
-    )
-    print("[build] counts:", file=sys.stderr)
-    for k, v in result.counts.items():
-        print(f"  {k}: {v:,}", file=sys.stderr)
-    print(f"[build] train -> {result.train_path}", file=sys.stderr)
-    print(f"[build] test  -> {result.test_path}", file=sys.stderr)
 
 
 if __name__ == "__main__":

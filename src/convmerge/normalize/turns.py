@@ -88,39 +88,3 @@ def split_by_turns(
                 mf.write(raw + "\n")
                 m_count += 1
     return s_count, m_count
-
-
-def filter_by_min_turns(
-    src: str | Path,
-    dst: str | Path,
-    *,
-    min_turns: int = 1,
-) -> tuple[int, int]:
-    """Drop samples whose assistant-turn count is below ``min_turns``.
-
-    Streams ``src`` into ``dst`` without loading the whole file. Lines that
-    fail to parse or that do not hold a dict are also dropped. Returns
-    ``(total_rows, kept_rows)`` so callers can log the removal rate.
-    """
-    src_p = Path(src)
-    dst_p = Path(dst)
-    dst_p.parent.mkdir(parents=True, exist_ok=True)
-
-    total = 0
-    kept = 0
-    with src_p.open(encoding="utf-8") as rf, dst_p.open("w", encoding="utf-8") as wf:
-        for line in rf:
-            raw = line.strip()
-            if not raw:
-                continue
-            total += 1
-            try:
-                sample = json.loads(raw)
-            except json.JSONDecodeError:
-                continue
-            if not isinstance(sample, dict):
-                continue
-            if count_turns(sample) >= min_turns:
-                wf.write(raw + "\n")
-                kept += 1
-    return total, kept

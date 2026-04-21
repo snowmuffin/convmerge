@@ -115,60 +115,6 @@ convmerge turns  -i ./train/mixed.dedup.jsonl \
 See [docs/format.md](docs/format.md) for adapter / emitter schemas and
 [docs/fetch.md](docs/fetch.md) for manifest details.
 
-### 5. `merge` / `split` / `sample` — assemble and shard a final JSONL
-
-```bash
-convmerge merge  -i ./dir_a ./dir_b -o ./final/all.jsonl
-convmerge split  -i ./final/all.jsonl -o ./final --train-ratio 0.98 --seed 42
-convmerge sample -i ./final/all.jsonl -o ./final/peek.jsonl -k 100
-```
-
-- `merge` concatenates arbitrary JSONL files and whole directory trees.
-- `split` does a deterministic, pure-Python train/test split (no numpy).
-- `sample` picks `k` random rows (or streams via `--reservoir` for files
-  that don't fit in memory).
-
-### 6. `build` — end-to-end SFT dataset prep
-
-```bash
-convmerge build --raw ./raw --out ./out --train-ratio 0.98 --min-turns 1
-```
-
-Runs the default pipeline `normalize → reshape → convert → merge → dedupe
-→ filter → split` in a single call and writes `out/final/train.jsonl` and
-`out/final/test.jsonl`. Intermediate trees (`jsonl/`, `multi_turn/`,
-`single_turn/`, `final/`) are laid out under `--out` for inspection.
-From Python, the same pipeline is available as
-`convmerge.pipeline.build_sft_jsonl(...)`, which returns a `BuildResult`
-with every intermediate path plus per-stage row counts.
-
-### Directory-level primitives (library API)
-
-The CLI subcommands above are thin wrappers around module-level helpers
-that are designed to be imported from notebooks and scripts:
-
-```python
-from convmerge.normalize import (
-    normalize_dir, prune_by_suffix, scan_shapes, head_preview_dir,
-    filter_by_min_turns,
-    merge_jsonl, collect_jsonl_tree,
-    train_test_split,
-    sample_random, reservoir_sample,
-    count_lines, truncate_to_n_lines, trim_corrupt_tail,
-    unify_messages_dir, unify_message_entries, unify_alpaca_dir,
-    parse_tagged_text, classify_row_shape,
-)
-from convmerge.convert import convert_dir, convert_file
-from convmerge.adapters.alpaca import remap_to_alpaca
-```
-
-The `unify_*_dir` helpers walk a tree of JSONL files, rewrite each file
-into a uniform schema (messages / alpaca), and preserve relative paths.
-They support in-place rewrites via a temp-directory swap, so a crashed
-run cannot leave partially overwritten files. For resumable append-only
-pipelines, `trim_corrupt_tail` plus a list of companion files keeps
-several parallel outputs aligned after a crash.
-
 ## Out of scope
 
 To keep the package lean and dependency-free at its core, `convmerge` does
@@ -177,34 +123,21 @@ To keep the package lean and dependency-free at its core, `convmerge` does
 - **Model loading / inference / training.** No PyTorch, Transformers, vLLM,
   or similar runtime is imported by the core or any shipped extra.
 - **Automatic labeling or classification of samples** (e.g. topic tagging,
-  quality scoring, safety classification). Concretely: no Anthropic / OpenAI
-  batch-evaluation clients, no identity or safety scoring. Those belong in
-  upstream tools or private pipelines.
+  quality scoring, safety classification). These are left to upstream tools
+  or private pipelines.
 - **RLHF / DPO / preference-dataset construction** beyond passing through
   existing pairwise rows via the `chat` adapter's `pairwise_mode`.
 - **Training-job orchestration** (SkyPilot, RunPod, Modal, K8s operators).
-  No RunPod / GraphQL / worker-pool management lives here.
 - **Prompt templating / chat-template rendering** for specific model
   families. Output JSONL uses the standard `messages` / `alpaca` shapes;
   downstream trainers apply their own template.
 - **Tokenizer-aware length filtering, packing, or curriculum scheduling.**
-  Those live in the training stack, not here. The library never imports a
-  tokenizer (e.g. `transformers.AutoTokenizer`) at any layer.
-- **Dataset-hosting integrations that require a remote account** —
-  specifically, no HuggingFace Hub *upload* path. `fetch` uses the
-  HuggingFace `datasets` library read-only to pull down splits; publishing
-  a cleaned dataset is your pipeline's concern, not `convmerge`'s.
-- **Product-specific transforms** (e.g. per-persona rewrites, bespoke
-  translation flows tied to a particular model / company). The library
-  exposes generic primitives; wire your own rewriter on top.
+  Those live in the training stack, not here.
 - **Scraping HTML pages or running browser automation.** Structured JSON /
   JSONL / Parquet inputs only.
 
 If any of these are important to your workflow, wire `convmerge` in as one
 step of a larger pipeline rather than expecting it to grow into those areas.
-The [`pipeline.build_sft_jsonl`](src/convmerge/pipeline.py) function is a
-deliberate, local-filesystem-only orchestrator: everything after it (upload,
-labeling, training) is the caller's responsibility.
 
 ## Development
 
