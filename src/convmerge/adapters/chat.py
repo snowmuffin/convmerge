@@ -20,7 +20,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 from typing import Any
 
-from convmerge.adapters.alpaca import iter_from_alpaca_line
+from convmerge.adapters.alpaca import iter_from_alpaca_line, remap_to_alpaca
 from convmerge.models import ChatMessage, TrainingExample
 
 # Default mapping from common ShareGPT-style ``from`` values onto standard roles.
@@ -97,7 +97,12 @@ def iter_from_chat_line(
         return
 
     # Fall back to the alpaca adapter, but let callers override the key priority.
-    remapped = _remap_for_alpaca(record, instruction_keys, input_keys, output_keys)
+    remapped = remap_to_alpaca(
+        record,
+        instruction_keys=instruction_keys,
+        input_keys=input_keys,
+        output_keys=output_keys,
+    )
     if remapped is not None:
         yield from iter_from_alpaca_line(remapped)
 
@@ -176,30 +181,3 @@ def _coerce_messages(
             continue
         out.append(ChatMessage(role=role, content=content))
     return out
-
-
-def _remap_for_alpaca(
-    record: dict[str, Any],
-    instruction_keys: tuple[str, ...],
-    input_keys: tuple[str, ...],
-    output_keys: tuple[str, ...],
-) -> dict[str, Any] | None:
-    """Pick the first matching key for each slot and return a standard alpaca row."""
-    instr = _first_string(record, instruction_keys)
-    out = _first_string(record, output_keys)
-    if instr is None and out is None:
-        return None
-    inp = _first_string(record, input_keys) or ""
-    return {
-        "instruction": instr or "",
-        "input": inp,
-        "output": out or "",
-    }
-
-
-def _first_string(record: dict[str, Any], keys: tuple[str, ...]) -> str | None:
-    for k in keys:
-        v = record.get(k)
-        if isinstance(v, str) and v.strip():
-            return v
-    return None

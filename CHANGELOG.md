@@ -5,6 +5,68 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-04-21
+
+### Added
+
+- **Directory-level normalize primitives** in `convmerge.normalize`:
+  `normalize_dir`, `prune_by_suffix`, `head_preview`, `head_preview_dir`,
+  `scan_shapes`. These hoist the directory-walking logic that previously
+  lived only in the `convmerge normalize` CLI into module-level APIs so
+  notebooks and scripts can reuse them.
+- **Turn filtering**: `convmerge.normalize.filter_by_min_turns(src, dst,
+  min_turns=...)` — stream a JSONL file while dropping rows whose assistant
+  turn count is below a threshold.
+- **New submodules** under `convmerge.normalize`:
+  - `merge.py` — `merge_jsonl(sources, dst)` and
+    `collect_jsonl_tree(source_dirs, dst)` for concatenating files and
+    whole trees with optional JSON validation.
+  - `split.py` — `train_test_split(src, out_dir, train_ratio=..., seed=...,
+    max_samples=...)`. Pure-Python implementation, no numpy dependency.
+  - `sample.py` — `sample_random` (in-memory) and `reservoir_sample`
+    (streaming, memory-bounded) random samplers.
+  - `resume.py` — `count_lines`, `truncate_to_n_lines`, and
+    `trim_corrupt_tail` for append-only JSONL pipelines that need to
+    resume after a crash.
+  - `reshape.py` — directory-level schema unification:
+    `unify_messages_dir`, `unify_message_entries`, `unify_alpaca_dir`,
+    plus row-level helpers `parse_tagged_text` and `classify_row_shape`.
+    In-place rewrites are supported via a temp-directory swap so a crashed
+    run cannot leave partially overwritten files.
+- **Alpaca remap helper**: `convmerge.adapters.alpaca.remap_to_alpaca` is
+  now public (previously `_remap_for_alpaca` in the chat adapter). Use it
+  to pull an `{instruction, input, output}` triple out of a messy
+  single-turn row with configurable key-priority lists.
+- **`convert_dir`**: `convmerge.convert.convert_dir(src_dir, dst_dir,
+  adapter_name=..., output_format=...)` — a thin wrapper that runs
+  `convert_file` over every JSONL under a directory tree while preserving
+  the relative-path layout.
+- **End-to-end pipeline**: `convmerge.pipeline.build_sft_jsonl(raw_dir,
+  out_dir, ...)` runs normalize → reshape → convert → merge → dedupe →
+  filter → split in a single call and returns a `BuildResult` with every
+  intermediate path plus row counts. Intentionally local-filesystem-only:
+  no HuggingFace Hub upload, no labeling, no model inference.
+- **New CLI subcommands**: `convmerge merge`, `convmerge split`,
+  `convmerge sample`, `convmerge build`.
+
+### Changed
+
+- `convmerge.normalize.__init__` re-exports the new primitives so most
+  workflows can import from `convmerge.normalize` directly.
+- `convmerge.adapters.__init__` now exports `remap_to_alpaca` alongside
+  the existing adapter functions.
+
+### Notes on scope
+
+- No new required dependencies were added. `train_test_split` uses the
+  standard-library `random` module; numpy is **not** a dependency of
+  core or of the `pipeline` module.
+- The library's "Out of scope" contract is unchanged — the new modules
+  do not add model loading, inference, training, classification /
+  labeling, tokenizer-aware filtering, or remote-service orchestration.
+
+[0.3.0]: https://pypi.org/project/convmerge/0.3.0/
+
 ## [0.2.1] - 2026-04-20
 
 ### Added

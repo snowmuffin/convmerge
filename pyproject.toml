@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "convmerge"
-version = "0.2.1"
+version = "0.3.0"
 description = "Fetch, normalize, and convert heterogeneous chat/instruct datasets into a single LLM training format"
 readme = "README.md"
 license = "MIT"
