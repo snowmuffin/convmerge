@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable, Iterator
 from typing import Any
 
-from convmerge.adapters.alpaca import iter_from_alpaca_line
+from convmerge.adapters.alpaca import iter_from_alpaca_line, remap_to_alpaca
 from convmerge.adapters.chat import iter_from_chat_line
 from convmerge.adapters.sharegpt import iter_from_sharegpt_line
 from convmerge.models import TrainingExample
@@ -26,3 +26,14 @@ def get_adapter(name: str) -> AdapterFn:
         known = ", ".join(sorted(ADAPTERS))
         raise ValueError(f"Unknown adapter {name!r}. Choose one of: {known}")
     return ADAPTERS[name]
+
+
+__all__ = [
+    "ADAPTERS",
+    "AdapterFn",
+    "get_adapter",
+    "iter_from_alpaca_line",
+    "iter_from_chat_line",
+    "iter_from_sharegpt_line",
+    "remap_to_alpaca",
+]
