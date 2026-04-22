@@ -1,0 +1,16 @@
+# HuggingFace-only manifest for any ShareGPT-style dataset. Any HF
+# dataset with a ``conversations: [{from, value}, ...]`` column works;
+# replace <HF_ORG>/<DATASET> with the one you want to fetch.
+version: 1
+
+defaults:
+  output_root: ./raw
+  resume: true
+
+auth:
+  hf_token_env: HF_TOKEN
+
+datasets:
+  - name: sharegpt
+    hf: <HF_ORG>/<DATASET>
+    split: train

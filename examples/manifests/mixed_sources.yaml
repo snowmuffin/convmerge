@@ -1,0 +1,44 @@
+# Mixed-source manifest: a HuggingFace dataset plus GitHub-hosted JSONL
+# files. Demonstrates every GitHub mode supported by `convmerge fetch`:
+#
+#   - `url: https://.../raw/.../file.jsonl`
+#       Single raw-file download over HTTPS.
+#   - `url: https://github.com/ORG/REPO` + `ext: [.jsonl]`
+#       Recursive fetch via the GitHub Trees API, filtered by extension.
+#   - `mode: clone`
+#       `git clone` (+ `git lfs pull` if `lfs: true`) for large repos or
+#       binary assets.
+#
+# Replace the placeholder ORG / REPO / HF_ORG / DATASET values with the
+# sources you actually use.
+version: 1
+
+defaults:
+  output_root: ./raw
+  resume: true
+
+auth:
+  hf_token_env: HF_TOKEN
+  github_token_env: GITHUB_TOKEN
+
+datasets:
+  # HuggingFace — any public SFT dataset works here.
+  - name: hf-sft
+    hf: <HF_ORG>/<DATASET>
+    split: train
+
+  # GitHub: single raw file.
+  - name: extra-train
+    url: https://raw.githubusercontent.com/ORG/REPO/main/data/train.jsonl
+
+  # GitHub: recursive tree fetch, *.jsonl only.
+  - name: repo-jsonl
+    url: https://github.com/ORG/REPO
+    ext:
+      - ".jsonl"
+
+  # GitHub: full clone (useful for repos with LFS or mixed file types).
+  - name: big-lfs-repo
+    url: https://github.com/ORG/BIG-LFS-REPO
+    mode: clone
+    lfs: true

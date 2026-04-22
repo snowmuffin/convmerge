@@ -1,0 +1,40 @@
+name: Bug report
+description: Report incorrect conversion or a crash
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to fill this out.
+  - type: input
+    id: version
+    attributes:
+      label: convmerge version
+      placeholder: e.g. 0.2.0
+    validations:
+      required: true
+  - type: textarea
+    id: command
+    attributes:
+      label: Command you ran
+      description: Full `convmerge convert ...` line
+    validations:
+      required: true
+  - type: textarea
+    id: sample
+    attributes:
+      label: Minimal input sample (redacted JSONL line)
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: What you got
+    validations:
+      required: true
