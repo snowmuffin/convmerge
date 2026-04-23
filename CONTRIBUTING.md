@@ -44,11 +44,11 @@ cd convmerge
 python -m venv .venv
 source .venv/bin/activate   # Windows: .venv\Scripts\activate
 python -m pip install -U pip
-pip install -e ".[dev,fetch-all,parquet]"
+pip install -e ".[dev,all]"
 ```
 
-The `[dev,fetch-all,parquet]` extras install everything needed to run the
-full test suite, including the optional `pyarrow` / `datasets` paths.
+The `[dev,all]` extras install everything needed to run the full test suite,
+including the optional `pyarrow` / `datasets` / PyYAML paths.
 
 ## Checks
 

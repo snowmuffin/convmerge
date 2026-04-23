@@ -24,8 +24,8 @@ body:
       multiple: true
       options:
         - "[fetch] (GitHub only)"
-        - "[fetch-hf] (HuggingFace)"
-        - "[fetch-all]"
+        - "[fetch-hf] or [fetch-all] (HuggingFace; same deps)"
+        - "[all]"
         - "[parquet]"
         - core only
     validations:

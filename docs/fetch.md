@@ -19,7 +19,8 @@ depending on the entry.
   the manifest.
 
 ```bash
-pip install "convmerge[fetch-all]"   # YAML + HuggingFace datasets
+pip install "convmerge[fetch-all]"   # YAML + HuggingFace datasets (same as [fetch-hf])
+# or: pip install "convmerge[all]"    # fetch + parquet + presets
 convmerge fetch manifest.yaml -o ./raw
 ```
 
@@ -29,7 +30,8 @@ convmerge fetch manifest.yaml -o ./raw
 |---------------|-----------------------|--------------------------------|
 | `fetch`       | `pyyaml`              | manifest parsing, GitHub only  |
 | `fetch-hf`    | `pyyaml`, `datasets`  | HuggingFace entries            |
-| `fetch-all`   | above combined        | everything                      |
+| `fetch-all`   | same as `fetch-hf`    | alias; kept for compatibility   |
+| `all`         | `pyyaml`, `datasets`, `pyarrow` | full CLI (includes fetch + parquet + presets) |
 
 Raw GitHub URLs and the Trees API use Python's `urllib.request` — no extra
 dependency for pure-GitHub manifests beyond PyYAML.

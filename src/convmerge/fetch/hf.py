@@ -29,7 +29,7 @@ def download_hf_dataset(
     except ImportError as e:
         raise ImportError(
             "HuggingFace entries require the 'datasets' package. "
-            "Install with: pip install 'convmerge[fetch-hf]'"
+            "Install with: pip install 'convmerge[fetch-all]' (or [fetch-hf] or [all])"
         ) from e
 
     dst = Path(dst_path)

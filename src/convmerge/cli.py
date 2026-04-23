@@ -12,6 +12,16 @@ from convmerge.convert import convert_file
 
 FETCH_FILE_EXTENSIONS = (".parquet", ".json", ".jsonl")
 
+_INSTALL_EXTRAS_EPILOG = """
+optional dependencies (pip install "convmerge[EXTRA]"):
+  (none)     convert, dedupe, turns on JSONL; normalize on .json/.jsonl only
+  fetch      YAML manifests and GitHub sources (PyYAML)
+  fetch-all  above + HuggingFace (datasets); same packages as fetch-hf
+  parquet    .parquet input for normalize
+  preset     YAML presets (convert --preset, preset validate)
+  all        fetch-all + parquet + preset (full CLI feature set)
+""".strip()
+
 
 def main(argv: list[str] | None = None) -> None:
     parser = _build_parser()
@@ -43,6 +53,8 @@ def _build_parser() -> argparse.ArgumentParser:
             "Fetch, normalize, and convert heterogeneous chat/instruct datasets "
             "into a single LLM training format."
         ),
+        epilog=_INSTALL_EXTRAS_EPILOG,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -126,7 +138,10 @@ def _cmd_convert(args: argparse.Namespace) -> None:
 
 
 def _add_preset(sub: argparse._SubParsersAction) -> None:
-    p = sub.add_parser("preset", help="Create or validate convert preset files")
+    p = sub.add_parser(
+        "preset",
+        help="Create or validate convert preset files (install convmerge[preset] for YAML)",
+    )
     subp = p.add_subparsers(dest="preset_action", required=True)
     pi = subp.add_parser("init", help="Write a commented YAML template")
     pi.add_argument(
@@ -167,7 +182,10 @@ def _cmd_preset_validate(args: argparse.Namespace) -> None:
 def _add_normalize(sub: argparse._SubParsersAction) -> None:
     p = sub.add_parser(
         "normalize",
-        help="Normalize parquet/json/jsonl files in a directory into clean JSONL",
+        help=(
+            "Normalize parquet/json/jsonl files in a directory into clean JSONL "
+            "(install convmerge[parquet] for .parquet inputs)"
+        ),
     )
     p.add_argument("--input", "-i", type=Path, required=True, help="Input file or directory")
     p.add_argument(
@@ -293,7 +311,8 @@ def _add_fetch(sub: argparse._SubParsersAction) -> None:
         "fetch",
         help=(
             "Fetch training data via a YAML manifest, or a single "
-            "hf://org/dataset / GitHub URL shortcut"
+            "hf://org/dataset / GitHub URL shortcut "
+            "(convmerge[fetch] for YAML; [fetch-all] or [fetch-hf] for HF entries)"
         ),
     )
     p.add_argument(

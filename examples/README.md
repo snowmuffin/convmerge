@@ -5,7 +5,7 @@ Each recipe is small, copy-pasteable, and assumes only the installation
 from the top-level [README](../README.md):
 
 ```bash
-pip install "convmerge[fetch-all,parquet]"
+pip install "convmerge[all]"
 ```
 
 The manifests intentionally use `<HF_ORG>/<DATASET>` and `ORG/REPO`

@@ -22,13 +22,28 @@ loading, no inference, no labeling, no training orchestration. See
 ## Install
 
 ```bash
-pip install convmerge                    # core: convert, normalize, dedupe, turns
-pip install "convmerge[fetch]"           # + YAML manifest fetcher (GitHub)
-pip install "convmerge[fetch-hf]"        # + HuggingFace entries (adds ``datasets``)
-pip install "convmerge[fetch-all]"       # all fetch-related extras
-pip install "convmerge[parquet]"         # + parquet streaming input
-pip install "convmerge[preset]"           # + YAML convert presets (--preset, preset validate)
+pip install convmerge                    # core: convert, dedupe, turns; normalize for .json/.jsonl
+pip install "convmerge[all]"             # full CLI: fetch (HF+GitHub), parquet, YAML presets
 ```
+
+Granular extras:
+
+```bash
+pip install "convmerge[fetch]"           # YAML manifests + GitHub (PyYAML)
+pip install "convmerge[fetch-all]"       # fetch + HuggingFace (``datasets``)
+pip install "convmerge[fetch-hf]"        # same dependencies as ``fetch-all`` (backward-compatible name)
+pip install "convmerge[parquet]"         # Parquet input for ``normalize``
+pip install "convmerge[preset]"          # YAML convert presets (`--preset`, `preset validate`)
+```
+
+| Command / feature | Extra |
+|-------------------|--------|
+| `convert`, `dedupe`, `turns` | *(core)* |
+| `normalize` on `.parquet` | `[parquet]` |
+| `fetch` with YAML manifest or GitHub | `[fetch]` |
+| `fetch` with HuggingFace manifest entries | `[fetch-all]` or `[fetch-hf]` |
+| `convert --preset`, `preset` | `[preset]` |
+| Everything above | `[all]` |
 
 Or from a clone:
 
@@ -36,7 +51,7 @@ Or from a clone:
 git clone https://github.com/snowmuffin/convmerge.git
 cd convmerge
 python -m venv .venv && source .venv/bin/activate
-pip install -e ".[dev,fetch-all,parquet]"
+pip install -e ".[dev,all]"
 ```
 
 ## The four use cases
@@ -154,7 +169,7 @@ checks, code conventions, and a walkthrough for adding a new adapter /
 emitter. CI runs Ruff + pytest on Python 3.10 – 3.12.
 
 ```bash
-pip install -e ".[dev,fetch-all,parquet]"
+pip install -e ".[dev,all]"
 ruff check src tests
 ruff format --check src tests
 pytest -q

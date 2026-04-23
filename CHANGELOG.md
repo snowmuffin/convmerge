@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.3] - 2026-04-23
+
+### Added
+
+- Optional extra ``all``: installs PyYAML, ``datasets``, and PyArrow (full runtime
+  feature set: fetch with HF, parquet normalize, YAML presets).
+- CLI: ``--help`` epilog lists extras; normalize / fetch / preset short help
+  mentions required extras.
+
+### Changed
+
+- Documented that ``fetch-hf`` and ``fetch-all`` pull in the same packages;
+  both names remain for backward compatibility.
+- README install section: ``[all]`` one-liner, granular extras, and a
+  command-to-extra table.
+
 ## [0.3.2] - 2026-04-22
 
 ### Changed
