@@ -157,15 +157,27 @@ def normalize_to_jsonl(src: str | Path, dst: str | Path) -> int:
 def _rewrite_jsonl(src: Path, dst: Path) -> int:
     n = 0
     with src.open(encoding="utf-8") as fin, dst.open("w", encoding="utf-8") as fout:
-        for line in fin:
-            line = line.strip()
+        for line_number, line in enumerate(fin, 1):
+            line = _sanitize_line(line, line_number=line_number)
             if not line:
                 continue
+            if line.endswith(","):
+                raise ValueError(
+                    f"Cannot normalize {src}: trailing comma at line {line_number}; "
+                    "remove the comma or provide valid JSONL"
+                )
             # Validate each line so the output is guaranteed to round-trip.
             json.loads(line)
             fout.write(line + "\n")
             n += 1
     return n
+
+
+def _sanitize_line(line: str, *, line_number: int) -> str:
+    line = line.rstrip()
+    if line_number == 1:
+        line = line.removeprefix("\ufeff")
+    return line
 
 
 def _rewrite_json_array(src: Path, dst: Path) -> int:
