@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from convmerge.normalize.jsonl import (
     detect_jsonl_shape,
     iter_json_records,
@@ -81,3 +83,26 @@ def test_iter_json_records_handles_json_single_object(tmp_path: Path) -> None:
 def test_iter_json_records_max_rows(tmp_path: Path) -> None:
     p = _write(tmp_path / "a.jsonl", '{"x":1}\n{"x":2}\n{"x":3}\n')
     assert list(iter_json_records(p, max_rows=2)) == [{"x": 1}, {"x": 2}]
+
+
+def test_normalize_jsonl_sanitizes_bom_crlf_and_trailing_whitespace(tmp_path: Path) -> None:
+    src = _write(tmp_path / "messy.jsonl", '\ufeff{"x":1}   \r\n{"x":2}\t \r\n')
+    dst = tmp_path / "out.jsonl"
+
+    n = normalize_to_jsonl(src, dst)
+
+    assert n == 2
+    assert dst.read_text(encoding="utf-8") == '{"x":1}\n{"x":2}\n'
+
+
+def test_normalize_jsonl_rejects_trailing_comma_with_file_and_line(tmp_path: Path) -> None:
+    src = _write(tmp_path / "bad.jsonl", '{"x":1},\n{"x":2}\n')
+    dst = tmp_path / "out.jsonl"
+
+    with pytest.raises(ValueError) as exc_info:
+        normalize_to_jsonl(src, dst)
+
+    message = str(exc_info.value)
+    assert "bad.jsonl" in message
+    assert "line 1" in message
+    assert "trailing comma" in message

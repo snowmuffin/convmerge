@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Normalize JSONL inputs with a leading UTF-8 BOM, CRLF line endings, and trailing whitespace; report trailing-comma JSONL lines with file and line context.
+
 ## [0.3.3] - 2026-04-23
 
 ### Added
