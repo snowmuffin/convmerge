@@ -7,8 +7,13 @@ from pathlib import Path
 
 import pytest
 
-from convmerge.mix import MixSource, _allocate, load_mix_config, mix_files, write_mix_recipe
-
+from convmerge.mix import (
+    MixSource,
+    _allocate,
+    load_mix_config,
+    mix_files,
+    write_mix_recipe,
+)
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -38,7 +43,11 @@ def test_allocate_exact():
 
 
 def test_allocate_rounding_corrected():
-    sources = [MixSource(Path("a"), 1 / 3), MixSource(Path("b"), 1 / 3), MixSource(Path("c"), 1 / 3)]
+    sources = [
+        MixSource(Path("a"), 1 / 3),
+        MixSource(Path("b"), 1 / 3),
+        MixSource(Path("c"), 1 / 3),
+    ]
     counts = _allocate(sources, 100)
     assert sum(counts) == 100
 
