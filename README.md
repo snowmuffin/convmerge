@@ -126,10 +126,41 @@ Presets and team-specific tuning: [docs/custom_presets.md](docs/custom_presets.m
 > (`alpaca`, `sharegpt`) or override keys programmatically — see
 > [docs/format.md](docs/format.md).
 
-### 4. `dedupe` / `turns` — final cleanup + train/eval split hook
+### 4. `mix` — domain-controlled weighted merge
 
 ```bash
-convmerge dedupe -i ./train/mixed.messages.jsonl -o ./train/mixed.dedup.jsonl
+# Inline weights
+convmerge mix \
+  -i ./train/code.messages.jsonl:0.4 \
+     ./train/math.messages.jsonl:0.3 \
+     ./train/general.messages.jsonl:0.3 \
+  -o ./train/mixed.jsonl --total 100000 --seed 42
+
+# Or via a config file (YAML requires convmerge[preset])
+convmerge mix mix.yaml
+```
+
+```yaml
+# mix.yaml
+seed: 42
+total: 100000
+output: ./train/mixed.jsonl
+sources:
+  - { path: ./train/code.messages.jsonl,    weight: 0.4 }
+  - { path: ./train/math.messages.jsonl,    weight: 0.3 }
+  - { path: ./train/general.messages.jsonl, weight: 0.3 }
+```
+
+Weights are normalized automatically and need not sum to 1.0. When a source
+has fewer records than its allocation it is clipped; pass `--oversample` to
+sample with replacement instead. A sidecar `.mix.json` is written alongside
+the output recording the exact seed, weights, and per-source counts for full
+reproducibility. Omit `--total` to merge all records from every source.
+
+### 5. `dedupe` / `turns` — final cleanup + train/eval split hook
+
+```bash
+convmerge dedupe -i ./train/mixed.jsonl -o ./train/mixed.dedup.jsonl
 convmerge turns  -i ./train/mixed.dedup.jsonl \
   --single-out ./train/single.jsonl \
   --multi-out  ./train/multi.jsonl
