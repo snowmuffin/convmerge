@@ -173,9 +173,7 @@ def test_empty_source_skipped(tmp_path):
     write_jsonl(src_ok, [{"x": i} for i in range(50)])
 
     out = tmp_path / "out.jsonl"
-    result = mix_files(
-        [MixSource(src_empty, 0.5), MixSource(src_ok, 0.5)], out, total=40, seed=42
-    )
+    result = mix_files([MixSource(src_empty, 0.5), MixSource(src_ok, 0.5)], out, total=40, seed=42)
 
     assert result.sources[0].written == 0
     assert result.sources[1].written == 20  # gets its own allocation only
@@ -293,13 +291,20 @@ def test_cli_inline_mix(tmp_path):
     write_jsonl(src_b, [{"src": "b", "i": i} for i in range(100)])
     out = tmp_path / "mixed.jsonl"
 
-    main([
-        "mix",
-        "--input", f"{src_a}:0.6", f"{src_b}:0.4",
-        "--output", str(out),
-        "--total", "100",
-        "--seed", "42",
-    ])
+    main(
+        [
+            "mix",
+            "--input",
+            f"{src_a}:0.6",
+            f"{src_b}:0.4",
+            "--output",
+            str(out),
+            "--total",
+            "100",
+            "--seed",
+            "42",
+        ]
+    )
 
     lines = read_jsonl(out)
     assert len(lines) == 100
@@ -334,12 +339,16 @@ def test_cli_no_recipe_flag(tmp_path):
     write_jsonl(src, [{"x": i} for i in range(50)])
     out = tmp_path / "out.jsonl"
 
-    main([
-        "mix",
-        "--input", f"{src}:1.0",
-        "--output", str(out),
-        "--no-recipe",
-    ])
+    main(
+        [
+            "mix",
+            "--input",
+            f"{src}:1.0",
+            "--output",
+            str(out),
+            "--no-recipe",
+        ]
+    )
 
     assert out.is_file()
     assert not out.with_suffix(".mix.json").exists()
