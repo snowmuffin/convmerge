@@ -174,7 +174,7 @@ def _rewrite_jsonl(src: Path, dst: Path) -> int:
 
 
 def _sanitize_line(line: str, *, line_number: int) -> str:
-    line = line.rstrip()
+    line = line.strip()
     if line_number == 1:
         line = line.removeprefix("\ufeff")
     return line

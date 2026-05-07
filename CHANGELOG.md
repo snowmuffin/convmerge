@@ -7,9 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-05-07
+
+### Added
+
+- `convmerge mix`: weighted sampling and merging of multiple converted JSONL
+  sources into a single training file. Supports inline `FILE:WEIGHT` pairs or
+  a YAML/JSON config file. Fixed seed guarantees reproducibility; a sidecar
+  `.mix.json` recipe records exact parameters for auditing and replay.
+  Optional `--oversample` allows sampling with replacement when a source is
+  smaller than its allocation. YAML configs require `convmerge[preset]`.
+
 ### Fixed
 
-- Normalize JSONL inputs with a leading UTF-8 BOM, CRLF line endings, and trailing whitespace; report trailing-comma JSONL lines with file and line context.
+- Normalize JSONL inputs with a leading UTF-8 BOM, CRLF line endings, and
+  trailing whitespace; report trailing-comma JSONL lines with file and line
+  context.
+- Leading whitespace on JSONL lines is now stripped (regression introduced in
+  the BOM/CRLF fix — `rstrip` was used instead of `strip`).
 
 ## [0.3.3] - 2026-04-23
 
