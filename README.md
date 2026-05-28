@@ -7,10 +7,13 @@
 [![PyPI downloads](https://img.shields.io/pypi/dm/convmerge.svg)](https://pypi.org/project/convmerge/)
 [![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-2.1-4baaaa.svg)](CODE_OF_CONDUCT.md)
 
-`convmerge` is a **data-preparation library** for supervised fine-tuning (SFT)
-datasets. It fetches, normalizes, and merges heterogeneous chat / instruct
-sources into a single newline-delimited JSON Lines layout that training code
-can consume directly.
+> **Convert Alpaca, ShareGPT, and mixed chat datasets into a unified `messages` JSONL for LLM supervised fine-tuning.**  
+> Fetch from HuggingFace or GitHub, normalize messy Parquet / JSON / JSONL, convert between Alpaca / ShareGPT / chat schemas, weighted-mix multiple domain sources, and deduplicate — all in one CLI pipeline.
+
+`convmerge` is a **data-preparation CLI and library** for LLM supervised fine-tuning (SFT).
+It takes heterogeneous instruction-tuning datasets — **Alpaca**, **ShareGPT**, raw chat JSONL,
+Parquet dumps — and produces a single clean JSONL file in the standard `messages` format
+(or back to `alpaca` shape) that any fine-tuning framework can consume directly.
 
 It is intentionally scoped to the **pre-training-loop** step: no model
 loading, no inference, no labeling, no training orchestration. See
