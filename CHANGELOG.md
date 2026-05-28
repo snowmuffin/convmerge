@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-05-28
+
+### Changed
+
+- README: added search-friendly tagline and expanded opening paragraph with
+  Alpaca / ShareGPT / messages-format keywords for better discoverability.
+- `pyproject.toml`: updated `description` to problem-oriented wording; added
+  `messages-format`, `llm-training`, `data-pipeline`, `chat-dataset` keywords.
+
 ## [0.4.0] - 2026-05-07
 
 ### Added
