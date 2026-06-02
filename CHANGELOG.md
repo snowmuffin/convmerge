@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `inspect` command + `profile_schema()`: profile a `.json` / `.jsonl` file's
+  structure — per-field value types, presence ratio, sample values, and
+  preserved nesting (`items` for list-of-object fields, `fields` for object
+  fields) so `messages[].role` is distinguishable from a top-level `role`.
+  Intended as the first step for designing input → output key mappings on
+  unfamiliar datasets.
+
 ## [0.5.0] - 2026-06-02
 
 ### Added

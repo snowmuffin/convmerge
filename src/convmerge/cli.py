@@ -34,6 +34,8 @@ def main(argv: list[str] | None = None) -> None:
             _cmd_preset_init(args)
         else:
             _cmd_preset_validate(args)
+    elif args.command == "inspect":
+        _cmd_inspect(args)
     elif args.command == "normalize":
         _cmd_normalize(args)
     elif args.command == "dedupe":
@@ -70,6 +72,7 @@ def _build_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     _add_convert(subparsers)
+    _add_inspect(subparsers)
     _add_normalize(subparsers)
     _add_dedupe(subparsers)
     _add_turns(subparsers)
@@ -192,6 +195,47 @@ def _cmd_preset_validate(args: argparse.Namespace) -> None:
         print(f"error: {e}", file=sys.stderr)
         sys.exit(1)
     print("ok", file=sys.stderr)
+
+
+def _add_inspect(sub: argparse._SubParsersAction) -> None:
+    p = sub.add_parser(
+        "inspect",
+        help=(
+            "Profile the schema/structure of a JSON/JSONL file "
+            "(keys, value types, nesting, presence, sample values)"
+        ),
+    )
+    p.add_argument("--input", "-i", type=Path, required=True, help="Input .json or .jsonl path")
+    p.add_argument(
+        "--max-rows",
+        type=int,
+        default=None,
+        help="Sample only the first N records (recommended for large files)",
+    )
+    p.add_argument(
+        "--max-examples",
+        type=int,
+        default=3,
+        help="Sample values to show per field (default: 3)",
+    )
+
+
+def _cmd_inspect(args: argparse.Namespace) -> None:
+    from convmerge.normalize.schema import profile_schema
+
+    if not args.input.is_file():
+        print(f"error: input file not found: {args.input}", file=sys.stderr)
+        sys.exit(1)
+    try:
+        report = profile_schema(
+            args.input,
+            max_rows=args.max_rows,
+            max_examples=args.max_examples,
+        )
+    except ValueError as e:
+        print(f"error: {e}", file=sys.stderr)
+        sys.exit(1)
+    print(json.dumps(report, ensure_ascii=False, indent=2))
 
 
 def _add_normalize(sub: argparse._SubParsersAction) -> None:
