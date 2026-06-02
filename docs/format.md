@@ -167,6 +167,14 @@ subcommands handle the pre-adapter cleanup step:
 - `single_turn_to_multi_turn_record` / `multi_turn_to_single_turn_record` —
   round-trip between `{instruction, input, output}` and `{messages: [...]}`.
 
+### Progress reporting
+
+`convert` and `dedupe` accept a `--progress` flag (or set the
+`CONVMERGE_PROGRESS=1` environment variable) to log periodic row counts and
+throughput to stderr for long-running jobs. Progress is **off by default**, so
+normal output is unchanged. The `convert_file` and `deduplicate_jsonl` library
+functions expose the same behavior via a `progress=True` keyword argument.
+
 ## Non-goals (current)
 
 - **Model loading, inference, or training.** `convmerge` never imports
