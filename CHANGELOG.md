@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-06-02
+
+### Fixed
+
+- `load_jsonl`: added `on_error="fail" | "skip"`. The default `"fail"` keeps the
+  existing behavior (one bad line discards the whole file); `"skip"` logs and
+  skips only the offending line, keeping every row that parsed (#15).
+- `detect_jsonl_shape`: pretty-printed top-level JSON arrays (`[` followed by
+  objects on subsequent lines) are no longer misclassified as `jsonl`, so they
+  normalize correctly (#16).
+- `chat` adapter: a stray `text` field no longer shadows a well-formed
+  instruction/output record. When both an instruction and an output key are
+  present the record is routed to the Alpaca branch; a partial-key `text`
+  fallback now logs a warning. Resolution order documented in `docs/format.md`
+  (#17).
+
 ## [0.4.1] - 2026-05-28
 
 ### Changed

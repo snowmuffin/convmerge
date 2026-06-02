@@ -17,11 +17,14 @@ without writing a new adapter from scratch.
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Iterator
 from typing import Any
 
 from convmerge.adapters.alpaca import iter_from_alpaca_line
 from convmerge.models import ChatMessage, TrainingExample
+
+logger = logging.getLogger(__name__)
 
 # Default mapping from common ShareGPT-style ``from`` values onto standard roles.
 DEFAULT_ROLE_MAP: dict[str, str] = {
@@ -88,8 +91,21 @@ def iter_from_chat_line(
                 yield TrainingExample(messages=msgs, meta={"source": "chat"})
             return
 
+    # Resolve Alpaca cues up front so a stray ``text`` field can't silently
+    # shadow a well-formed instruction/output record (see issue #17).
+    instr = _first_string(record, instruction_keys)
+    out = _first_string(record, output_keys)
+    has_strong_alpaca = instr is not None and out is not None
+
     txt = record.get("text")
-    if isinstance(txt, str) and txt.strip():
+    if isinstance(txt, str) and txt.strip() and not has_strong_alpaca:
+        if instr is not None or out is not None:
+            logger.warning(
+                "chat adapter: routing record to the 'text' branch even though "
+                "partial Alpaca keys are present; instruction/output content "
+                "will be dropped. Pin --from alpaca for these records if that "
+                "is wrong."
+            )
         yield TrainingExample(
             messages=[ChatMessage(role="assistant", content=txt.strip())],
             meta={"source": "chat:text"},
