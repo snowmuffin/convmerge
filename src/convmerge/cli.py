@@ -48,6 +48,14 @@ def main(argv: list[str] | None = None) -> None:
         parser.error(f"unknown command: {args.command}")
 
 
+def _add_progress_flag(p: argparse.ArgumentParser) -> None:
+    p.add_argument(
+        "--progress",
+        action="store_true",
+        help="Log periodic row counts to stderr (or set CONVMERGE_PROGRESS=1)",
+    )
+
+
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="convmerge",
@@ -107,6 +115,7 @@ def _add_convert(sub: argparse._SubParsersAction) -> None:
         help='JSON object merged on the preset, e.g. {"chat":{"pairwise_mode":"both"}}',
     )
     p.add_argument("--encoding", default="utf-8", help="File encoding (default: utf-8)")
+    _add_progress_flag(p)
 
 
 def _cmd_convert(args: argparse.Namespace) -> None:
@@ -129,6 +138,8 @@ def _cmd_convert(args: argparse.Namespace) -> None:
     except ImportError as e:
         print(f"error: {e}", file=sys.stderr)
         sys.exit(2)
+    from convmerge.progress import progress_enabled
+
     n_in, n_out = convert_file(
         args.input,
         args.output,
@@ -136,6 +147,7 @@ def _cmd_convert(args: argparse.Namespace) -> None:
         output_format=cfg.output_format,
         encoding=cfg.encoding,
         adapter_options=cfg.adapter_options,
+        progress=progress_enabled(args.progress),
     )
     print(f"read {n_in} lines, wrote {n_out} examples", file=sys.stderr)
 
@@ -258,16 +270,19 @@ def _add_dedupe(sub: argparse._SubParsersAction) -> None:
         help="Only hash these top-level keys (defaults to the whole record)",
     )
     p.add_argument("--algorithm", default="md5", choices=("md5", "sha256"))
+    _add_progress_flag(p)
 
 
 def _cmd_dedupe(args: argparse.Namespace) -> None:
     from convmerge.normalize.dedup import deduplicate_jsonl
+    from convmerge.progress import progress_enabled
 
     total, kept = deduplicate_jsonl(
         args.input,
         args.output,
         keys=args.keys,
         algorithm=args.algorithm,
+        progress=progress_enabled(args.progress),
     )
     removed = total - kept
     pct = (removed / total * 100) if total else 0.0

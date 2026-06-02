@@ -31,6 +31,7 @@ def deduplicate_jsonl(
     *,
     keys: Iterable[str] | None = None,
     algorithm: str | HashFn = "md5",
+    progress: bool = False,
 ) -> tuple[int, int]:
     """Stream ``src`` JSONL into ``dst``, dropping duplicate rows.
 
@@ -38,10 +39,14 @@ def deduplicate_jsonl(
     ``keys`` optionally restricts the projection to the given top-level fields
     (useful when metadata like ``id`` or timestamps differ but the content is
     identical). ``algorithm`` may be ``"md5"``, ``"sha256"``, or any callable
-    ``bytes -> str``.
+    ``bytes -> str``. Set ``progress=True`` to log periodic row counts to
+    stderr (off by default; see :mod:`convmerge.progress`).
 
     Returns ``(total_rows, kept_rows)``.
     """
+    from convmerge.progress import ProgressReporter
+
+    reporter = ProgressReporter(f"dedupe {Path(src).name}", enabled=progress)
     if callable(algorithm):
         hasher = algorithm
     else:
@@ -68,6 +73,7 @@ def deduplicate_jsonl(
             if not line:
                 continue
             total += 1
+            reporter.update()
             try:
                 data = json.loads(line)
             except json.JSONDecodeError:
@@ -81,6 +87,7 @@ def deduplicate_jsonl(
             seen.add(h)
             wf.write(line + "\n")
             kept += 1
+    reporter.done()
     return total, kept
 
 

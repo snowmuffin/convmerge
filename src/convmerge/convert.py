@@ -19,17 +19,24 @@ def convert_file(
     output_format: str,
     encoding: str = "utf-8",
     adapter_options: AdapterOptions | None = None,
+    progress: bool = False,
 ) -> tuple[int, int]:
     """
     Read JSONL lines, parse with adapter, write emitted JSONL.
 
+    Set ``progress=True`` to log periodic row counts to stderr (off by default;
+    see :mod:`convmerge.progress`).
+
     Returns (lines_read, lines_written).
     """
+    from convmerge.progress import ProgressReporter
+
     adapter = resolve_adapter(adapter_name, adapter_options)
     emitter = get_emitter(output_format)
 
     lines_read = 0
     lines_written = 0
+    reporter = ProgressReporter(f"convert {input_path.name}", enabled=progress)
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -39,6 +46,7 @@ def convert_file(
     ):
         for raw in fin:
             lines_read += 1
+            reporter.update()
             raw = raw.strip()
             if not raw:
                 continue
@@ -53,6 +61,7 @@ def convert_file(
                 fout.write(json.dumps(row, ensure_ascii=False) + "\n")
                 lines_written += 1
 
+    reporter.done()
     return lines_read, lines_written
 
 
