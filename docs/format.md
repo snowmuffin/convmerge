@@ -35,10 +35,56 @@ For multi-turn internal examples, user contents are joined into `instruction` an
 
 Expects keys such as `instruction`, optional `input`, and `output` (or `response`).
 
+<details>
+<summary>Sample input → output</summary>
+
+Input (one JSONL line):
+
+```json
+{"instruction": "Say hello", "input": "", "output": "Hello!"}
+```
+
+Output with `--format messages`:
+
+```json
+{"messages": [{"role": "user", "content": "Say hello"}, {"role": "assistant", "content": "Hello!"}]}
+```
+
+Output with `--format alpaca`:
+
+```json
+{"instruction": "Say hello", "input": "", "output": "Hello!"}
+```
+
+</details>
+
 ### `sharegpt`
 
 Expects `conversations`: list of `{"from": "human"|"gpt"|..., "value": "..."}`.
 Emits one example per consecutive user→assistant pair.
+
+<details>
+<summary>Sample input → output</summary>
+
+Input (one JSONL line):
+
+```json
+{"conversations": [{"from": "human", "value": "2+2?"}, {"from": "gpt", "value": "4"}]}
+```
+
+Output with `--format messages`:
+
+```json
+{"messages": [{"role": "user", "content": "2+2?"}, {"role": "assistant", "content": "4"}]}
+```
+
+Output with `--format alpaca`:
+
+```json
+{"instruction": "2+2?", "input": "", "output": "4"}
+```
+
+</details>
 
 ### `chat` (alias: `auto`)
 
@@ -69,6 +115,40 @@ Tries, in order:
 You can override every part (`conversation_keys`, `role_keys`, `content_keys`,
 `role_map`, `instruction_keys`, `input_keys`, `output_keys`, `pairwise_mode`)
 when calling `iter_from_chat_line` programmatically.
+
+<details>
+<summary>Sample inputs → output (<code>--format messages</code>)</summary>
+
+The heuristic routes each shape to the same `messages` output:
+
+`messages` list:
+
+```json
+{"messages": [{"role": "user", "content": "hi"}, {"role": "assistant", "content": "hello"}]}
+```
+```json
+{"messages": [{"role": "user", "content": "hi"}, {"role": "assistant", "content": "hello"}]}
+```
+
+ShareGPT-style `conversations`:
+
+```json
+{"conversations": [{"from": "human", "value": "hi"}, {"from": "gpt", "value": "hello"}]}
+```
+```json
+{"messages": [{"role": "user", "content": "hi"}, {"role": "assistant", "content": "hello"}]}
+```
+
+Plain `text`:
+
+```json
+{"text": "some raw text"}
+```
+```json
+{"messages": [{"role": "assistant", "content": "some raw text"}]}
+```
+
+</details>
 
 ## Normalization utilities
 
