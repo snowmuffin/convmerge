@@ -160,6 +160,10 @@ subcommands handle the pre-adapter cleanup step:
   Parquet requires the `parquet` extra.
 - `deduplicate_jsonl(src, dst, keys=None, algorithm="md5")` — streaming dedup
   by an MD5/SHA256 hash of the whole record or a projected subset of keys.
+  Seen hashes are tracked in memory by default; pass `seen_store="sqlite"`
+  (CLI `--seen-store sqlite`, optional `--seen-db PATH`) to keep them in a
+  disk-backed SQLite table for bounded memory on inputs with tens of millions
+  of unique rows.
 - `analyze_turn_distribution(path)` — reports single-turn vs multi-turn counts
   for messages-style JSONL, plus a per-turn-count histogram.
 - `split_by_turns(src, single_out=..., multi_out=...)` — partitions a
