@@ -12,3 +12,14 @@ build/
 htmlcov/
 *.egg
 .DS_Store
+
+# Local secrets / fetch tokens (never commit)
+.env
+.env.*
+
+# Local fetch manifest (user-specific dataset list; not part of the package)
+source.yml
+
+# Fetched/sampled data
+data/
+
