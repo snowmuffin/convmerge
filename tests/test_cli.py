@@ -79,3 +79,22 @@ def test_cli_turns(tmp_path: Path, capsys) -> None:
 def test_cli_fetch_missing_manifest(tmp_path: Path) -> None:
     with pytest.raises(SystemExit):
         main(["fetch", str(tmp_path / "does_not_exist.yaml")])
+
+
+def test_cli_inspect(tmp_path: Path, capsys) -> None:
+    src = tmp_path / "in.jsonl"
+    src.write_text(
+        '{"instruction":"q","messages":[{"role":"user","content":"hi"}]}\n{"instruction":"q2"}\n',
+        encoding="utf-8",
+    )
+    main(["inspect", "--input", str(src)])
+    report = json.loads(capsys.readouterr().out)
+    assert report["records"] == 2
+    assert report["fields"]["instruction"]["presence"] == 1.0
+    assert report["fields"]["messages"]["presence"] == 0.5
+    assert set(report["fields"]["messages"]["items"].keys()) == {"role", "content"}
+
+
+def test_cli_inspect_missing_file(tmp_path: Path) -> None:
+    with pytest.raises(SystemExit):
+        main(["inspect", "--input", str(tmp_path / "nope.jsonl")])
