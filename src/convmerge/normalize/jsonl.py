@@ -13,12 +13,24 @@ JSONLShape = Literal["jsonl", "single_line", "json_array", "invalid", "empty"]
 _HEAD_PEEK_BYTES = 65536
 
 
-def load_jsonl(path: str | Path, *, max_rows: int | None = None) -> list[dict[str, Any]]:
+def load_jsonl(
+    path: str | Path,
+    *,
+    max_rows: int | None = None,
+    on_error: Literal["fail", "skip"] = "fail",
+) -> list[dict[str, Any]]:
     """Load a well-formed JSONL file into a list of dicts.
 
-    Lines that are empty are skipped. Any line that fails to parse aborts the
-    load and returns an empty list, mirroring a common permissive notebook-style
-    loader pattern.
+    Empty lines are always skipped. ``on_error`` controls what happens when a
+    line fails to parse:
+
+    - ``"fail"`` (default): print the failing location and return an empty
+      list, mirroring a common permissive notebook-style loader. The whole
+      file is discarded so a partially corrupt input is never silently
+      half-loaded.
+    - ``"skip"``: log the failing line number and skip just that line, keeping
+      every row that did parse. Use this for large files where one bad line
+      should not lose all the good data.
     """
     out: list[dict[str, Any]] = []
     with open(path, encoding="utf-8") as f:
@@ -31,6 +43,11 @@ def load_jsonl(path: str | Path, *, max_rows: int | None = None) -> list[dict[st
             try:
                 obj = json.loads(line)
             except json.JSONDecodeError as e:
+                if on_error == "skip":
+                    # Skip just this line; the location is logged so the user
+                    # can repair the source if desired.
+                    print(f"[JSONL SKIP] {path} line {i}: {e} :: {line[:80]!r}")
+                    continue
                 # Caller gets an empty list; the failing location is still printed
                 # so the user can fix the source file.
                 print(f"[JSONL ERROR] {path} line {i}: {e} :: {line[:80]!r}")
@@ -102,6 +119,13 @@ def detect_jsonl_shape(path: str | Path) -> JSONLShape:
     if not head.strip():
         return "empty"
     text = head.decode("utf-8", errors="ignore")
+
+    # A leading '[' means a top-level JSON array. Pretty-printed arrays span
+    # many lines, so detect this before the multi-line ``jsonl`` heuristic
+    # below — otherwise an array like ``[\n  {...},\n  {...}\n]`` is mistaken
+    # for line-delimited JSON and breaks normalization.
+    if text.lstrip()[:1] == "[":
+        return "json_array"
 
     non_empty_lines = [line for line in text.splitlines() if line.strip()]
     if len(non_empty_lines) >= 2:
