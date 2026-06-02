@@ -57,7 +57,13 @@ Tries, in order:
 2. Chat-list containers named `messages`, `conversation`, or `conversations`.
    - Both `{role, content}` and ShareGPT-style `{from, value}` entries work.
    - A default role map normalizes `human → user`, `gpt/bing/bot → assistant`.
-3. Plain `text` → emitted as a single assistant message.
+3. Plain `text` → emitted as a single assistant message — **but only when the
+   record does not carry strong Alpaca cues.** If both an instruction key
+   (`instruction`/`question`/`prompt`) and an output key
+   (`output`/`response`/`answer`) are present, the record is routed to the
+   Alpaca branch (step 4) instead, so a stray `text` field cannot silently
+   discard the instruction/output pair. When `text` is taken while only a
+   partial Alpaca key is present, a `logging` warning is emitted.
 4. Fallback: alpaca-like keys (`instruction`/`question`/`prompt` + `output`/`response`/`answer`).
 
 You can override every part (`conversation_keys`, `role_keys`, `content_keys`,

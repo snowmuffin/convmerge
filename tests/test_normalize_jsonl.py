@@ -106,3 +106,44 @@ def test_normalize_jsonl_rejects_trailing_comma_with_file_and_line(tmp_path: Pat
     assert "bad.jsonl" in message
     assert "line 1" in message
     assert "trailing comma" in message
+
+
+# --- issue #15: load_jsonl on_error ---------------------------------------
+
+
+def test_load_jsonl_default_discards_file_on_bad_line(tmp_path: Path) -> None:
+    p = _write(tmp_path / "a.jsonl", '{"a":1}\nnot json\n{"a":2}\n')
+    # Default behavior is preserved: one bad line discards the whole file.
+    assert load_jsonl(p) == []
+
+
+def test_load_jsonl_skip_keeps_valid_rows(tmp_path: Path) -> None:
+    p = _write(tmp_path / "a.jsonl", '{"a":1}\nnot json\n{"a":2}\n')
+    assert load_jsonl(p, on_error="skip") == [{"a": 1}, {"a": 2}]
+
+
+def test_load_jsonl_skip_with_all_valid_lines(tmp_path: Path) -> None:
+    p = _write(tmp_path / "a.jsonl", '{"a":1}\n{"a":2}\n')
+    assert load_jsonl(p, on_error="skip") == [{"a": 1}, {"a": 2}]
+
+
+# --- issue #16: pretty-printed JSON array detection ------------------------
+
+
+def test_detect_shape_pretty_printed_json_array(tmp_path: Path) -> None:
+    p = _write(tmp_path / "a.json", '[\n  {"a": 1},\n  {"a": 2}\n]\n')
+    assert detect_jsonl_shape(p) == "json_array"
+
+
+def test_normalize_pretty_printed_json_array(tmp_path: Path) -> None:
+    src = _write(tmp_path / "a.json", '[\n  {"x": 1},\n  {"x": 2}\n]\n')
+    dst = tmp_path / "out.jsonl"
+    n = normalize_to_jsonl(src, dst)
+    assert n == 2
+    lines = dst.read_text(encoding="utf-8").strip().splitlines()
+    assert [json.loads(line) for line in lines] == [{"x": 1}, {"x": 2}]
+
+
+def test_detect_shape_array_with_leading_whitespace(tmp_path: Path) -> None:
+    p = _write(tmp_path / "a.json", '  \n[\n  {"a": 1}\n]\n')
+    assert detect_jsonl_shape(p) == "json_array"
