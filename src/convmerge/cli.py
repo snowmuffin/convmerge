@@ -270,6 +270,19 @@ def _add_dedupe(sub: argparse._SubParsersAction) -> None:
         help="Only hash these top-level keys (defaults to the whole record)",
     )
     p.add_argument("--algorithm", default="md5", choices=("md5", "sha256"))
+    p.add_argument(
+        "--seen-store",
+        choices=("memory", "sqlite"),
+        default="memory",
+        help="Duplicate tracking: 'memory' (default, fastest) or 'sqlite' "
+        "(disk-backed, bounded memory for huge unique-row counts)",
+    )
+    p.add_argument(
+        "--seen-db",
+        type=Path,
+        default=None,
+        help="sqlite store path (default: a temp file removed on completion)",
+    )
     _add_progress_flag(p)
 
 
@@ -283,6 +296,8 @@ def _cmd_dedupe(args: argparse.Namespace) -> None:
         keys=args.keys,
         algorithm=args.algorithm,
         progress=progress_enabled(args.progress),
+        seen_store=args.seen_store,
+        seen_db=args.seen_db,
     )
     removed = total - kept
     pct = (removed / total * 100) if total else 0.0
