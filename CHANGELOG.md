@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-06-02
+
+### Added
+
+- `dedupe`: optional `--seen-store sqlite` (with `--seen-db PATH`) keeps the
+  seen-hash set in a disk-backed SQLite table for bounded memory on inputs with
+  tens of millions of unique rows. Default `memory` is unchanged. Exposed on
+  `deduplicate_jsonl` via `seen_store` / `seen_db` (#14).
+- `convert` / `dedupe`: optional `--progress` flag (or `CONVMERGE_PROGRESS=1`)
+  logs periodic row counts and throughput to stderr for long-running jobs; off
+  by default. Exposed on `convert_file` / `deduplicate_jsonl` via
+  `progress=True` (#18).
+
+### Changed
+
+- docs: `docs/format.md` now shows concrete input → output sample blocks for
+  the `alpaca`, `sharegpt`, and `chat`/`auto` adapters (#10).
+
 ## [0.4.2] - 2026-06-02
 
 ### Fixed
