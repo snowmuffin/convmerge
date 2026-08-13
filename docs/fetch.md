@@ -44,7 +44,7 @@ version: 1
 defaults:
   output_root: ./raw            # default destination directory
   on_error: continue            # "continue" (default) or "fail"
-  resume: true                  # skip entries whose output already exists
+  resume: true                  # skip entries with a valid completion marker
 
 auth:
   hf_token_env: HF_TOKEN        # env var to read the HF token from
@@ -102,11 +102,22 @@ For `mode: clone` entries the token is injected into the clone URL as
 
 ## Resume behaviour
 
-With `defaults.resume: true` (the default) the runner inspects the expected
-output path for each entry:
+With `defaults.resume: true` (the default), a successful fetch writes a
+`<output>.fetch.json` sidecar containing a versioned file or directory
+snapshot. The runner skips an entry only when that marker still matches the
+output. This prevents a truncated or manually modified output from being
+silently treated as complete. Existing non-empty outputs without a marker are
+fetched once to establish the completion record.
 
-- HuggingFace / raw URL entries: a non-empty file counts as "done".
-- Trees / clone entries: a non-empty directory counts as "done".
+The output snapshot uses the file size and SHA-256 digest for files. Directory
+outputs record the relative files, sizes, and digests. A marker write failure
+does not discard a successful download; the next resume conservatively fetches
+it again.
+
+With the marker present and valid, the runner skips:
+
+- HuggingFace / raw URL entries: the downloaded file.
+- Trees / clone entries: the complete directory snapshot.
 
 Pass `--no-resume` on the CLI to force a re-download.
 

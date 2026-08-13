@@ -16,6 +16,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Intended as the first step for designing input → output key mappings on
   unfamiliar datasets.
 
+### Fixed
+
+- `fetch` resume now writes and validates completion sidecars, so interrupted
+  or modified outputs are fetched again instead of being skipped as complete
+  (#25).
+
 ## [0.5.0] - 2026-06-02
 
 ### Added
