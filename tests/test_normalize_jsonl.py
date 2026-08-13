@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+from convmerge.lfs import LfsPointerError
 from convmerge.normalize.jsonl import (
     detect_jsonl_shape,
     iter_json_records,
@@ -43,6 +44,17 @@ def test_detect_shape_single_object(tmp_path: Path) -> None:
 def test_detect_shape_empty(tmp_path: Path) -> None:
     p = _write(tmp_path / "a.jsonl", "")
     assert detect_jsonl_shape(p) == "empty"
+
+
+def test_lfs_pointer_is_rejected_before_jsonl_parsing(tmp_path: Path) -> None:
+    p = _write(tmp_path / "pointer.jsonl", "version https://git-lfs.github.com/spec/v1\n")
+
+    with pytest.raises(LfsPointerError, match="mode: clone and lfs: true"):
+        detect_jsonl_shape(p)
+    with pytest.raises(LfsPointerError, match="mode: clone and lfs: true"):
+        load_jsonl(p)
+    with pytest.raises(LfsPointerError, match="mode: clone and lfs: true"):
+        list(iter_json_records(p))
 
 
 def test_normalize_json_array(tmp_path: Path) -> None:
