@@ -20,6 +20,15 @@ def test_cli_help_runs(capsys) -> None:
         assert cmd in out
 
 
+def test_cli_help_lists_all_install_extra(capsys) -> None:
+    with pytest.raises(SystemExit) as exc:
+        main(["--help"])
+    assert exc.value.code == 0
+    out = capsys.readouterr().out
+    for extra in ("[all]", "[parquet]", "[preset]", "[fetch-all]"):
+        assert extra in out
+
+
 def test_cli_normalize_on_json_array(tmp_path: Path) -> None:
     src = tmp_path / "in.json"
     src.write_text(json.dumps([{"a": 1}, {"a": 2}]), encoding="utf-8")

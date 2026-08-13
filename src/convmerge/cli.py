@@ -15,11 +15,11 @@ FETCH_FILE_EXTENSIONS = (".parquet", ".json", ".jsonl")
 _INSTALL_EXTRAS_EPILOG = """
 optional dependencies (pip install "convmerge[EXTRA]"):
   (none)     convert, dedupe, turns on JSONL; normalize on .json/.jsonl only
-  fetch      YAML manifests and GitHub sources (PyYAML)
-  fetch-all  above + HuggingFace (datasets); same packages as fetch-hf
-  parquet    .parquet input for normalize
-  preset     YAML presets (convert --preset, preset validate)
-  all        fetch-all + parquet + preset (full CLI feature set)
+  [fetch]      YAML manifests and GitHub sources (PyYAML)
+  [fetch-all]  above + HuggingFace (datasets); same packages as fetch-hf
+  [parquet]    .parquet input for normalize
+  [preset]     YAML presets (convert --preset, preset validate)
+  [all]        fetch-all + parquet + preset (full CLI feature set)
 """.strip()
 
 
