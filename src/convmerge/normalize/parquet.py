@@ -2,7 +2,7 @@
 
 Requires the optional ``parquet`` extra::
 
-    pip install "convmerge[parquet]"
+    pip install "convmerge[parquet]"  # or "convmerge[all]"
 """
 
 from __future__ import annotations
@@ -22,7 +22,7 @@ def parquet_to_jsonl(src: str | Path, dst: str | Path, *, batch_rows: int = 6553
     except ImportError as e:
         raise RuntimeError(
             "pyarrow is required for parquet conversion. "
-            "Install with: pip install 'convmerge[parquet]'"
+            "Install with: pip install 'convmerge[parquet]' (or [all])"
         ) from e
 
     src_p = Path(src)
