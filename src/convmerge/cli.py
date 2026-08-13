@@ -87,6 +87,8 @@ def _add_convert(sub: argparse._SubParsersAction) -> None:
     p = sub.add_parser(
         "convert",
         help="Convert a JSONL file using a source adapter and output format",
+        description="Convert a JSONL file using a source adapter and output format. "
+        "YAML presets require convmerge[preset].",
     )
     p.add_argument("--input", "-i", type=Path, required=True, help="Input JSONL path")
     p.add_argument("--output", "-o", type=Path, required=True, help="Output JSONL path")
@@ -159,6 +161,7 @@ def _add_preset(sub: argparse._SubParsersAction) -> None:
     p = sub.add_parser(
         "preset",
         help="Create or validate convert preset files (install convmerge[preset] for YAML)",
+        description="Create or validate convert preset files. YAML requires convmerge[preset].",
     )
     subp = p.add_subparsers(dest="preset_action", required=True)
     pi = subp.add_parser("init", help="Write a commented YAML template")
@@ -245,6 +248,8 @@ def _add_normalize(sub: argparse._SubParsersAction) -> None:
             "Normalize parquet/json/jsonl files in a directory into clean JSONL "
             "(install convmerge[parquet] for .parquet inputs)"
         ),
+        description="Normalize parquet/json/jsonl files in a directory into clean JSONL. "
+        "Parquet inputs require convmerge[parquet].",
     )
     p.add_argument("--input", "-i", type=Path, required=True, help="Input file or directory")
     p.add_argument(
@@ -391,6 +396,9 @@ def _add_fetch(sub: argparse._SubParsersAction) -> None:
             "hf://org/dataset / GitHub URL shortcut "
             "(convmerge[fetch] for YAML; [fetch-all], [fetch-hf], or [all] for HF entries)"
         ),
+        description="Fetch training data via a YAML manifest, or a single "
+        "hf://org/dataset / GitHub URL shortcut. "
+        "Use convmerge[fetch] for YAML, [fetch-all]/[fetch-hf] for HF, or [all].",
     )
     p.add_argument(
         "source",
