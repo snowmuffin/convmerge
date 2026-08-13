@@ -112,12 +112,60 @@ def test_runner_resume_skips_existing(monkeypatch, tmp_path: Path) -> None:
     # Pre-populate the expected target so resume should skip it.
     target = tmp_path / "hf-one.jsonl"
     target.write_text("{}\n", encoding="utf-8")
+    runner._write_completion_marker(target)
 
     entries = [DatasetEntry(name="hf-one", hf="org/a")]
     manifest = _make_manifest(entries, tmp_path)
     result = runner.run_manifest(manifest, log=lambda _msg: None)
     assert result.skipped == ["hf-one"]
     assert hits == []
+
+
+def test_runner_resume_refetches_without_completion_marker(monkeypatch, tmp_path: Path) -> None:
+    import convmerge.fetch.hf as hfmod
+
+    calls: list[str] = []
+    target = tmp_path / "hf-one.jsonl"
+    target.write_text("truncated\n", encoding="utf-8")
+
+    def fake_hf(*_args, **_kwargs):
+        calls.append("called")
+        target.write_text('{"fresh": true}\n', encoding="utf-8")
+        return target
+
+    monkeypatch.setattr(hfmod, "download_hf_dataset", fake_hf)
+    manifest = _make_manifest([DatasetEntry(name="hf-one", hf="org/a")], tmp_path)
+
+    result = runner.run_manifest(manifest, log=lambda _msg: None)
+
+    assert result.succeeded == ["hf-one"]
+    assert result.skipped == []
+    assert calls == ["called"]
+    assert (tmp_path / "hf-one.jsonl.fetch.json").is_file()
+
+
+def test_runner_resume_refetches_when_marked_output_changes(monkeypatch, tmp_path: Path) -> None:
+    import convmerge.fetch.hf as hfmod
+
+    calls: list[str] = []
+    target = tmp_path / "hf-one.jsonl"
+    target.write_text('{"complete": true}\n', encoding="utf-8")
+    runner._write_completion_marker(target)
+    target.write_text("truncated\n", encoding="utf-8")
+
+    def fake_hf(*_args, **_kwargs):
+        calls.append("called")
+        target.write_text('{"repaired": true}\n', encoding="utf-8")
+        return target
+
+    monkeypatch.setattr(hfmod, "download_hf_dataset", fake_hf)
+    manifest = _make_manifest([DatasetEntry(name="hf-one", hf="org/a")], tmp_path)
+
+    result = runner.run_manifest(manifest, log=lambda _msg: None)
+
+    assert result.succeeded == ["hf-one"]
+    assert result.skipped == []
+    assert calls == ["called"]
 
 
 def test_runner_continues_on_error(monkeypatch, tmp_path: Path) -> None:
