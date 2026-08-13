@@ -12,6 +12,8 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
+from convmerge.lfs import LfsPointerError, is_lfs_pointer
+
 _GITHUB_REPO_RE = re.compile(
     r"^https?://(?:www\.)?github\.com/(?P<owner>[^/]+)/(?P<repo>[^/?#]+?)(?:\.git)?(?:/.*)?$"
 )
@@ -45,6 +47,11 @@ def download_raw_file(url: str, dst: str | Path, *, token: str | None = None) ->
     except urllib.error.URLError as e:
         raise GitHubFetchError(f"Network error fetching {url}: {e.reason}") from e
 
+    if is_lfs_pointer(data):
+        raise LfsPointerError(
+            f"{url} returned a Git LFS pointer instead of the underlying dataset blob; "
+            "use a manifest entry with mode: clone and lfs: true"
+        )
     dst_p.write_bytes(data)
     return dst_p
 
