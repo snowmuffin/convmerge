@@ -76,6 +76,22 @@ def test_download_raw_file_http_error(monkeypatch, tmp_path: Path) -> None:
     assert "404" in str(exc.value)
 
 
+def test_download_raw_file_rejects_lfs_pointer(monkeypatch, tmp_path: Path) -> None:
+    pointer = b"version https://git-lfs.github.com/spec/v1\n"
+
+    def fake_urlopen(req, timeout=None):
+        return _FakeResponse(pointer)
+
+    monkeypatch.setattr(gh.urllib.request, "urlopen", fake_urlopen)
+
+    with pytest.raises(gh.LfsPointerError, match="mode: clone and lfs: true"):
+        gh.download_raw_file(
+            "https://raw.githubusercontent.com/o/r/m/data.jsonl",
+            tmp_path / "data.jsonl",
+        )
+    assert not (tmp_path / "data.jsonl").exists()
+
+
 def test_fetch_repo_tree_files_filters_by_ext(monkeypatch, tmp_path: Path) -> None:
     tree_response = {
         "tree": [

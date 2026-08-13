@@ -36,6 +36,11 @@ convmerge fetch manifest.yaml -o ./raw
 Raw GitHub URLs and the Trees API use Python's `urllib.request` — no extra
 dependency for pure-GitHub manifests beyond PyYAML.
 
+GitHub raw/tree downloads reject Git LFS pointer files instead of treating the
+pointer text as dataset content. For LFS-backed data, use mode: clone with
+lfs: true; the same actionable error is raised if a pointer reaches
+normalization.
+
 ## Manifest schema (version 1)
 
 ```yaml
