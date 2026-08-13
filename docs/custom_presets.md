@@ -6,7 +6,8 @@ Presets are small YAML (or JSON) files that pin `adapter`, `output_format`, and 
 
 1. **Only field names differ** (`from` / `value`, `conversation` vs `messages`): use `adapter_options.chat` in a preset (key lists, `role_map`, `pairwise_mode`).
 2. **You need a repeatable team default**: commit a preset next to your manifest and call `convmerge convert --preset your_team.yaml`.
-3. **YAML needs PyYAML**: `pip install "convmerge[preset]"`.
+3. **YAML needs PyYAML**: `pip install "convmerge[preset]"` (or
+   `pip install "convmerge[all]"`).
 4. **Rules need custom code** (complex winner logic, non-JSON shapes): add a Python adapter in your project or upstream a patch; presets alone are declarative.
 
 ## v1 schema
