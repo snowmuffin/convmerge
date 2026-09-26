@@ -8,7 +8,7 @@
 [![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-2.1-4baaaa.svg)](CODE_OF_CONDUCT.md)
 
 > **Convert Alpaca, ShareGPT, and mixed chat datasets into a unified `messages` JSONL for LLM supervised fine-tuning.**  
-> Fetch from HuggingFace or GitHub, normalize messy Parquet / JSON / JSONL, convert between Alpaca / ShareGPT / chat schemas, weighted-mix multiple domain sources, and deduplicate — all in one CLI pipeline.
+> Fetch from HuggingFace or GitHub, normalize messy Parquet / JSON / JSONL, convert between Alpaca / ShareGPT / chat schemas, weighted-mix multiple domain sources, and deduplicate — one command each, or the whole pipeline from a reproducible recipe.
 
 `convmerge` is a **data-preparation CLI and library** for LLM supervised fine-tuning (SFT).
 It takes heterogeneous instruction-tuning datasets — **Alpaca**, **ShareGPT**, raw chat JSONL,
@@ -57,7 +57,7 @@ python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev,all]"
 ```
 
-## The four use cases
+## Commands
 
 ### 1. `fetch` — pull raw data from HF + GitHub via a YAML manifest
 
@@ -197,6 +197,32 @@ See [docs/format.md](docs/format.md) for adapter / emitter schemas,
 [docs/api.md](docs/api.md) for the Python API and writing plugins
 (custom adapters / output formats via entry points).
 
+### 6. `run` — the whole pipeline from one recipe
+
+```yaml
+# recipe.yaml
+version: 1
+output: train/mixed.jsonl
+sources:
+  alpaca: { path: data/alpaca_data.json, convert: { from: alpaca } }
+  tools:
+    fetch: { url: https://raw.githubusercontent.com/org/repo/main/tools.jsonl }
+    convert: { from: sharegpt }
+mix: { total: 100000, seed: 42, weights: { alpaca: 0.7, tools: 0.3 } }
+dedupe: true
+```
+
+```bash
+convmerge run recipe.yaml --plan     # what would run, and why
+convmerge run recipe.yaml            # fetch → normalize → convert → mix → dedupe
+convmerge run recipe.yaml --frozen   # CI: fail unless the lock file is current
+```
+
+Each step is the same command you would type by hand, so the result is
+identical. `recipe.lock.json` records options, convmerge version, and
+input/output digests; the next run repeats only the steps whose inputs or
+options changed. See [docs/recipes.md](docs/recipes.md).
+
 ## Out of scope
 
 To keep the package lean and dependency-free at its core, `convmerge` does
@@ -228,12 +254,13 @@ step of a larger pipeline rather than expecting it to grow into those areas.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the full guide — setup, local
 checks, code conventions, and a walkthrough for adding a new adapter /
-emitter. CI runs Ruff + pytest on Python 3.10 – 3.12.
+emitter. CI runs Ruff, mypy, and pytest on Python 3.10 – 3.12.
 
 ```bash
 pip install -e ".[dev,all]"
 ruff check src tests
 ruff format --check src tests
+mypy
 pytest -q
 ```
 

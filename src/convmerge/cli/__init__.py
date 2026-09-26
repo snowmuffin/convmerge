@@ -17,6 +17,7 @@ from convmerge.cli import convert as _convert
 from convmerge.cli import data as _data
 from convmerge.cli import fetch as _fetch
 from convmerge.cli import mix as _mix
+from convmerge.cli import run as _run
 from convmerge.cli.data import FETCH_FILE_EXTENSIONS, SIDECAR_SUFFIXES
 
 __all__ = ["FETCH_FILE_EXTENSIONS", "SIDECAR_SUFFIXES", "main"]
@@ -44,6 +45,7 @@ _COMMANDS: dict[str, tuple[Callable, Callable]] = {
     "fetch": (_fetch._add_fetch, _fetch._cmd_fetch),
     "preset": (_convert._add_preset, _convert._cmd_preset),
     "mix": (_mix._add_mix, _mix._cmd_mix),
+    "run": (_run._add_run, _run._cmd_run),
 }
 
 

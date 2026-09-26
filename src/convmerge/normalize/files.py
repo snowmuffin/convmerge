@@ -1,0 +1,90 @@
+"""Normalize a file or a whole directory tree into clean JSONL.
+
+This is the logic behind ``convmerge normalize``; recipes call it directly.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Callable, Iterator
+from dataclasses import dataclass, field
+from pathlib import Path
+
+NORMALIZE_EXTENSIONS: tuple[str, ...] = (".parquet", ".json", ".jsonl")
+
+# Sidecars convmerge itself writes next to data files; never treat them as data.
+SIDECAR_SUFFIXES: tuple[str, ...] = (".fetch.json", ".mix.json")
+
+
+@dataclass
+class NormalizeResult:
+    """What :func:`normalize_path` wrote: ``(source, output, records)`` per file."""
+
+    files: list[tuple[Path, Path, int]] = field(default_factory=list)
+    failed: list[tuple[Path, str]] = field(default_factory=list)
+
+    @property
+    def records(self) -> int:
+        return sum(n for _, _, n in self.files)
+
+
+def normalize_file(src: Path, dst: Path, *, array_key: str = "conversation") -> int:
+    """Normalize one ``.parquet`` / ``.json`` / ``.jsonl`` file; return records written."""
+    # Imported lazily so that convert works without the parquet extra.
+    from convmerge.normalize.jsonl import normalize_to_jsonl
+
+    if src.suffix.lower() == ".parquet":
+        from convmerge.normalize.parquet import parquet_to_jsonl
+
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        return parquet_to_jsonl(src, dst)
+    return normalize_to_jsonl(src, dst, array_key=array_key)
+
+
+def iter_data_files(root: Path) -> Iterator[Path]:
+    """Data files under ``root`` in sorted order, skipping sidecars and hidden paths."""
+    for path in sorted(root.rglob("*")):
+        if not path.is_file() or path.suffix.lower() not in NORMALIZE_EXTENSIONS:
+            continue
+        if path.name.lower().endswith(SIDECAR_SUFFIXES):
+            continue
+        if any(part.startswith(".") for part in path.relative_to(root).parts):
+            # Hidden entries such as a cloned repo's .git directory.
+            continue
+        yield path
+
+
+def normalize_path(
+    src: Path,
+    dst: Path,
+    *,
+    array_key: str = "conversation",
+    on_file: Callable[[Path, Path, int | None, str | None], None] | None = None,
+) -> NormalizeResult:
+    """Normalize ``src`` (a file, written to ``dst``) or a directory (mirrored under ``dst``).
+
+    In a directory, a file that fails is recorded in ``result.failed`` and the
+    walk continues. ``on_file(src, dst, records, error)`` is called per file.
+    """
+    result = NormalizeResult()
+    if src.is_file():
+        n = normalize_file(src, dst, array_key=array_key)
+        result.files.append((src, dst, n))
+        if on_file:
+            on_file(src, dst, n, None)
+        return result
+    if not src.is_dir():
+        raise FileNotFoundError(f"input not found: {src}")
+    for in_path in iter_data_files(src):
+        out_path = dst / in_path.relative_to(src).with_suffix(".jsonl")
+        try:
+            n = normalize_file(in_path, out_path, array_key=array_key)
+        except Exception as e:  # noqa: BLE001 - one bad file must not stop the walk
+            msg = f"{type(e).__name__}: {e}"
+            result.failed.append((in_path, msg))
+            if on_file:
+                on_file(in_path, out_path, None, msg)
+            continue
+        result.files.append((in_path, out_path, n))
+        if on_file:
+            on_file(in_path, out_path, n, None)
+    return result

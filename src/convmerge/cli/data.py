@@ -8,12 +8,10 @@ import sys
 from pathlib import Path
 
 from convmerge.cli._common import add_progress_flag as _add_progress_flag
+from convmerge.normalize.files import NORMALIZE_EXTENSIONS as FETCH_FILE_EXTENSIONS
+from convmerge.normalize.files import SIDECAR_SUFFIXES
 
-FETCH_FILE_EXTENSIONS = (".parquet", ".json", ".jsonl")
-
-
-# Sidecars convmerge itself writes next to data files; never treat them as data.
-SIDECAR_SUFFIXES = (".fetch.json", ".mix.json")
+__all__ = ["FETCH_FILE_EXTENSIONS", "SIDECAR_SUFFIXES"]
 
 
 def _add_inspect(sub: argparse._SubParsersAction) -> None:
@@ -84,55 +82,26 @@ def _add_normalize(sub: argparse._SubParsersAction) -> None:
 
 
 def _cmd_normalize(args: argparse.Namespace) -> None:
+    from convmerge.normalize.files import normalize_path
+
     src: Path = args.input
     dst: Path = args.output
-
+    if not src.exists():
+        print(f"error: input not found: {src}", file=sys.stderr)
+        sys.exit(1)
     if src.is_file():
-        n = _normalize_one_file(src, dst, args.array_key)
+        n = normalize_path(src, dst, array_key=args.array_key).records
         print(f"{src} -> {dst}: {n} records", file=sys.stderr)
         return
 
-    if not src.is_dir():
-        print(f"error: input not found: {src}", file=sys.stderr)
-        sys.exit(1)
+    def report(in_path: Path, out_path: Path, n: int | None, error: str | None) -> None:
+        if error is not None:
+            print(f"[fail] {in_path}: {error}", file=sys.stderr)
+        else:
+            print(f"[ok] {in_path} -> {out_path} ({n} records)", file=sys.stderr)
 
-    total_files = 0
-    total_rows = 0
-    for in_path in sorted(src.rglob("*")):
-        if not in_path.is_file():
-            continue
-        if in_path.suffix.lower() not in FETCH_FILE_EXTENSIONS:
-            continue
-        if in_path.name.lower().endswith(SIDECAR_SUFFIXES):
-            continue
-        if any(part.startswith(".") for part in in_path.relative_to(src).parts):
-            # Hidden entries such as a cloned repo's .git directory.
-            continue
-        rel = in_path.relative_to(src).with_suffix(".jsonl")
-        out_path = dst / rel
-        try:
-            n = _normalize_one_file(in_path, out_path, args.array_key)
-        except Exception as e:  # noqa: BLE001
-            print(f"[fail] {in_path}: {type(e).__name__}: {e}", file=sys.stderr)
-            continue
-        total_files += 1
-        total_rows += n
-        print(f"[ok] {in_path} -> {out_path} ({n} records)", file=sys.stderr)
-    print(f"[done] {total_files} files, {total_rows} records", file=sys.stderr)
-
-
-def _normalize_one_file(src: Path, dst: Path, array_key: str = "conversation") -> int:
-    # Imported lazily so that ``convmerge convert`` works without the
-    # ``parquet`` extra when no parquet files are touched.
-    from convmerge.normalize.jsonl import normalize_to_jsonl
-
-    suffix = src.suffix.lower()
-    if suffix == ".parquet":
-        from convmerge.normalize.parquet import parquet_to_jsonl
-
-        dst.parent.mkdir(parents=True, exist_ok=True)
-        return parquet_to_jsonl(src, dst)
-    return normalize_to_jsonl(src, dst, array_key=array_key)
+    result = normalize_path(src, dst, array_key=args.array_key, on_file=report)
+    print(f"[done] {len(result.files)} files, {result.records} records", file=sys.stderr)
 
 
 def _add_dedupe(sub: argparse._SubParsersAction) -> None:

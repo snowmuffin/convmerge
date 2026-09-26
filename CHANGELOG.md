@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-09-26
+
+Reproducible pipelines. No breaking changes: existing commands behave
+exactly as in 0.7.
+
+### Added
+
+- `convmerge run recipe.yaml`: a declarative recipe chains fetch (manifest
+  entry fields, `{manifest, name}` to reuse an existing fetch manifest, or a
+  local `path`) → normalize → convert per source, then mix → dedupe into the
+  output. Each step calls the same function as the CLI, so a recipe produces
+  byte-for-byte the output of the hand-typed commands (verified on Stanford
+  Alpaca, KoAlpaca, LLaMA-Factory tool-calling and DPO data).
+- `recipe.lock.json`: per-step options, convmerge version, and input/output
+  SHA-256 digests (cached by size and mtime). Re-runs repeat only steps whose
+  options, inputs, or version changed or whose output was modified; a re-run
+  that reproduces its output does not propagate downstream.
+- `run --plan` (what would run and why), `--frozen` (exit 1 unless up to
+  date, for CI), `--force [STEP|source|kind ...]`, and `--init` (commented
+  template). `build/report.json` collects per-step stats and drop reasons.
+- Steps write through hidden `.part` paths, so a failed run keeps previous
+  outputs and the lock file intact. Recipe errors name the exact key.
+- `convmerge.normalize.files.normalize_path()`: directory normalization as a
+  library function (used by the CLI and recipes).
+- Docs: `docs/recipes.md`; `docs/api.md` covers `convmerge.recipe`.
+
+### Changed
+
+- CI type-checks with mypy (`mypy` is part of the `dev` extra); fixed the
+  handful of issues it found.
+
 ## [0.7.0] - 2026-09-26
 
 Scale and extension. See [docs/migration-0.7.md](docs/migration-0.7.md);

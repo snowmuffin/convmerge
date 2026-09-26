@@ -48,7 +48,7 @@ adapter_options:
 
 def _require_yaml() -> Any:
     try:
-        import yaml  # type: ignore[import-untyped]
+        import yaml
     except ImportError as e:
         raise ImportError(
             "Preset files require PyYAML. Install with: pip install 'convmerge[preset]' (or [all]) "
