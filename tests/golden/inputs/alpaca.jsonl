@@ -1,0 +1,4 @@
+{"instruction": "Translate to French", "input": "Good morning", "output": "Bonjour"}
+{"instruction": "Name a primary color", "input": "", "output": "Red"}
+{"instruction": "Summarize", "input": "Long text here.", "response": "Short."}
+{"instruction": "And in German?", "input": "", "output": "Guten Morgen", "system": "You are a translator.", "history": [["Translate 'Good morning' to French", "Bonjour"]]}

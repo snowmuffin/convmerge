@@ -99,8 +99,9 @@ convmerge normalize -i ./raw -o ./jsonl
 ```
 
 Handles parquet (streamed via `pyarrow`), top-level JSON arrays, concatenated
-single-line JSON (`{...}{...}{...}`), and already-valid JSONL. A directory
-input is walked recursively and mirrored under the output directory.
+single-line JSON (`{...}{...}{...}`), JSONL whose lines are arrays (wrapped as
+`{"conversation": [...]}`), and already-valid JSONL. A directory input is
+walked recursively and mirrored under the output directory.
 
 ### 3. `convert` — adapter + emitter pipeline
 
@@ -120,12 +121,19 @@ convmerge convert -i ./jsonl/mixed.jsonl -o ./out.jsonl --preset convert_preset.
 Adapters: `alpaca`, `sharegpt`, `chat` (alias `auto`).  
 Emitters: `messages`, `alpaca`.
 
-> **ShareGPT multi-turn:** `--from sharegpt` currently splits each
-> conversation into independent user/assistant pairs (dropping the system
-> prompt and earlier context) and warns about it; the default switches to
-> keeping the whole conversation in 0.6.0. Opt in now with
-> `--adapter-kwargs '{"sharegpt": {"turn_mode": "full"}}'`, or pin
-> `"pairs"` to keep the old output. See [docs/format.md](docs/format.md#sharegpt).
+> **Tool calling and multimodal:** OpenAI `tool_calls` / `tools`, LLaMA-Factory
+> `function_call` / `observation` turns, and image / audio / video references
+> (`image_url` parts, `images` columns with `<image>` tokens) are preserved in
+> the `messages` output. Media is kept by reference only — convmerge never
+> downloads or decodes it. `--from sharegpt` keeps whole conversations since
+> 0.6.0 (`turn_mode: pairs` restores the old split). See
+> [docs/format.md](docs/format.md#sharegpt).
+
+Every example is validated before it is written; ones with no user turn,
+empty messages, or unmatched tool results are dropped and counted by reason
+(`--on-invalid keep|fail` to change that, `--report PATH` for details,
+`convmerge validate -i FILE` to check an existing file). See
+[docs/format.md](docs/format.md#validation).
 
 Presets and team-specific tuning: [docs/custom_presets.md](docs/custom_presets.md).
 
@@ -197,6 +205,9 @@ To keep the package lean and dependency-free at its core, `convmerge` does
   downstream trainers apply their own template.
 - **Tokenizer-aware length filtering, packing, or curriculum scheduling.**
   Those live in the training stack, not here.
+- **Downloading, decoding, or transforming media.** Images, audio, and video
+  are carried through as references (URLs or paths) exactly as the source
+  gave them; fetching and preprocessing the files is the trainer's job.
 - **Scraping HTML pages or running browser automation.** Structured JSON /
   JSONL / Parquet inputs only.
 
@@ -244,7 +255,7 @@ GitHub Actions secret.
 
 ## Changelog
 
-[CHANGELOG.md](CHANGELOG.md)
+[CHANGELOG.md](CHANGELOG.md) · upgrading from 0.5: [docs/migration-0.6.md](docs/migration-0.6.md)
 
 ## License
 

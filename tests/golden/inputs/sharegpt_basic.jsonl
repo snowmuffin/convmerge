@@ -1,0 +1,4 @@
+{"conversations": [{"from": "human", "value": "2+2?"}, {"from": "gpt", "value": "4"}]}
+{"conversations": [{"from": "system", "value": "Be brief."}, {"from": "human", "value": "Capital of France?"}, {"from": "gpt", "value": "Paris."}, {"from": "human", "value": "And its population?"}, {"from": "gpt", "value": "About 2.1 million."}]}
+{"conversations": [{"from": "human", "value": "Hi"}, {"from": "human", "value": "Are you there?"}, {"from": "gpt", "value": "Yes."}, {"from": "human", "value": "Bye"}]}
+{"conversations": [{"from": "system", "value": ""}, {"from": "human", "value": "Ping"}, {"from": "gpt", "value": "Pong"}]}

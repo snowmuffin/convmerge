@@ -1,0 +1,4 @@
+{"instruction": "2+2?", "input": "", "output": "4"}
+{"instruction": "Capital of France?\nAnd its population?", "input": "", "output": "About 2.1 million.", "system": "Be brief."}
+{"instruction": "Hi\nAre you there?\nBye", "input": "", "output": "Yes."}
+{"instruction": "Ping", "input": "", "output": "Pong"}

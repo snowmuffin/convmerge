@@ -25,10 +25,17 @@ adapter_options:
     # content_keys: [content, value, text]
     # role_map: { human: user, gpt: assistant }
   sharegpt:                  # used when adapter: sharegpt
-    turn_mode: full          # full | pairs  (unset = pairs + FutureWarning; full in 0.6.0)
+    turn_mode: full          # full (default) | pairs (0.5.x behavior)
+
+output_options:              # optional; CLI flags override each key
+  tool_arguments: string     # string (OpenAI) | object
+  keep_meta: false           # true, or a list such as [source, id]
+  meta_key: meta
+  alpaca_multiturn: flatten  # flatten | history | drop
 ```
 
-CLI flags `--from`, `--format`, and `--adapter-kwargs` override the preset when provided.
+CLI flags `--from`, `--format`, `--adapter-kwargs`, `--tool-arguments`, `--keep-meta`,
+`--meta-key`, and `--alpaca-multiturn` override the preset when provided.
 
 ## Commands
 

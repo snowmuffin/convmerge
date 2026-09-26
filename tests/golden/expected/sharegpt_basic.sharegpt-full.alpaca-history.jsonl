@@ -1,0 +1,3 @@
+{"instruction": "2+2?", "input": "", "output": "4"}
+{"instruction": "And its population?", "input": "", "output": "About 2.1 million.", "history": [["Capital of France?", "Paris."]], "system": "Be brief."}
+{"instruction": "Ping", "input": "", "output": "Pong"}

@@ -1,0 +1,7 @@
+{"conversation": [{"role": "user", "content": "hi"}, {"role": "assistant", "content": "hello"}]}
+{"text": "Plain pretraining-style text with no roles."}
+{"conversation_a": [{"role": "user", "content": "Q"}, {"role": "assistant", "content": "A1"}], "conversation_b": [{"role": "user", "content": "Q"}, {"role": "assistant", "content": "A2"}], "winner": "model_b"}
+{"conversation_a": [{"role": "user", "content": "Q"}, {"role": "assistant", "content": "A1"}], "conversation_b": [{"role": "user", "content": "Q"}, {"role": "assistant", "content": "A2"}], "winner": "tie"}
+{"question": "Why is the sky blue?", "answer": "Rayleigh scattering."}
+{"prompt": "Write a haiku", "response": "Autumn moonlight / a worm digs silently / into the chestnut", "text": "noise"}
+{"messages": [{"from": "human", "value": "custom keys"}, {"from": "gpt", "value": "ok"}]}

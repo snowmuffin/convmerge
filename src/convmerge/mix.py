@@ -7,6 +7,8 @@ import random
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from convmerge.io import iter_jsonl
+
 
 @dataclass(frozen=True)
 class MixSource:
@@ -194,18 +196,7 @@ def load_mix_config(path: Path) -> tuple[list[MixSource], dict]:
 
 
 def _load_valid_lines(path: Path, encoding: str) -> list[str]:
-    lines = []
-    with path.open(encoding=encoding) as f:
-        for raw in f:
-            stripped = raw.strip()
-            if not stripped:
-                continue
-            try:
-                json.loads(stripped)
-            except json.JSONDecodeError:
-                continue
-            lines.append(stripped)
-    return lines
+    return [line.raw for line in iter_jsonl(path, encoding=encoding)]
 
 
 def _allocate(sources: list[MixSource], total: int) -> list[int]:

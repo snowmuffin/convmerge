@@ -3,12 +3,9 @@
 from __future__ import annotations
 
 import argparse
-import contextlib
 import json
+import logging
 import sys
-import warnings
-from collections import Counter
-from collections.abc import Iterator
 from pathlib import Path
 
 from convmerge import __version__
@@ -33,6 +30,7 @@ optional dependencies (pip install "convmerge[EXTRA]"):
 def main(argv: list[str] | None = None) -> None:
     parser = _build_parser()
     args = parser.parse_args(argv)
+    _configure_logging()
 
     if args.command == "convert":
         _cmd_convert(args)
@@ -41,6 +39,8 @@ def main(argv: list[str] | None = None) -> None:
             _cmd_preset_init(args)
         else:
             _cmd_preset_validate(args)
+    elif args.command == "validate":
+        _cmd_validate(args)
     elif args.command == "inspect":
         _cmd_inspect(args)
     elif args.command == "normalize":
@@ -55,6 +55,25 @@ def main(argv: list[str] | None = None) -> None:
         _cmd_mix(args)
     else:  # pragma: no cover - argparse enforces ``required=True``
         parser.error(f"unknown command: {args.command}")
+
+
+class _StderrHandler(logging.Handler):
+    """Write ``warning: ...`` lines to whatever ``sys.stderr`` is at emit time."""
+
+    def emit(self, record: logging.LogRecord) -> None:
+        try:
+            print(f"{record.levelname.lower()}: {record.getMessage()}", file=sys.stderr)
+        except Exception:  # noqa: BLE001 - logging must never break the command
+            self.handleError(record)
+
+
+def _configure_logging() -> None:
+    """Route library log records to stderr unless the host app configured logging."""
+    log = logging.getLogger("convmerge")
+    if logging.getLogger().handlers or any(isinstance(h, _StderrHandler) for h in log.handlers):
+        return
+    log.addHandler(_StderrHandler())
+    log.setLevel(logging.INFO)
 
 
 def _add_progress_flag(p: argparse.ArgumentParser) -> None:
@@ -79,6 +98,7 @@ def _build_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     _add_convert(subparsers)
+    _add_validate(subparsers)
     _add_inspect(subparsers)
     _add_normalize(subparsers)
     _add_dedupe(subparsers)
@@ -130,6 +150,45 @@ def _add_convert(sub: argparse._SubParsersAction) -> None:
         ),
     )
     p.add_argument("--encoding", default="utf-8", help="File encoding (default: utf-8)")
+    p.add_argument(
+        "--on-invalid",
+        choices=("drop", "keep", "fail"),
+        default="drop",
+        help="What to do with examples that fail validation (no user turn, empty "
+        "messages, orphan tool results, ...): drop and count them (default), "
+        "keep them, or stop with an error",
+    )
+    p.add_argument(
+        "--report",
+        type=Path,
+        default=None,
+        metavar="PATH",
+        help="Write a JSON report of counts, drop reasons, and sample line numbers",
+    )
+    p.add_argument(
+        "--tool-arguments",
+        choices=("string", "object"),
+        default=None,
+        help="messages format: write tool-call arguments as a JSON string "
+        "(default, OpenAI style) or as a JSON object",
+    )
+    p.add_argument(
+        "--keep-meta",
+        nargs="?",
+        const="*",
+        default=None,
+        metavar="KEYS",
+        help="Also write provenance (source, id, branch) under 'meta'; "
+        "optionally only these comma-separated keys, e.g. --keep-meta source,id",
+    )
+    p.add_argument("--meta-key", default=None, help="Output key for --keep-meta (default: meta)")
+    p.add_argument(
+        "--alpaca-multiturn",
+        choices=("flatten", "history", "drop"),
+        default=None,
+        help="alpaca format, conversations longer than one pair: flatten into one "
+        "instruction (default, lossy), write a LLaMA-Factory 'history' list, or drop",
+    )
     _add_progress_flag(p)
 
 
@@ -146,6 +205,7 @@ def _cmd_convert(args: argparse.Namespace) -> None:
             output_format=args.output_format,
             encoding=args.encoding,
             adapter_kwargs_json=args.adapter_kwargs,
+            emit_overrides=_emit_overrides(args),
         )
     except (ValueError, OSError) as e:
         print(f"error: {e}", file=sys.stderr)
@@ -153,10 +213,11 @@ def _cmd_convert(args: argparse.Namespace) -> None:
     except ImportError as e:
         print(f"error: {e}", file=sys.stderr)
         sys.exit(2)
+    from convmerge.convert import InvalidExampleError
     from convmerge.progress import progress_enabled
 
     stats = ConvertStats()
-    with _count_future_warnings() as future:
+    try:
         n_in, n_out = convert_file(
             args.input,
             args.output,
@@ -166,10 +227,16 @@ def _cmd_convert(args: argparse.Namespace) -> None:
             adapter_options=cfg.adapter_options,
             progress=progress_enabled(args.progress),
             stats=stats,
+            on_invalid=args.on_invalid,
+            emit_options=cfg.emit_options,
         )
+    except InvalidExampleError as e:
+        print(f"error: {e} (use --on-invalid drop or keep to continue)", file=sys.stderr)
+        sys.exit(1)
     print(f"read {n_in} lines, wrote {n_out} examples", file=sys.stderr)
-    for message, count in future.items():
-        print(f"warning: {message} [{count:,} records affected]", file=sys.stderr)
+    _print_drop_summary(stats, kept=args.on_invalid == "keep")
+    if args.report:
+        _write_report(args.report, stats)
     if stats.skipped:
         print(
             f"warning: skipped {stats.skipped:,} lines "
@@ -185,22 +252,84 @@ def _cmd_convert(args: argparse.Namespace) -> None:
         )
 
 
-@contextlib.contextmanager
-def _count_future_warnings() -> Iterator[Counter[str]]:
-    """Collapse per-record FutureWarnings into one counted line per message."""
-    counts: Counter[str] = Counter()
-    with warnings.catch_warnings():
-        original = warnings.showwarning
+def _emit_overrides(args: argparse.Namespace) -> dict[str, object]:
+    out: dict[str, object] = {}
+    if args.tool_arguments is not None:
+        out["tool_arguments"] = args.tool_arguments
+    if args.keep_meta is not None:
+        keys = [k.strip() for k in args.keep_meta.split(",") if k.strip()]
+        out["keep_meta"] = True if args.keep_meta == "*" else tuple(keys)
+    if args.meta_key is not None:
+        out["meta_key"] = args.meta_key
+    if args.alpaca_multiturn is not None:
+        out["alpaca_multiturn"] = args.alpaca_multiturn
+    return out
 
-        def show(message, category, *args, **kwargs):
-            if issubclass(category, FutureWarning):
-                counts[str(message)] += 1
-            else:
-                original(message, category, *args, **kwargs)
 
-        warnings.simplefilter("always", FutureWarning)
-        warnings.showwarning = show
-        yield counts
+def _print_drop_summary(stats: ConvertStats, *, kept: bool = False) -> None:
+    _print_lossy_summary(stats)
+    if not stats.drop_reasons:
+        return
+    reasons = ", ".join(f"{r}={n:,}" for r, n in sorted(stats.drop_reasons.items()))
+    if kept:
+        print(f"warning: kept {stats.kept_invalid:,} invalid examples ({reasons})", file=sys.stderr)
+    if stats.dropped:
+        print(f"warning: dropped {stats.dropped:,} examples ({reasons})", file=sys.stderr)
+
+
+def _print_lossy_summary(stats: ConvertStats) -> None:
+    for reason, n in sorted(stats.lossy.items()):
+        hint = (
+            " (use --alpaca-multiturn history to keep turns, or drop)"
+            if reason == "lossy_multiturn_flattened"
+            else ""
+        )
+        print(f"warning: {n:,} examples written lossily: {reason}{hint}", file=sys.stderr)
+
+
+def _write_report(path: Path, stats: ConvertStats) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(stats.to_report(), ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
+    print(f"report: {path}", file=sys.stderr)
+
+
+def _add_validate(sub: argparse._SubParsersAction) -> None:
+    p = sub.add_parser(
+        "validate",
+        help="Check a JSONL file's examples for SFT problems (exit 1 if any are invalid)",
+    )
+    p.add_argument("--input", "-i", type=Path, required=True, help="Input JSONL path")
+    p.add_argument(
+        "--from",
+        dest="adapter",
+        default="chat",
+        metavar="ADAPTER",
+        help="Adapter used to read records (default: chat, which reads messages rows)",
+    )
+    p.add_argument("--encoding", default="utf-8")
+
+
+def _cmd_validate(args: argparse.Namespace) -> None:
+    from convmerge.convert import validate_file
+
+    if not args.input.is_file():
+        print(f"error: input file not found: {args.input}", file=sys.stderr)
+        sys.exit(1)
+    try:
+        stats = validate_file(args.input, adapter_name=args.adapter, encoding=args.encoding)
+    except ValueError as e:
+        print(f"error: {e}", file=sys.stderr)
+        sys.exit(2)
+    report = stats.to_report()
+    report["valid"] = report.pop("written")
+    report["invalid"] = report.pop("dropped")
+    for key in ("kept_invalid",):
+        report.pop(key)
+    print(json.dumps(report, ensure_ascii=False, indent=2))
+    if stats.dropped or stats.skipped:
+        sys.exit(1)
 
 
 def _add_preset(sub: argparse._SubParsersAction) -> None:
@@ -305,6 +434,12 @@ def _add_normalize(sub: argparse._SubParsersAction) -> None:
         required=True,
         help="Output file (when --input is a file) or directory",
     )
+    p.add_argument(
+        "--array-key",
+        default="conversation",
+        help="Key that wraps records which are JSON arrays, e.g. one conversation "
+        "per line as a list of turns (default: conversation)",
+    )
 
 
 def _cmd_normalize(args: argparse.Namespace) -> None:
@@ -312,7 +447,7 @@ def _cmd_normalize(args: argparse.Namespace) -> None:
     dst: Path = args.output
 
     if src.is_file():
-        n = _normalize_one_file(src, dst)
+        n = _normalize_one_file(src, dst, args.array_key)
         print(f"{src} -> {dst}: {n} records", file=sys.stderr)
         return
 
@@ -335,7 +470,7 @@ def _cmd_normalize(args: argparse.Namespace) -> None:
         rel = in_path.relative_to(src).with_suffix(".jsonl")
         out_path = dst / rel
         try:
-            n = _normalize_one_file(in_path, out_path)
+            n = _normalize_one_file(in_path, out_path, args.array_key)
         except Exception as e:  # noqa: BLE001
             print(f"[fail] {in_path}: {type(e).__name__}: {e}", file=sys.stderr)
             continue
@@ -345,7 +480,7 @@ def _cmd_normalize(args: argparse.Namespace) -> None:
     print(f"[done] {total_files} files, {total_rows} records", file=sys.stderr)
 
 
-def _normalize_one_file(src: Path, dst: Path) -> int:
+def _normalize_one_file(src: Path, dst: Path, array_key: str = "conversation") -> int:
     # Imported lazily so that ``convmerge convert`` works without the
     # ``parquet`` extra when no parquet files are touched.
     from convmerge.normalize.jsonl import normalize_to_jsonl
@@ -356,7 +491,7 @@ def _normalize_one_file(src: Path, dst: Path) -> int:
 
         dst.parent.mkdir(parents=True, exist_ok=True)
         return parquet_to_jsonl(src, dst)
-    return normalize_to_jsonl(src, dst)
+    return normalize_to_jsonl(src, dst, array_key=array_key)
 
 
 def _add_dedupe(sub: argparse._SubParsersAction) -> None:

@@ -10,6 +10,7 @@ from convmerge.config import (
     AdapterOptions,
     ConvertConfig,
     chat_adapter_options_from_mapping,
+    emit_options_from_mapping,
     sharegpt_adapter_options_from_mapping,
 )
 
@@ -32,7 +33,14 @@ adapter_options:
     #   gpt: assistant
   # Optional: sharegpt adapter (adapter: sharegpt)
   # sharegpt:
-  #   turn_mode: full         # full (whole conversation) | pairs (pre-0.6 default)
+  #   turn_mode: full         # full (default, whole conversation) | pairs (0.5.x behavior)
+
+# Optional: output format options
+# output_options:
+#   tool_arguments: string    # string (OpenAI) | object
+#   keep_meta: false          # true, or a list of keys such as [source, id]
+#   meta_key: meta
+#   alpaca_multiturn: flatten # flatten | history | drop
 """
 
 
@@ -83,6 +91,12 @@ def load_convert_preset(path: Path) -> ConvertConfig:
                 chat=chat_adapter_options_from_mapping(ch) if ch is not None else None,
                 sharegpt=sharegpt_adapter_options_from_mapping(sg) if sg is not None else None,
             )
+    emit_options = None
+    oo = data.get("output_options")
+    if oo is not None:
+        if not isinstance(oo, dict):
+            raise ValueError("output_options must be a mapping")
+        emit_options = emit_options_from_mapping(oo)
     if not isinstance(adapter, str) or not adapter.strip():
         raise ValueError("preset requires non-empty string 'adapter'")
     if not isinstance(output_format, str) or not output_format.strip():
@@ -94,6 +108,7 @@ def load_convert_preset(path: Path) -> ConvertConfig:
         output_format=output_format.strip(),
         encoding=encoding.strip(),
         adapter_options=adapter_options,
+        emit_options=emit_options,
     )
 
 
