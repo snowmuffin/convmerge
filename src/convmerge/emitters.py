@@ -9,6 +9,20 @@ from typing import Any, Literal
 from convmerge.models import ChatMessage, ContentPart, ToolCall, TrainingExample
 
 EmitterFn = Callable[[TrainingExample], dict[str, Any]]
+
+
+class UnrepresentableExample(ValueError):
+    """Raised by an emitter for an example its format cannot hold losslessly.
+
+    ``convert`` drops the example and counts ``reason`` (an
+    ``unrepresentable_*`` code) in its stats.
+    """
+
+    def __init__(self, reason: str, message: str = ""):
+        super().__init__(message or reason)
+        self.reason = reason
+
+
 ToolArguments = Literal["string", "object"]
 
 # Media part → OpenAI-style content part. ``image_url`` is the OpenAI schema;

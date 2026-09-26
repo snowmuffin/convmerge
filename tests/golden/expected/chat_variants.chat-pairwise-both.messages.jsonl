@@ -1,5 +1,4 @@
 {"messages": [{"role": "user", "content": "hi"}, {"role": "assistant", "content": "hello"}]}
-{"messages": [{"role": "assistant", "content": "Plain pretraining-style text with no roles."}]}
 {"messages": [{"role": "user", "content": "Q"}, {"role": "assistant", "content": "A1"}]}
 {"messages": [{"role": "user", "content": "Q"}, {"role": "assistant", "content": "A2"}]}
 {"messages": [{"role": "user", "content": "Q"}, {"role": "assistant", "content": "A1"}]}

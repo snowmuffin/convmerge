@@ -4,22 +4,47 @@ from __future__ import annotations
 
 import json
 from collections.abc import Iterator
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
+from typing import TYPE_CHECKING, Literal, TextIO
 
 from convmerge.adapter_resolve import resolve_adapter
 from convmerge.config import AdapterOptions, ConvertConfig
-from convmerge.emitters import ToolArguments, get_emitter
+from convmerge.emitters import EmitterFn, ToolArguments, UnrepresentableExample, get_emitter
 from convmerge.io import ReadStats, iter_jsonl
+from convmerge.validate import validate_example
+
+if TYPE_CHECKING:
+    from convmerge.adapters import AdapterFn
+    from convmerge.progress import ProgressReporter
+
+OnInvalid = Literal["drop", "keep", "fail"]
+
+# Line numbers remembered per drop reason, for reports.
+_SAMPLE_LINES = 5
+
+
+class InvalidExampleError(ValueError):
+    """Raised by ``convert_file(on_invalid="fail")`` at the first invalid example."""
+
+    def __init__(self, line_number: int, reasons: list[str]):
+        super().__init__(f"line {line_number}: invalid example ({', '.join(reasons)})")
+        self.line_number = line_number
+        self.reasons = reasons
 
 
 @dataclass
 class ConvertStats:
     """Per-run counters filled by :func:`convert_file` when ``stats`` is passed.
 
-    Every non-blank input line lands in exactly one of ``invalid_json``,
-    ``non_object``, ``no_example``, or contributes to ``written`` (one record
-    may yield several examples, e.g. ``pairwise_mode="both"``).
+    Every non-blank input line is either ``invalid_json``, ``non_object``,
+    ``no_example`` (the adapter found nothing to map), or yields one or more
+    examples (e.g. ``pairwise_mode="both"``). Each example is then either
+    ``written`` or ``dropped``; ``drop_reasons`` counts why (validation reason
+    codes, see :mod:`convmerge.validate`, or an output format that cannot
+    represent the example) and ``drop_lines`` keeps the first few input line
+    numbers per reason. With ``on_invalid="keep"``, invalid examples are
+    written anyway and counted in ``kept_invalid``.
     """
 
     lines_read: int = 0
@@ -29,11 +54,44 @@ class ConvertStats:
     non_object: int = 0
     no_example: int = 0
     first_invalid_line: int | None = None
+    dropped: int = 0
+    kept_invalid: int = 0
+    drop_reasons: dict[str, int] = field(default_factory=dict)
+    drop_lines: dict[str, list[int]] = field(default_factory=dict)
 
     @property
     def skipped(self) -> int:
-        """Non-blank lines that produced no output."""
+        """Non-blank lines that produced no example at all."""
         return self.invalid_json + self.non_object + self.no_example
+
+    def note(self, reasons: list[str], line_number: int) -> None:
+        for r in reasons:
+            self.drop_reasons[r] = self.drop_reasons.get(r, 0) + 1
+            lines = self.drop_lines.setdefault(r, [])
+            if len(lines) < _SAMPLE_LINES:
+                lines.append(line_number)
+
+    def to_report(self) -> dict[str, object]:
+        """JSON-ready summary (used by ``convert --report``)."""
+        from convmerge.validate import REASONS
+
+        report: dict[str, object] = asdict(self)
+        report["skipped_lines"] = self.skipped
+        report["reason_descriptions"] = {
+            r: REASONS.get(r, _describe_extra(r)) for r in sorted(self.drop_reasons)
+        }
+        return report
+
+
+def _describe_extra(reason: str) -> str:
+    kind, _, media = reason.partition("_")
+    if kind == "unresolved" and media:
+        return f"a {media} placeholder has no matching reference in the record"
+    if kind == "unused" and media:
+        return f"the record lists more {media} references than placeholders"
+    if reason.startswith("unrepresentable"):
+        return "the output format cannot represent this example losslessly"
+    return reason
 
 
 def convert_file(
@@ -47,9 +105,15 @@ def convert_file(
     progress: bool = False,
     stats: ConvertStats | None = None,
     tool_arguments: ToolArguments = "string",
+    on_invalid: OnInvalid = "drop",
 ) -> tuple[int, int]:
     """
-    Read JSONL lines, parse with adapter, write emitted JSONL.
+    Read JSONL lines, parse with adapter, validate, write emitted JSONL.
+
+    Each example is checked by :func:`convmerge.validate.validate_example`.
+    ``on_invalid`` decides what happens to one that fails: ``"drop"``
+    (default; counted in ``stats``), ``"keep"`` (written anyway), or
+    ``"fail"`` (raise :class:`InvalidExampleError`).
 
     ``tool_arguments`` controls how tool-call arguments are written by the
     ``messages`` format: ``"string"`` (JSON-encoded, OpenAI style) or
@@ -64,6 +128,8 @@ def convert_file(
     """
     from convmerge.progress import ProgressReporter
 
+    if on_invalid not in ("drop", "keep", "fail"):
+        raise ValueError(f"on_invalid must be 'drop', 'keep', or 'fail', got {on_invalid!r}")
     adapter = resolve_adapter(adapter_name, adapter_options)
     emitter = get_emitter(output_format, tool_arguments=tool_arguments)
 
@@ -72,32 +138,82 @@ def convert_file(
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
+    with output_path.open("w", encoding=encoding) as fout:
+        _run(input_path, fout, adapter, emitter, st, reporter, encoding, on_invalid)
+
+    reporter.done()
+    return st.lines_read, st.written
+
+
+def validate_file(
+    input_path: Path,
+    *,
+    adapter_name: str = "chat",
+    adapter_options: AdapterOptions | None = None,
+    encoding: str = "utf-8",
+) -> ConvertStats:
+    """Check every example in a JSONL file without writing anything.
+
+    Records are read through ``adapter_name`` (default ``chat``, which
+    understands the ``messages`` rows ``convert`` writes) and validated with
+    :func:`convmerge.validate.validate_example`. Invalid examples are counted
+    in ``dropped`` / ``drop_reasons`` / ``drop_lines`` of the returned stats.
+    """
+    st = ConvertStats()
+    adapter = resolve_adapter(adapter_name, adapter_options)
+    _run(input_path, None, adapter, None, st, None, encoding, "drop")
+    return st
+
+
+def _run(
+    input_path: Path,
+    fout: TextIO | None,
+    adapter: AdapterFn,
+    emitter: EmitterFn | None,
+    st: ConvertStats,
+    reporter: ProgressReporter | None,
+    encoding: str,
+    on_invalid: OnInvalid,
+) -> None:
     read = ReadStats()
     try:
-        with output_path.open("w", encoding=encoding) as fout:
-            for line in iter_jsonl(input_path, encoding=encoding, stats=read):
+        for line in iter_jsonl(input_path, encoding=encoding, stats=read):
+            if reporter is not None:
                 reporter.update()
-                obj = line.value
-                if not isinstance(obj, dict):
-                    st.non_object += 1
+            obj = line.value
+            if not isinstance(obj, dict):
+                st.non_object += 1
+                continue
+            produced = 0
+            for example in adapter(obj):
+                produced += 1
+                reasons = validate_example(example)
+                if reasons:
+                    if on_invalid == "fail":
+                        raise InvalidExampleError(line.number, reasons)
+                    st.note(reasons, line.number)
+                    if on_invalid == "drop":
+                        st.dropped += 1
+                        continue
+                    st.kept_invalid += 1
+                if fout is None or emitter is None:
+                    st.written += 1
                     continue
-                produced = 0
-                for example in adapter(obj):
+                try:
                     row = emitter(example)
-                    fout.write(json.dumps(row, ensure_ascii=False) + "\n")
-                    produced += 1
-                if produced:
-                    st.written += produced
-                else:
-                    st.no_example += 1
+                except UnrepresentableExample as e:
+                    st.note([e.reason], line.number)
+                    st.dropped += 1
+                    continue
+                fout.write(json.dumps(row, ensure_ascii=False) + "\n")
+                st.written += 1
+            if not produced:
+                st.no_example += 1
     finally:
         st.lines_read = read.lines_read
         st.blank = read.blank
         st.invalid_json = read.invalid_json
         st.first_invalid_line = read.first_invalid_line
-
-    reporter.done()
-    return st.lines_read, st.written
 
 
 def convert_with_config(
@@ -108,6 +224,7 @@ def convert_with_config(
     progress: bool = False,
     stats: ConvertStats | None = None,
     tool_arguments: ToolArguments = "string",
+    on_invalid: OnInvalid = "drop",
 ) -> tuple[int, int]:
     """Run :func:`convert_file` using a resolved :class:`convmerge.config.ConvertConfig`."""
     return convert_file(
@@ -120,6 +237,7 @@ def convert_with_config(
         progress=progress,
         stats=stats,
         tool_arguments=tool_arguments,
+        on_invalid=on_invalid,
     )
 
 
@@ -130,7 +248,7 @@ def iter_converted_lines(
     output_format: str,
     adapter_options: AdapterOptions | None = None,
 ) -> Iterator[str]:
-    """In-memory conversion (for tests)."""
+    """In-memory conversion (for tests); no validation."""
     adapter = resolve_adapter(adapter_name, adapter_options)
     emitter = get_emitter(output_format)
     for raw in lines:

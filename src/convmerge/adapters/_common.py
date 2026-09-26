@@ -289,8 +289,8 @@ def coerce_messages(
     Roles come from the first of ``role_keys`` present (lower-cased, then
     ``role_map``); content from the first usable ``content_keys`` value
     (string or parts). ``function_call`` turns become assistant tool calls.
-    Turns without content are skipped unless they carry tool calls; with
-    ``strip=True`` text is stripped and empty strings count as no content.
+    Turns without content (missing, null, or blank text) are skipped unless
+    they carry tool calls; with ``strip=True`` text is also stripped.
     """
     out: list[ChatMessage] = []
     for item in convs:
@@ -308,7 +308,11 @@ def coerce_messages(
                 continue
 
         tool_calls = parse_tool_calls(item)
-        empty = content is MISSING or content is None or (strip and content == "")
+        empty = (
+            content is MISSING
+            or content is None
+            or (isinstance(content, str) and not content.strip())
+        )
         if empty and not tool_calls:
             continue
         name = item.get("name")

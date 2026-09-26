@@ -39,6 +39,8 @@ def main(argv: list[str] | None = None) -> None:
             _cmd_preset_init(args)
         else:
             _cmd_preset_validate(args)
+    elif args.command == "validate":
+        _cmd_validate(args)
     elif args.command == "inspect":
         _cmd_inspect(args)
     elif args.command == "normalize":
@@ -96,6 +98,7 @@ def _build_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     _add_convert(subparsers)
+    _add_validate(subparsers)
     _add_inspect(subparsers)
     _add_normalize(subparsers)
     _add_dedupe(subparsers)
@@ -148,6 +151,21 @@ def _add_convert(sub: argparse._SubParsersAction) -> None:
     )
     p.add_argument("--encoding", default="utf-8", help="File encoding (default: utf-8)")
     p.add_argument(
+        "--on-invalid",
+        choices=("drop", "keep", "fail"),
+        default="drop",
+        help="What to do with examples that fail validation (no user turn, empty "
+        "messages, orphan tool results, ...): drop and count them (default), "
+        "keep them, or stop with an error",
+    )
+    p.add_argument(
+        "--report",
+        type=Path,
+        default=None,
+        metavar="PATH",
+        help="Write a JSON report of counts, drop reasons, and sample line numbers",
+    )
+    p.add_argument(
         "--tool-arguments",
         choices=("string", "object"),
         default="string",
@@ -177,21 +195,30 @@ def _cmd_convert(args: argparse.Namespace) -> None:
     except ImportError as e:
         print(f"error: {e}", file=sys.stderr)
         sys.exit(2)
+    from convmerge.convert import InvalidExampleError
     from convmerge.progress import progress_enabled
 
     stats = ConvertStats()
-    n_in, n_out = convert_file(
-        args.input,
-        args.output,
-        adapter_name=cfg.adapter,
-        output_format=cfg.output_format,
-        encoding=cfg.encoding,
-        adapter_options=cfg.adapter_options,
-        progress=progress_enabled(args.progress),
-        stats=stats,
-        tool_arguments=args.tool_arguments,
-    )
+    try:
+        n_in, n_out = convert_file(
+            args.input,
+            args.output,
+            adapter_name=cfg.adapter,
+            output_format=cfg.output_format,
+            encoding=cfg.encoding,
+            adapter_options=cfg.adapter_options,
+            progress=progress_enabled(args.progress),
+            stats=stats,
+            tool_arguments=args.tool_arguments,
+            on_invalid=args.on_invalid,
+        )
+    except InvalidExampleError as e:
+        print(f"error: {e} (use --on-invalid drop or keep to continue)", file=sys.stderr)
+        sys.exit(1)
     print(f"read {n_in} lines, wrote {n_out} examples", file=sys.stderr)
+    _print_drop_summary(stats, kept=args.on_invalid == "keep")
+    if args.report:
+        _write_report(args.report, stats)
     if stats.skipped:
         print(
             f"warning: skipped {stats.skipped:,} lines "
@@ -205,6 +232,61 @@ def _cmd_convert(args: argparse.Namespace) -> None:
             "run `convmerge normalize` first to repair the file",
             file=sys.stderr,
         )
+
+
+def _print_drop_summary(stats: ConvertStats, *, kept: bool = False) -> None:
+    if not stats.drop_reasons:
+        return
+    reasons = ", ".join(f"{r}={n:,}" for r, n in sorted(stats.drop_reasons.items()))
+    if kept:
+        print(f"warning: kept {stats.kept_invalid:,} invalid examples ({reasons})", file=sys.stderr)
+    if stats.dropped:
+        print(f"warning: dropped {stats.dropped:,} examples ({reasons})", file=sys.stderr)
+
+
+def _write_report(path: Path, stats: ConvertStats) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(stats.to_report(), ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
+    print(f"report: {path}", file=sys.stderr)
+
+
+def _add_validate(sub: argparse._SubParsersAction) -> None:
+    p = sub.add_parser(
+        "validate",
+        help="Check a JSONL file's examples for SFT problems (exit 1 if any are invalid)",
+    )
+    p.add_argument("--input", "-i", type=Path, required=True, help="Input JSONL path")
+    p.add_argument(
+        "--from",
+        dest="adapter",
+        default="chat",
+        metavar="ADAPTER",
+        help="Adapter used to read records (default: chat, which reads messages rows)",
+    )
+    p.add_argument("--encoding", default="utf-8")
+
+
+def _cmd_validate(args: argparse.Namespace) -> None:
+    from convmerge.convert import validate_file
+
+    if not args.input.is_file():
+        print(f"error: input file not found: {args.input}", file=sys.stderr)
+        sys.exit(1)
+    try:
+        stats = validate_file(args.input, adapter_name=args.adapter, encoding=args.encoding)
+    except ValueError as e:
+        print(f"error: {e}", file=sys.stderr)
+        sys.exit(2)
+    report = stats.to_report()
+    report["valid"] = report.pop("written")
+    report["invalid"] = report.pop("dropped")
+    for key in ("kept_invalid",):
+        report.pop(key)
+    print(json.dumps(report, ensure_ascii=False, indent=2))
+    if stats.dropped or stats.skipped:
+        sys.exit(1)
 
 
 def _add_preset(sub: argparse._SubParsersAction) -> None:
