@@ -7,6 +7,8 @@ from collections.abc import Iterator
 from pathlib import Path
 from typing import Any, Literal
 
+from convmerge.lfs import ensure_not_lfs_pointer
+
 JSONLShape = Literal["jsonl", "single_line", "json_array", "invalid", "empty"]
 
 # Bytes scanned from the head of a file to decide its shape without loading everything.
@@ -32,6 +34,7 @@ def load_jsonl(
       every row that did parse. Use this for large files where one bad line
       should not lose all the good data.
     """
+    ensure_not_lfs_pointer(path)
     out: list[dict[str, Any]] = []
     with open(path, encoding="utf-8") as f:
         for i, line in enumerate(f, 1):
@@ -65,6 +68,7 @@ def iter_json_records(path: str | Path, *, max_rows: int | None = None) -> Itera
     JSON object per line is expected.
     """
     p = Path(path)
+    ensure_not_lfs_pointer(p)
     suffix = p.suffix.lower()
     if suffix == ".jsonl":
         yielded = 0
@@ -114,6 +118,7 @@ def detect_jsonl_shape(path: str | Path) -> JSONLShape:
     - ``invalid``     : none of the above.
     """
     p = Path(path)
+    ensure_not_lfs_pointer(p)
     with p.open("rb") as f:
         head = f.read(_HEAD_PEEK_BYTES)
     if not head.strip():
@@ -161,6 +166,7 @@ def normalize_to_jsonl(src: str | Path, dst: str | Path) -> int:
     - Single-line concatenated objects (``{...}{...}{...}``).
     """
     src_p = Path(src)
+    ensure_not_lfs_pointer(src_p)
     dst_p = Path(dst)
     dst_p.parent.mkdir(parents=True, exist_ok=True)
 
