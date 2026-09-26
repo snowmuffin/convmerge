@@ -258,7 +258,14 @@ subcommands handle the pre-adapter cleanup step:
 
 - `normalize_to_jsonl(src, dst)` — rewrites parquet, JSON arrays, concatenated
   single-line JSON, or already-valid JSONL into clean newline-delimited JSONL.
-  Parquet requires the `parquet` extra.
+  Parquet requires the `parquet` extra. Records that are themselves arrays —
+  e.g. JSONL with one conversation per line stored as a list of turns — are
+  wrapped as `{"conversation": [...]}` (`--array-key` / `array_key=` to
+  rename), which the `chat` adapter reads directly; `inspect` profiles them
+  the same way.
+- `profile_schema(path)` / `convmerge inspect` — per-field types, presence,
+  examples, nested `fields` / `items`, and for list fields `element_types` /
+  `element_examples` (so a list of bare strings is visible).
 - `deduplicate_jsonl(src, dst, keys=None, algorithm="md5")` — streaming dedup
   by an MD5/SHA256 hash of the whole record or a projected subset of keys.
   Seen hashes are tracked in memory by default; pass `seen_store="sqlite"`

@@ -434,6 +434,12 @@ def _add_normalize(sub: argparse._SubParsersAction) -> None:
         required=True,
         help="Output file (when --input is a file) or directory",
     )
+    p.add_argument(
+        "--array-key",
+        default="conversation",
+        help="Key that wraps records which are JSON arrays, e.g. one conversation "
+        "per line as a list of turns (default: conversation)",
+    )
 
 
 def _cmd_normalize(args: argparse.Namespace) -> None:
@@ -441,7 +447,7 @@ def _cmd_normalize(args: argparse.Namespace) -> None:
     dst: Path = args.output
 
     if src.is_file():
-        n = _normalize_one_file(src, dst)
+        n = _normalize_one_file(src, dst, args.array_key)
         print(f"{src} -> {dst}: {n} records", file=sys.stderr)
         return
 
@@ -464,7 +470,7 @@ def _cmd_normalize(args: argparse.Namespace) -> None:
         rel = in_path.relative_to(src).with_suffix(".jsonl")
         out_path = dst / rel
         try:
-            n = _normalize_one_file(in_path, out_path)
+            n = _normalize_one_file(in_path, out_path, args.array_key)
         except Exception as e:  # noqa: BLE001
             print(f"[fail] {in_path}: {type(e).__name__}: {e}", file=sys.stderr)
             continue
@@ -474,7 +480,7 @@ def _cmd_normalize(args: argparse.Namespace) -> None:
     print(f"[done] {total_files} files, {total_rows} records", file=sys.stderr)
 
 
-def _normalize_one_file(src: Path, dst: Path) -> int:
+def _normalize_one_file(src: Path, dst: Path, array_key: str = "conversation") -> int:
     # Imported lazily so that ``convmerge convert`` works without the
     # ``parquet`` extra when no parquet files are touched.
     from convmerge.normalize.jsonl import normalize_to_jsonl
@@ -485,7 +491,7 @@ def _normalize_one_file(src: Path, dst: Path) -> int:
 
         dst.parent.mkdir(parents=True, exist_ok=True)
         return parquet_to_jsonl(src, dst)
-    return normalize_to_jsonl(src, dst)
+    return normalize_to_jsonl(src, dst, array_key=array_key)
 
 
 def _add_dedupe(sub: argparse._SubParsersAction) -> None:
