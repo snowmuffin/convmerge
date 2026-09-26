@@ -33,7 +33,7 @@ def _require_yaml() -> Any:
         import yaml  # type: ignore[import-untyped]
     except ImportError as e:
         raise ImportError(
-            "Preset files require PyYAML. Install with: pip install 'convmerge[preset]' "
+            "Preset files require PyYAML. Install with: pip install 'convmerge[preset]' (or [all]) "
             "or pip install pyyaml"
         ) from e
     return yaml
