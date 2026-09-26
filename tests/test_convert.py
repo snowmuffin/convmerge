@@ -100,3 +100,40 @@ def test_cli_convert(tmp_path: Path) -> None:
     assert r.returncode == 0, (r.stdout, r.stderr)
     assert dst.read_text(encoding="utf-8").strip()
     assert "wrote" in r.stderr
+
+
+def test_convert_file_stats_counts_skip_reasons(tmp_path: Path) -> None:
+    from convmerge.convert import ConvertStats
+
+    src = tmp_path / "in.jsonl"
+    src.write_text(
+        '{"instruction": "a", "output": "b"}\n\n{bad json\n[1, 2]\n{"unrelated": 1}\n',
+        encoding="utf-8",
+    )
+    stats = ConvertStats()
+    n_in, n_out = convert_file(
+        src,
+        tmp_path / "out.jsonl",
+        adapter_name="alpaca",
+        output_format="messages",
+        stats=stats,
+    )
+    assert (n_in, n_out) == (5, 1)
+    assert stats.blank == 1
+    assert stats.invalid_json == 1
+    assert stats.first_invalid_line == 3
+    assert stats.non_object == 1
+    assert stats.no_example == 1
+    assert stats.skipped == 3
+
+
+def test_convert_with_config_passes_progress(tmp_path: Path, capsys) -> None:
+    from convmerge.config import ConvertConfig
+    from convmerge.convert import convert_with_config
+
+    src = tmp_path / "in.jsonl"
+    src.write_text('{"instruction": "a", "output": "b"}\n', encoding="utf-8")
+    convert_with_config(
+        src, tmp_path / "out.jsonl", ConvertConfig("alpaca", "messages"), progress=True
+    )
+    assert "[done] convert in.jsonl" in capsys.readouterr().err

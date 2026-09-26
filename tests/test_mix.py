@@ -371,3 +371,32 @@ def test_cli_bad_spec_exits(tmp_path):
     with pytest.raises(SystemExit) as exc:
         main(["mix", "--input", "no-colon-here", "--output", str(tmp_path / "out.jsonl")])
     assert exc.value.code != 0
+
+
+@pytest.mark.parametrize(("cli_seed", "expected"), [(None, 7), ("42", 42), ("3", 3)])
+def test_cli_seed_precedence_over_config(tmp_path, cli_seed, expected):
+    from convmerge.cli import main
+
+    src = tmp_path / "src.jsonl"
+    write_jsonl(src, [{"x": i} for i in range(20)])
+    out = tmp_path / "out.jsonl"
+    config_path = tmp_path / "mix.json"
+    config_path.write_text(
+        json.dumps({"seed": 7, "output": str(out), "sources": [{"path": str(src), "weight": 1}]})
+    )
+    argv = ["mix", str(config_path)]
+    if cli_seed is not None:
+        argv += ["--seed", cli_seed]
+    main(argv)
+    recipe = json.loads(out.with_suffix(".mix.json").read_text())
+    assert recipe["seed"] == expected
+
+
+def test_cli_seed_defaults_to_42_without_config(tmp_path):
+    from convmerge.cli import main
+
+    src = tmp_path / "src.jsonl"
+    write_jsonl(src, [{"x": i} for i in range(5)])
+    out = tmp_path / "out.jsonl"
+    main(["mix", "--input", f"{src}:1", "--output", str(out)])
+    assert json.loads(out.with_suffix(".mix.json").read_text())["seed"] == 42

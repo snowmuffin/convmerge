@@ -71,18 +71,7 @@ def iter_json_records(path: str | Path, *, max_rows: int | None = None) -> Itera
     ensure_not_lfs_pointer(p)
     suffix = p.suffix.lower()
     if suffix == ".jsonl":
-        yielded = 0
-        with p.open(encoding="utf-8") as f:
-            for line in f:
-                line = line.strip()
-                if not line:
-                    continue
-                obj = json.loads(line)
-                if isinstance(obj, dict):
-                    yield obj
-                    yielded += 1
-                    if max_rows is not None and yielded >= max_rows:
-                        return
+        yield from _iter_jsonl_records(p, max_rows=max_rows)
         return
 
     if suffix == ".json":
@@ -90,8 +79,9 @@ def iter_json_records(path: str | Path, *, max_rows: int | None = None) -> Itera
             try:
                 data = json.load(f)
             except json.JSONDecodeError:
-                # Fallback: treat it as JSONL (some datasets ship .json that is really JSONL).
-                yield from iter_json_records(p.with_suffix(".jsonl"), max_rows=max_rows)
+                # Fallback: treat the same file as JSONL (some datasets ship
+                # ``.json`` files that are really line-delimited).
+                yield from _iter_jsonl_records(p, max_rows=max_rows)
                 return
         if isinstance(data, dict):
             yield data
@@ -105,6 +95,21 @@ def iter_json_records(path: str | Path, *, max_rows: int | None = None) -> Itera
         return
 
     raise ValueError(f"Unsupported file extension for iter_json_records: {p.suffix!r}")
+
+
+def _iter_jsonl_records(p: Path, *, max_rows: int | None) -> Iterator[dict[str, Any]]:
+    yielded = 0
+    with p.open(encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            obj = json.loads(line)
+            if isinstance(obj, dict):
+                yield obj
+                yielded += 1
+                if max_rows is not None and yielded >= max_rows:
+                    return
 
 
 def detect_jsonl_shape(path: str | Path) -> JSONLShape:

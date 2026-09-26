@@ -167,3 +167,9 @@ def test_is_lfs_pointer_only_inspects_head() -> None:
     assert is_lfs_pointer(b"version https://git-lfs.github.com/spec/v1\noid sha256:x\n")
     assert not is_lfs_pointer(b'{"a": 1}\n' * 1000)
     assert not is_lfs_pointer(b"")
+
+
+def test_iter_json_records_json_suffix_with_jsonl_content(tmp_path: Path) -> None:
+    p = _write(tmp_path / "rows.json", '{"a": 1}\n{"a": 2}\n')
+    assert list(iter_json_records(p)) == [{"a": 1}, {"a": 2}]
+    assert list(iter_json_records(p, max_rows=1)) == [{"a": 1}]
