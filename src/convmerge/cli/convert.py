@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 
 from convmerge.cli._common import add_progress_flag as _add_progress_flag
+from convmerge.cli._common import positive_int as _positive_int
 from convmerge.convert import ConvertStats, convert_file
 
 
@@ -60,7 +61,7 @@ def _add_convert(sub: argparse._SubParsersAction) -> None:
     )
     p.add_argument(
         "--workers",
-        type=int,
+        type=_positive_int,
         default=1,
         metavar="N",
         help="Convert with N processes (default 1). Output order and stats are "

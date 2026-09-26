@@ -6,6 +6,8 @@ import argparse
 import sys
 from pathlib import Path
 
+from convmerge.cli._common import positive_int as _positive_int
+
 
 def _add_fetch(sub: argparse._SubParsersAction) -> None:
     p = sub.add_parser(
@@ -40,7 +42,7 @@ def _add_fetch(sub: argparse._SubParsersAction) -> None:
     )
     p.add_argument(
         "--max-rows",
-        type=int,
+        type=_positive_int,
         default=None,
         metavar="N",
         help="Fetch only the first N rows: HF streams them, raw/tree line files stop "
