@@ -7,6 +7,61 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0rc1] - 2026-09-26
+
+Release candidate: `pip install convmerge==0.6.0rc1`. Output changes are
+listed in [docs/migration-0.6.md](docs/migration-0.6.md).
+
+### Added
+
+- Tool calling: OpenAI `tool_calls` (and legacy `function_call`),
+  `tool_call_id`, `name`, and top-level `tools` are kept by the `chat`
+  adapter; LLaMA-Factory `function_call` / `observation` turns and `tools`
+  columns are decoded by `chat` and `sharegpt`. The `messages` output follows
+  the OpenAI schema; `--tool-arguments object` writes arguments as objects.
+- Multimodal by reference: OpenAI content arrays (`image_url`, audio, video,
+  `{"type": "image"}` placeholders) and `images` / `videos` / `audios` / LLaVA
+  `image` columns bound to `<image>`-style tokens become content parts.
+  Media is never downloaded or decoded.
+- LLaMA-Factory `system` and alpaca `history` columns become system messages
+  and earlier turns.
+- Validation: `convert --on-invalid drop|keep|fail` (default `drop`) with
+  per-reason counts, `--report PATH`, and a new `convmerge validate` command
+  (`convmerge.validate.validate_example`, `convert.validate_file`).
+- `alpaca` output: `system` field, `--alpaca-multiturn flatten|history|drop`,
+  and lossy-conversion counts (#23).
+- `--keep-meta [KEYS]` / `--meta-key` write provenance (`source`, record `id`,
+  pairwise `branch`) (#22).
+- Presets: `adapter_options.sharegpt` and an `output_options` block.
+- `normalize` / `inspect` handle JSONL whose lines are arrays, wrapping them
+  as `{"conversation": [...]}` (`--array-key`) (#26); `inspect` reports
+  `element_types` / `element_examples` for list fields (#27).
+- `convmerge.io.iter_jsonl`: one shared JSONL reader (BOM, blank and invalid
+  lines handled and counted the same way in every command).
+- Golden regression suite over realistic dataset shapes
+  (`tests/golden/`, `CONVMERGE_UPDATE_GOLDEN=1`).
+
+### Changed
+
+- **Breaking:** `sharegpt` `turn_mode` defaults to `full` (whole
+  conversation); `pairs` restores the 0.5 split (#23).
+- **Breaking:** examples failing validation are dropped by default, e.g.
+  assistant-only rows from plain `text` records.
+- **Breaking:** `alpaca` output drops examples with tool calls or media
+  instead of reducing them to text.
+- Adapters skip blank turns (such as an empty system prompt).
+- Diagnostics go to stderr only (`load_jsonl` logs via the `convmerge`
+  logger; `fetch` progress lines go to stderr).
+- `convert` is about 1.5x slower on plain chat data than 0.5.1 because every
+  example is now validated (≈38k rows/s in our benchmark).
+
+### Fixed
+
+- Vision samples no longer lose their user turn, and tool-call conversations
+  no longer keep tool results while dropping the calls.
+- A UTF-8 BOM on the first line no longer turns it into an invalid row in
+  `convert` / `dedupe` / `mix` / `turns`.
+
 ## [0.5.1] - 2026-09-26
 
 ### Security
