@@ -151,6 +151,13 @@ def _add_convert(sub: argparse._SubParsersAction) -> None:
         ),
     )
     p.add_argument("--encoding", default="utf-8", help="File encoding (default: utf-8)")
+    p.add_argument(
+        "--tool-arguments",
+        choices=("string", "object"),
+        default="string",
+        help="messages format: write tool-call arguments as a JSON string "
+        "(default, OpenAI style) or as a JSON object",
+    )
     _add_progress_flag(p)
 
 
@@ -187,6 +194,7 @@ def _cmd_convert(args: argparse.Namespace) -> None:
             adapter_options=cfg.adapter_options,
             progress=progress_enabled(args.progress),
             stats=stats,
+            tool_arguments=args.tool_arguments,
         )
     print(f"read {n_in} lines, wrote {n_out} examples", file=sys.stderr)
     for message, count in future.items():
