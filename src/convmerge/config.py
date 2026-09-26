@@ -29,10 +29,22 @@ class ChatAdapterOptions:
 
 
 @dataclass
+class SharegptAdapterOptions:
+    """Options passed to :func:`convmerge.adapters.sharegpt.iter_from_sharegpt_line`.
+
+    ``turn_mode=None`` keeps the pre-0.6 ``"pairs"`` behavior with a
+    :class:`FutureWarning`; set ``"pairs"`` or ``"full"`` explicitly.
+    """
+
+    turn_mode: str | None = None
+
+
+@dataclass
 class AdapterOptions:
-    """Per-adapter tuning; only ``chat`` is supported in v1."""
+    """Per-adapter tuning for the ``chat``/``auto`` and ``sharegpt`` adapters."""
 
     chat: ChatAdapterOptions | None = None
+    sharegpt: SharegptAdapterOptions | None = None
 
 
 @dataclass
@@ -85,6 +97,19 @@ def chat_adapter_options_from_mapping(data: dict[str, Any]) -> ChatAdapterOption
     return replace(base, **kw)
 
 
+def sharegpt_adapter_options_from_mapping(data: dict[str, Any]) -> SharegptAdapterOptions:
+    """Build :class:`SharegptAdapterOptions` from a YAML/JSON mapping."""
+    from convmerge.adapters.sharegpt import TURN_MODES
+
+    unknown = set(data) - {"turn_mode"}
+    if unknown:
+        raise ValueError(f"sharegpt: unknown option(s) {sorted(unknown)}; supported: turn_mode")
+    mode = data.get("turn_mode")
+    if mode is not None and mode not in TURN_MODES:
+        raise ValueError(f"sharegpt.turn_mode must be one of {list(TURN_MODES)}, got {mode!r}")
+    return SharegptAdapterOptions(turn_mode=mode)
+
+
 def _chat_options_to_override_dict(chat: ChatAdapterOptions) -> dict[str, Any]:
     """Fields that differ from defaults become a merge dict."""
     defaults = ChatAdapterOptions()
@@ -98,6 +123,10 @@ def _chat_options_to_override_dict(chat: ChatAdapterOptions) -> dict[str, Any]:
             else:
                 out[f.name] = v
     return out
+
+
+def _sharegpt_options_to_override_dict(opts: SharegptAdapterOptions) -> dict[str, Any]:
+    return {} if opts.turn_mode is None else {"turn_mode": opts.turn_mode}
 
 
 def _merge_chat_dicts(*layers: dict[str, Any]) -> dict[str, Any]:
@@ -119,8 +148,8 @@ def build_convert_config(
     """
     Merge preset file, explicit CLI/API arguments, and optional JSON adapter kwargs.
 
-    Order for ``adapter_options.chat`` fields: preset, then ``--adapter-kwargs``,
-    then explicit ``adapter_options``.
+    Order for ``adapter_options.chat`` / ``adapter_options.sharegpt`` fields:
+    preset, then ``--adapter-kwargs``, then explicit ``adapter_options``.
     Explicit ``adapter`` / ``output_format`` / ``encoding`` override the preset.
     """
     from convmerge.preset import load_convert_preset
@@ -129,6 +158,7 @@ def build_convert_config(
     cfg_format: str | None = None
     cfg_encoding: str | None = None
     chat_layers: list[dict[str, Any]] = []
+    sharegpt_layers: list[dict[str, Any]] = []
 
     if preset_path is not None:
         p = load_convert_preset(preset_path)
@@ -137,6 +167,8 @@ def build_convert_config(
         cfg_encoding = p.encoding
         if p.adapter_options and p.adapter_options.chat:
             chat_layers.append(_chat_options_to_override_dict(p.adapter_options.chat))
+        if p.adapter_options and p.adapter_options.sharegpt:
+            sharegpt_layers.append(_sharegpt_options_to_override_dict(p.adapter_options.sharegpt))
 
     if adapter_kwargs_json:
         try:
@@ -150,9 +182,16 @@ def build_convert_config(
             if not isinstance(ch, dict):
                 raise ValueError("--adapter-kwargs: 'chat' must be an object")
             chat_layers.append(ch)
+        sg = raw.get("sharegpt")
+        if sg is not None:
+            if not isinstance(sg, dict):
+                raise ValueError("--adapter-kwargs: 'sharegpt' must be an object")
+            sharegpt_layers.append(sg)
 
     if adapter_options and adapter_options.chat:
         chat_layers.append(_chat_options_to_override_dict(adapter_options.chat))
+    if adapter_options and adapter_options.sharegpt:
+        sharegpt_layers.append(_sharegpt_options_to_override_dict(adapter_options.sharegpt))
 
     if adapter is not None:
         cfg_adapter = adapter
@@ -167,9 +206,19 @@ def build_convert_config(
         )
 
     adapter_opts: AdapterOptions | None = None
-    if chat_layers:
-        merged_chat = chat_adapter_options_from_mapping(_merge_chat_dicts(*chat_layers))
-        adapter_opts = AdapterOptions(chat=merged_chat)
+    if chat_layers or sharegpt_layers:
+        adapter_opts = AdapterOptions(
+            chat=(
+                chat_adapter_options_from_mapping(_merge_chat_dicts(*chat_layers))
+                if chat_layers
+                else None
+            ),
+            sharegpt=(
+                sharegpt_adapter_options_from_mapping(_merge_chat_dicts(*sharegpt_layers))
+                if sharegpt_layers
+                else None
+            ),
+        )
 
     return ConvertConfig(
         adapter=cfg_adapter,

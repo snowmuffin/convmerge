@@ -3,8 +3,12 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import sys
+import warnings
+from collections import Counter
+from collections.abc import Iterator
 from pathlib import Path
 
 from convmerge import __version__
@@ -120,7 +124,10 @@ def _add_convert(sub: argparse._SubParsersAction) -> None:
         "--adapter-kwargs",
         default=None,
         metavar="JSON",
-        help='JSON object merged on the preset, e.g. {"chat":{"pairwise_mode":"both"}}',
+        help=(
+            'JSON object merged on the preset, e.g. {"chat":{"pairwise_mode":"both"}} '
+            'or {"sharegpt":{"turn_mode":"full"}}'
+        ),
     )
     p.add_argument("--encoding", default="utf-8", help="File encoding (default: utf-8)")
     _add_progress_flag(p)
@@ -149,17 +156,20 @@ def _cmd_convert(args: argparse.Namespace) -> None:
     from convmerge.progress import progress_enabled
 
     stats = ConvertStats()
-    n_in, n_out = convert_file(
-        args.input,
-        args.output,
-        adapter_name=cfg.adapter,
-        output_format=cfg.output_format,
-        encoding=cfg.encoding,
-        adapter_options=cfg.adapter_options,
-        progress=progress_enabled(args.progress),
-        stats=stats,
-    )
+    with _count_future_warnings() as future:
+        n_in, n_out = convert_file(
+            args.input,
+            args.output,
+            adapter_name=cfg.adapter,
+            output_format=cfg.output_format,
+            encoding=cfg.encoding,
+            adapter_options=cfg.adapter_options,
+            progress=progress_enabled(args.progress),
+            stats=stats,
+        )
     print(f"read {n_in} lines, wrote {n_out} examples", file=sys.stderr)
+    for message, count in future.items():
+        print(f"warning: {message} [{count:,} records affected]", file=sys.stderr)
     if stats.skipped:
         print(
             f"warning: skipped {stats.skipped:,} lines "
@@ -173,6 +183,24 @@ def _cmd_convert(args: argparse.Namespace) -> None:
             "run `convmerge normalize` first to repair the file",
             file=sys.stderr,
         )
+
+
+@contextlib.contextmanager
+def _count_future_warnings() -> Iterator[Counter[str]]:
+    """Collapse per-record FutureWarnings into one counted line per message."""
+    counts: Counter[str] = Counter()
+    with warnings.catch_warnings():
+        original = warnings.showwarning
+
+        def show(message, category, *args, **kwargs):
+            if issubclass(category, FutureWarning):
+                counts[str(message)] += 1
+            else:
+                original(message, category, *args, **kwargs)
+
+        warnings.simplefilter("always", FutureWarning)
+        warnings.showwarning = show
+        yield counts
 
 
 def _add_preset(sub: argparse._SubParsersAction) -> None:

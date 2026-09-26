@@ -24,6 +24,8 @@ adapter_options:
     # role_keys: [role, from]
     # content_keys: [content, value, text]
     # role_map: { human: user, gpt: assistant }
+  sharegpt:                  # used when adapter: sharegpt
+    turn_mode: full          # full | pairs  (unset = pairs + FutureWarning; full in 0.6.0)
 ```
 
 CLI flags `--from`, `--format`, and `--adapter-kwargs` override the preset when provided.
