@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 
 from convmerge.config import AdapterOptions, ChatAdapterOptions
-from convmerge.convert import convert_file, iter_converted_lines
+from convmerge.convert import _iter_converted_lines, convert_file
 
 
 def test_iter_chat_pairwise_both() -> None:
@@ -25,7 +25,7 @@ def test_iter_chat_pairwise_both() -> None:
     )
     opts = AdapterOptions(chat=ChatAdapterOptions(pairwise_mode="both"))
     out = list(
-        iter_converted_lines(
+        _iter_converted_lines(
             iter([line]),
             adapter_name="chat",
             output_format="messages",
@@ -38,7 +38,7 @@ def test_iter_chat_pairwise_both() -> None:
 def test_iter_alpaca_to_messages() -> None:
     lines = ['{"instruction": "Hi", "input": "", "output": "Hey"}']
     out = list(
-        iter_converted_lines(
+        _iter_converted_lines(
             iter(lines),
             adapter_name="alpaca",
             output_format="messages",

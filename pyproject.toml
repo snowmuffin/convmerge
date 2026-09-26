@@ -103,3 +103,5 @@ ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# convmerge's own code must never call its deprecated API.
+filterwarnings = ["error::DeprecationWarning:convmerge"]
