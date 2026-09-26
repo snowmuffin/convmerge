@@ -8,6 +8,7 @@ from collections.abc import Iterator
 from pathlib import Path
 from typing import Any, Literal
 
+from convmerge._deprecation import warn_deprecated
 from convmerge.io import JsonlDecodeError, iter_jsonl
 from convmerge.lfs import ensure_not_lfs_pointer
 
@@ -36,9 +37,9 @@ def load_jsonl(
     line fails to parse:
 
     - ``"fail"`` (default): log the failing location and return an empty
-      list, mirroring a common permissive notebook-style loader. The whole
-      file is discarded so a partially corrupt input is never silently
-      half-loaded.
+      list, so a partially corrupt input is never silently half-loaded.
+      Deprecated: this warns, and in 1.0 ``load_jsonl`` leaves the public
+      namespace — use :func:`convmerge.iter_jsonl`, which raises.
     - ``"skip"``: log the failing line number and skip just that line, keeping
       every row that did parse. Use this for large files where one bad line
       should not lose all the good data.
@@ -66,6 +67,10 @@ def load_jsonl(
         # Caller gets an empty list; the failing location is still logged so
         # the user can fix the source file.
         logger.warning("[JSONL ERROR] %s", err)
+        warn_deprecated(
+            "load_jsonl() returning [] on a malformed line",
+            instead="use convmerge.iter_jsonl(), which raises JsonlDecodeError",
+        )
         return []
     return out
 

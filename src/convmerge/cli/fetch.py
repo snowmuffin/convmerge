@@ -6,6 +6,7 @@ import argparse
 import sys
 from pathlib import Path
 
+from convmerge.cli._common import config_errors
 from convmerge.cli._common import positive_int as _positive_int
 
 
@@ -70,12 +71,16 @@ def _cmd_fetch(args: argparse.Namespace) -> None:
             "Pass either a YAML manifest path, an hf://org/dataset URI, or a GitHub URL.",
             file=sys.stderr,
         )
-        sys.exit(1)
+        sys.exit(2)
 
     from convmerge.fetch.manifest import Defaults, load_manifest
     from convmerge.fetch.runner import run_manifest
 
-    manifest = load_manifest(manifest_path)
+    try:
+        manifest = load_manifest(manifest_path)
+    except config_errors() as e:
+        print(f"error: {manifest_path}: {e}", file=sys.stderr)
+        sys.exit(2)
     if args.on_error is not None or args.no_resume:
         manifest = _with_overridden_defaults(
             manifest,
@@ -163,7 +168,7 @@ def _cmd_fetch_shortcut(args: argparse.Namespace, source: str) -> None:
         "Only hf://, raw.githubusercontent.com, and github.com are supported.",
         file=sys.stderr,
     )
-    sys.exit(1)
+    sys.exit(2)
 
 
 def _with_overridden_defaults(manifest, *, on_error, resume):

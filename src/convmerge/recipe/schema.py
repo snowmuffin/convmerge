@@ -119,7 +119,10 @@ def load_recipe(path: str | Path) -> Recipe:
                 "YAML recipes need PyYAML: pip install 'convmerge[preset]' (or [all]), "
                 "or write the recipe as JSON"
             ) from e
-        raw = yaml.safe_load(text)
+        try:
+            raw = yaml.safe_load(text)
+        except yaml.YAMLError as e:
+            raise RecipeError(f"invalid YAML: {e}") from e
     return parse_recipe(raw, path=p)
 
 

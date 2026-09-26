@@ -1,0 +1,24 @@
+{
+  "lines_read": 42,
+  "written": 41,
+  "blank": 0,
+  "invalid_json": 0,
+  "non_object": 0,
+  "no_example": 0,
+  "first_invalid_line": null,
+  "dropped": 1,
+  "kept_invalid": 0,
+  "drop_reasons": {
+    "no_user": 1
+  },
+  "drop_lines": {
+    "no_user": [
+      42
+    ]
+  },
+  "lossy": {},
+  "skipped_lines": 0,
+  "reason_descriptions": {
+    "no_user": "there is no user message"
+  }
+}

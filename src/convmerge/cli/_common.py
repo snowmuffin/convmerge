@@ -19,3 +19,13 @@ def positive_int(value: str) -> int:
     if n <= 0:
         raise argparse.ArgumentTypeError(f"must be a positive integer, got {value}")
     return n
+
+
+def config_errors() -> tuple[type[Exception], ...]:
+    """Exceptions that mean a config file (preset, manifest, mix config) is invalid."""
+    errors: tuple[type[Exception], ...] = (ValueError, ImportError, OSError)
+    try:
+        import yaml
+    except ImportError:
+        return errors
+    return (*errors, yaml.YAMLError)

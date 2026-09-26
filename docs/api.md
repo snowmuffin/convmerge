@@ -1,11 +1,12 @@
 # Python API
 
 Everything below is importable from the top-level package
-(`from convmerge import convert_file`) and is the **public API**: these names
-keep working across minor versions, and changes are announced in the
-changelog before they happen. Modules and names that are not listed here, or
-that start with `_`, are internal and may change without notice. 1.0 will
-freeze this list.
+(`from convmerge import convert_file`), plus the `convmerge.recipe` and
+`convmerge.fetch` modules, and is the **public API**. What exactly is
+promised, and how anything is deprecated before it goes, is in
+[stability.md](stability.md); from 1.0 this list only grows within a major
+version. Modules and names not listed here, or that start with `_`, are
+internal and may change without notice.
 
 ## Convert pipeline
 
@@ -48,11 +49,12 @@ print(stats.written, stats.drop_reasons)
 
 | Name | Purpose |
 |------|---------|
-| `mix_files(sources, output, *, total, seed, oversample, sampler)` with `MixSource(path, weight)` | Weighted mixing; `sampler="v2"` streams, `"v1"` reproduces pre-0.7 mixes. |
+| `mix_files(sources, output, *, total, seed, oversample, sampler)` with `MixSource(path, weight)` | Weighted mixing; `sampler="v2"` streams, `"v1"` reproduces pre-0.7 mixes. Returns a `MixResult` (`total_written`, `sources`, …). |
 | `deduplicate_jsonl(src, dst, *, keys, algorithm, seen_store, stats)` with `DedupeStats` | Hash-based dedupe. |
 | `normalize_to_jsonl(src, dst, *, array_key="conversation")` | Messy JSON / JSONL → clean JSONL. |
 | `profile_schema(path_or_records, *, max_rows, max_examples)` | The structure report behind `convmerge inspect`. |
-| `iter_jsonl(path, *, on_error, stats, on_invalid)` | The shared JSONL reader (BOM, blank, and invalid lines handled consistently). |
+| `analyze_turn_distribution(path)`, `split_by_turns(src, *, single_out, multi_out)` | The report and split behind `convmerge turns`. |
+| `iter_jsonl(path, *, encoding, on_error, stats, on_invalid)` | The shared JSONL reader (BOM, blank, and invalid lines handled consistently). Yields `JsonlLine(number, raw, value)`; fills a `ReadStats`; `on_error="raise"` raises `JsonlDecodeError` (a `ValueError` with `path`, `line_number`). |
 
 ## Recipes
 
@@ -62,6 +64,15 @@ print(stats.written, stats.drop_reasons)
 `RunResult` with `ran`, `skipped`, `report`), `RecipeError` (invalid recipe;
 the message names the key), and `RecipeRunError` (a step failed). See
 [recipes.md](recipes.md).
+
+## Fetch
+
+`convmerge.fetch` is public as a module: `load_manifest(path)` parses a
+manifest ([fetch.md](fetch.md)) into a `Manifest` (`version`, `auth`,
+`defaults`, `datasets`: `AuthConfig`, `TokenSpec`, `Defaults`,
+`DatasetEntry`), and `run_manifest(manifest, *, output_root, only, hf_token,
+github_token, log, max_rows)` fetches it, returning a `FetchResult`
+(`succeeded`, `skipped`, `failed`). Its submodules are internal.
 
 ## Extending convmerge
 

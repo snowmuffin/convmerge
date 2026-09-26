@@ -8,8 +8,9 @@ import sys
 from pathlib import Path
 
 from convmerge.cli._common import add_progress_flag as _add_progress_flag
+from convmerge.cli._common import config_errors
 from convmerge.cli._common import positive_int as _positive_int
-from convmerge.convert import ConvertStats, convert_file
+from convmerge.convert import REPORT_VERSION, ConvertStats, convert_file
 
 
 def _add_convert(sub: argparse._SubParsersAction) -> None:
@@ -125,10 +126,7 @@ def _cmd_convert(args: argparse.Namespace) -> None:
             emit_overrides=_emit_overrides(args),
             preference=args.preference,
         )
-    except (ValueError, OSError) as e:
-        print(f"error: {e}", file=sys.stderr)
-        sys.exit(2)
-    except ImportError as e:
+    except config_errors() as e:
         print(f"error: {e}", file=sys.stderr)
         sys.exit(2)
     from convmerge.convert import InvalidExampleError
@@ -209,7 +207,9 @@ def _print_lossy_summary(stats: ConvertStats) -> None:
 def _write_report(path: Path, stats: ConvertStats) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
-        json.dumps(stats.to_report(), ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+        json.dumps({"version": REPORT_VERSION, **stats.to_report()}, ensure_ascii=False, indent=2)
+        + "\n",
+        encoding="utf-8",
     )
     print(f"report: {path}", file=sys.stderr)
 
@@ -241,7 +241,7 @@ def _cmd_validate(args: argparse.Namespace) -> None:
     except ValueError as e:
         print(f"error: {e}", file=sys.stderr)
         sys.exit(2)
-    report = stats.to_report()
+    report: dict[str, object] = {"version": REPORT_VERSION, **stats.to_report()}
     report["valid"] = report.pop("written")
     report["invalid"] = report.pop("dropped")
     for key in ("kept_invalid",):
@@ -303,10 +303,7 @@ def _cmd_preset_validate(args: argparse.Namespace) -> None:
 
     try:
         validate_preset_file(args.path)
-    except (ValueError, OSError) as e:
-        print(f"error: {e}", file=sys.stderr)
-        sys.exit(1)
-    except ImportError as e:
+    except config_errors() as e:
         print(f"error: {e}", file=sys.stderr)
         sys.exit(1)
     print("ok", file=sys.stderr)

@@ -6,6 +6,8 @@ import argparse
 import sys
 from pathlib import Path
 
+from convmerge.cli._common import config_errors
+
 
 def _add_mix(sub: argparse._SubParsersAction) -> None:
     p = sub.add_parser(
@@ -68,10 +70,10 @@ def _cmd_mix(args: argparse.Namespace) -> None:
         config_path = Path(args.config)
         if not config_path.is_file():
             print(f"error: config file not found: {config_path}", file=sys.stderr)
-            sys.exit(1)
+            sys.exit(2)
         try:
             sources, options = load_mix_config(config_path)
-        except (ValueError, ImportError, OSError) as e:
+        except config_errors() as e:
             print(f"error: {e}", file=sys.stderr)
             sys.exit(2)
     elif args.input:

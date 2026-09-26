@@ -1,0 +1,71 @@
+[convmerge]
+class AdapterOptions(chat: 'ChatAdapterOptions | None' = None, sharegpt: 'SharegptAdapterOptions | None' = None, preference: 'str | None' = None) -> None
+class ChatAdapterOptions(conversation_keys: 'tuple[str, ...]' = ('messages', 'conversation', 'conversations'), role_keys: 'tuple[str, ...]' = ('role', 'from'), content_keys: 'tuple[str, ...]' = ('content', 'value', 'text'), role_map: 'dict[str, str] | None' = None, pairwise_mode: 'str' = 'winner', instruction_keys: 'tuple[str, ...]' = ('instruction', 'question', 'prompt', 'problem', 'query'), output_keys: 'tuple[str, ...]' = ('output', 'response', 'completion', 'solution', 'answer'), input_keys: 'tuple[str, ...]' = ('input', 'context')) -> None
+class ChatMessage(role: 'str', content: 'str | Sequence[ContentPart] | None', tool_calls: 'Sequence[ToolCall]' = (), tool_call_id: 'str | None' = None, name: 'str | None' = None) -> None
+    media: property -> tuple[ContentPart, ...]
+    text: property -> str
+class ContentPart(type: 'str', text: 'str | None' = None, url: 'str | None' = None) -> None
+    is_media: property -> bool
+class ConvertConfig(adapter: 'str', output_format: 'str', encoding: 'str' = 'utf-8', adapter_options: 'AdapterOptions | None' = None, emit_options: 'EmitOptions | None' = None) -> None
+class ConvertStats(lines_read: 'int' = 0, written: 'int' = 0, blank: 'int' = 0, invalid_json: 'int' = 0, non_object: 'int' = 0, no_example: 'int' = 0, first_invalid_line: 'int | None' = None, dropped: 'int' = 0, kept_invalid: 'int' = 0, drop_reasons: 'dict[str, int]' = <factory>, drop_lines: 'dict[str, list[int]]' = <factory>, lossy: 'dict[str, int]' = <factory>) -> None
+    def merge(self, other: 'ConvertStats') -> 'None'
+    def note(self, reasons: 'list[str]', line_number: 'int') -> 'None'
+    skipped: property -> int
+    def to_report(self) -> 'dict[str, object]'
+class DedupeStats(total: 'int' = 0, kept: 'int' = 0, duplicates: 'int' = 0, invalid_json: 'int' = 0, first_invalid_line: 'int | None' = None) -> None
+class EmitOptions(tool_arguments: 'ToolArguments' = 'string', keep_meta: 'bool | Sequence[str]' = False, meta_key: 'str' = 'meta', alpaca_multiturn: 'AlpacaMultiturn' = 'flatten') -> None
+class InvalidExampleError(ValueError)(line_number: 'int', reasons: 'list[str]')
+class JsonlDecodeError(ValueError)(path: 'str | Path', line_number: 'int', error: 'json.JSONDecodeError', raw: 'str')
+class JsonlLine(number: 'int', raw: 'str', value: 'Any') -> None
+class MixResult(total_written: 'int', seed: 'int', output: 'Path', sources: 'list[SourceStats]' = <factory>, sampler: 'str' = 'v2') -> None
+class MixSource(path: 'Path', weight: 'float') -> None
+class ReadStats(lines_read: 'int' = 0, blank: 'int' = 0, invalid_json: 'int' = 0, first_invalid_line: 'int | None' = None) -> None
+class SharegptAdapterOptions(turn_mode: 'str | None' = None) -> None
+class ToolCall(name: 'str', arguments: 'str' = '{}', id: 'str | None' = None) -> None
+    def arguments_object(self) -> 'Any'
+    @classmethod from_any(cls, name: 'str', arguments: 'Any', id: 'str | None' = None) -> 'ToolCall'
+class TrainingExample(messages: 'list[ChatMessage]' = <factory>, meta: 'dict[str, object]' = <factory>, tools: 'list[dict[str, Any]] | None' = None, issues: 'list[str]' = <factory>) -> None
+class UnrepresentableExample(ValueError)(reason: 'str', message: 'str' = '')
+__version__: str
+def analyze_turn_distribution(path: 'str | Path') -> 'dict[str, Any]'
+def available_adapters() -> 'list[str]'
+def available_formats() -> 'list[str]'
+def build_convert_config(*, preset_path: 'Path | None' = None, adapter: 'str | None' = None, output_format: 'str | None' = None, encoding: 'str | None' = None, adapter_options: 'AdapterOptions | None' = None, adapter_kwargs_json: 'str | None' = None, emit_overrides: 'dict[str, Any] | None' = None, preference: 'str | None' = None) -> 'ConvertConfig'
+def convert_file(input_path: 'Path', output_path: 'Path', *, adapter_name: 'str', output_format: 'str', encoding: 'str' = 'utf-8', adapter_options: 'AdapterOptions | None' = None, progress: 'bool' = False, stats: 'ConvertStats | None' = None, on_invalid: 'OnInvalid' = 'drop', emit_options: 'EmitOptions | None' = None, workers: 'int' = 1) -> 'tuple[int, int]'
+def convert_with_config(input_path: 'Path', output_path: 'Path', cfg: 'ConvertConfig', *, progress: 'bool' = False, stats: 'ConvertStats | None' = None, on_invalid: 'OnInvalid' = 'drop', emit_options: 'EmitOptions | None' = None, workers: 'int' = 1) -> 'tuple[int, int]'
+def deduplicate_jsonl(src: 'str | Path', dst: 'str | Path', *, keys: 'Iterable[str] | None' = None, algorithm: 'str | HashFn' = 'md5', progress: 'bool' = False, seen_store: 'str' = 'memory', seen_db: 'str | Path | None' = None, stats: 'DedupeStats | None' = None) -> 'tuple[int, int]'
+def iter_jsonl(path: 'str | Path', *, encoding: 'str' = 'utf-8', on_error: 'OnError' = 'skip', stats: 'ReadStats | None' = None, on_invalid: 'Callable[[JsonlDecodeError], None] | None' = None) -> 'Iterator[JsonlLine]'
+def mix_files(sources: 'list[MixSource]', output_path: 'Path', *, total: 'int | None' = None, seed: 'int' = 42, oversample: 'bool' = False, encoding: 'str' = 'utf-8', sampler: 'Sampler' = 'v2') -> 'MixResult'
+def normalize_to_jsonl(src: 'str | Path', dst: 'str | Path', *, array_key: 'str' = 'conversation') -> 'int'
+def profile_schema(records: 'Iterable[dict[str, Any]] | str | Path', *, max_rows: 'int | None' = None, max_examples: 'int' = 3) -> 'dict[str, Any]'
+def register_adapter(name: 'str', fn: 'AdapterFn', *, replace: 'bool' = False) -> 'None'
+def register_emitter(name: 'str', fn: 'EmitterFn', *, replace: 'bool' = False) -> 'None'
+def split_by_turns(src: 'str | Path', *, single_out: 'str | Path', multi_out: 'str | Path') -> 'tuple[int, int]'
+def validate_example(example: 'TrainingExample') -> 'list[str]'
+def validate_file(input_path: 'Path', *, adapter_name: 'str' = 'chat', adapter_options: 'AdapterOptions | None' = None, encoding: 'str' = 'utf-8') -> 'ConvertStats'
+
+[convmerge.recipe]
+class PlannedStep(step: 'Step', action: 'str', reason: 'str') -> None
+RECIPE_TEMPLATE: str
+class Recipe(path: 'Path', base_dir: 'Path', workdir: 'Path', output: 'Path', lock_path: 'Path', report_path: 'Path', sources: 'dict[str, SourceSpec]', mix: 'MixSpec | None', dedupe: 'DedupeSpec | None', auth: 'AuthConfig') -> None
+class RecipeError(ValueError)
+class RecipeRunError(RuntimeError)
+class RunResult(ran: 'list[str]' = <factory>, skipped: 'list[str]' = <factory>, report: 'dict[str, Any]' = <factory>) -> None
+class Step(name: 'str', kind: 'str', inputs: 'list[Path]', output: 'Path', options: 'dict[str, Any]', run: 'Callable[[Path], dict[str, Any]]', source: 'str | None' = None) -> None
+def build_steps(recipe: 'Recipe', *, hf_token: 'str | None' = None, github_token: 'str | None' = None) -> 'list[Step]'
+def load_lock(path: 'Path') -> 'dict[str, Any]'
+def load_recipe(path: 'str | Path') -> 'Recipe'
+def parse_recipe(raw: 'Any', *, path: 'Path') -> 'Recipe'
+def plan(recipe: 'Recipe', *, force: 'list[str] | None' = None, steps: 'list[Step] | None' = None) -> 'list[PlannedStep]'
+def run(recipe: 'Recipe', *, force: 'list[str] | None' = None, hf_token: 'str | None' = None, github_token: 'str | None' = None, log: 'LogFn | None' = None) -> 'RunResult'
+
+[convmerge.fetch]
+class AuthConfig(hf: 'TokenSpec' = TokenSpec(env=None, file=None), github: 'TokenSpec' = TokenSpec(env=None, file=None)) -> None
+class DatasetEntry(name: 'str', hf: 'str | None' = None, url: 'str | None' = None, config: 'str | None' = None, split: 'str | None' = None, ext: 'tuple[str, ...]' = (), mode: "Literal['tree', 'clone'] | None" = None, lfs: 'bool' = False, max_rows: 'int | None' = None, output: 'str | None' = None) -> None
+class Defaults(output_root: 'str' = './raw', on_error: "Literal['continue', 'fail']" = 'continue', resume: 'bool' = True) -> None
+class FetchResult(succeeded: 'list[str]' = <factory>, skipped: 'list[str]' = <factory>, failed: 'list[tuple[str, str]]' = <factory>) -> None
+    total: property -> int
+class Manifest(version: 'int' = 1, auth: 'AuthConfig' = <factory>, defaults: 'Defaults' = <factory>, datasets: 'tuple[DatasetEntry, ...]' = ()) -> None
+class TokenSpec(env: 'str | None' = None, file: 'str | None' = None) -> None
+def load_manifest(path: 'str | Path') -> 'Manifest'
+def run_manifest(manifest: 'Manifest', *, output_root: 'str | Path | None' = None, only: 'list[str] | None' = None, hf_token: 'str | None' = None, github_token: 'str | None' = None, log: 'LogFn | None' = None, max_rows: 'int | None' = None) -> 'FetchResult'

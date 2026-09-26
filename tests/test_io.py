@@ -64,7 +64,8 @@ def test_load_jsonl_logs_to_logger_not_stdout(tmp_path: Path, capsys, caplog) ->
 
     p = _write(tmp_path / "a.jsonl", '{"a": 1}\n{bad\n{"b": 2}\n')
     assert load_jsonl(p, on_error="skip") == [{"a": 1}, {"b": 2}]
-    assert load_jsonl(p) == []
+    with pytest.warns(DeprecationWarning, match="iter_jsonl"):
+        assert load_jsonl(p) == []
     assert capsys.readouterr().out == ""
     messages = [r.getMessage() for r in caplog.records]
     assert any("[JSONL SKIP]" in m and "line 2" in m for m in messages)
