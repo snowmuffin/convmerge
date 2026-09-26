@@ -74,9 +74,11 @@ class ChatMessage:
     name: str | None = None
 
     def __post_init__(self) -> None:
-        if self.content is not None and not isinstance(self.content, str):
-            object.__setattr__(self, "content", tuple(self.content))
-        object.__setattr__(self, "tool_calls", tuple(self.tool_calls))
+        content = self.content
+        if content is not None and type(content) is not str and type(content) is not tuple:
+            object.__setattr__(self, "content", tuple(content))
+        if type(self.tool_calls) is not tuple:
+            object.__setattr__(self, "tool_calls", tuple(self.tool_calls))
 
     @property
     def text(self) -> str:
