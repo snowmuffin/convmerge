@@ -7,7 +7,9 @@ present. Handles the common messy shapes seen across SFT datasets:
   ``{role, content}`` or ``{from, value}`` entries.
 - Pairwise preference rows (``conversation_a`` / ``conversation_b``), with an
   optional ``winner`` field; emits only the winner branch by default.
-- Plain ``text`` strings (yielded as a single assistant message).
+- A ``text`` string rendered with a known chat template (ChatML, Llama 2/3,
+  Gemma, Guanaco, HH-RLHF, the Alpaca prompt) is split back into turns;
+  any other ``text`` is yielded as a single assistant message.
 - Alpaca-style ``instruction`` / ``input`` / ``output`` (delegates to the
   existing alpaca adapter).
 - Tool-calling encodings other than OpenAI's: Hermes tags, Glaive
@@ -31,6 +33,7 @@ from typing import Any
 
 from convmerge.adapters._common import build_example, coerce_messages, source_meta
 from convmerge.adapters.alpaca import iter_from_alpaca_line
+from convmerge.adapters.text_chat import parse_text_chat
 from convmerge.adapters.tool_formats import glaive_messages, is_glaive, is_xlam, xlam_messages
 from convmerge.models import ChatMessage, TrainingExample
 
@@ -135,6 +138,10 @@ def iter_from_chat_line(
 
     txt = record.get("text")
     if isinstance(txt, str) and txt.strip() and not has_strong_alpaca:
+        turns = parse_text_chat(txt)
+        if turns:
+            yield build_example(turns, record, meta={"source": "chat:text"})
+            return
         if instr is not None or out is not None:
             logger.warning(
                 "chat adapter: routing record to the 'text' branch even though "
