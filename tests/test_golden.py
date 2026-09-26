@@ -72,6 +72,19 @@ CASES: dict[str, tuple[str, str, str, dict | None]] = {
     ),
     "messy.chat.messages": ("messy", "chat", "messages", None),
     "qa_variants.chat.messages": ("qa_variants", "chat", "messages", None),
+    "preference.chat.messages": ("preference", "chat", "messages", None),
+    "preference.chat-chosen.messages": (
+        "preference",
+        "chat",
+        "messages",
+        {"preference": "chosen"},
+    ),
+    "preference.chat-rejected.messages": (
+        "preference",
+        "chat",
+        "messages",
+        {"preference": "rejected"},
+    ),
     "sharegpt_basic.sharegpt-full.alpaca-history": (
         "sharegpt_basic",
         "sharegpt",

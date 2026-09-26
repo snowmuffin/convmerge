@@ -1,0 +1,6 @@
+{"conversations": [{"from": "system", "value": "Be kind."}, {"from": "human", "value": "Tell me a joke."}], "chosen": {"from": "gpt", "value": "Why did the chicken cross the road?"}, "rejected": {"from": "gpt", "value": "No."}}
+{"instruction": "Translate to French", "input": "cat", "chosen": "chat", "rejected": "dog"}
+{"chosen": "\n\nHuman: What is 2+2?\n\nAssistant: 4.\n\nHuman: And 3+3?\n\nAssistant: 6.", "rejected": "\n\nHuman: What is 2+2?\n\nAssistant: 5."}
+{"prompt": "Name a color.", "chosen": [{"role": "user", "content": "Name a color."}, {"role": "assistant", "content": "Blue."}], "rejected": [{"role": "user", "content": "Name a color."}, {"role": "assistant", "content": "Seven."}], "score_chosen": 9.0}
+{"prompt": [{"role": "user", "content": "Capital of Korea?"}], "chosen": [{"role": "assistant", "content": "Seoul."}], "rejected": [{"role": "assistant", "content": "Busan."}]}
+{"prompt": "Say hi", "chosen": [{"role": "assistant", "content": "Hi!"}], "rejected": [{"role": "assistant", "content": "..."}]}
