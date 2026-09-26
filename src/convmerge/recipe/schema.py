@@ -16,6 +16,7 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
+from convmerge.convert import OnInvalid
 from convmerge.fetch.auth import AuthConfig, TokenSpec
 from convmerge.fetch.manifest import DatasetEntry
 
@@ -47,7 +48,7 @@ class ConvertSpec:
     preset: Path | None = None
     adapter_kwargs: dict[str, Any] | None = None
     preference: str | None = None
-    on_invalid: str = "drop"
+    on_invalid: OnInvalid = "drop"
     workers: int = 1
     emit: dict[str, Any] = field(default_factory=dict)
 
