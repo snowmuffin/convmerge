@@ -32,6 +32,9 @@ class InvalidExampleError(ValueError):
         self.line_number = line_number
         self.reasons = reasons
 
+    def __reduce__(self):  # picklable across --workers processes
+        return (InvalidExampleError, (self.line_number, self.reasons))
+
 
 @dataclass
 class ConvertStats:
@@ -74,6 +77,23 @@ class ConvertStats:
             if len(lines) < _SAMPLE_LINES:
                 lines.append(line_number)
 
+    def merge(self, other: ConvertStats) -> None:
+        """Add ``other`` (a later chunk of the same input) into these stats."""
+        for name in (
+            "lines_read", "written", "blank", "invalid_json", "non_object",
+            "no_example", "dropped", "kept_invalid",
+        ):  # fmt: skip
+            setattr(self, name, getattr(self, name) + getattr(other, name))
+        if self.first_invalid_line is None:
+            self.first_invalid_line = other.first_invalid_line
+        for r, n in other.drop_reasons.items():
+            self.drop_reasons[r] = self.drop_reasons.get(r, 0) + n
+        for r, lines in other.drop_lines.items():
+            mine = self.drop_lines.setdefault(r, [])
+            mine.extend(lines[: max(0, _SAMPLE_LINES - len(mine))])
+        for r, n in other.lossy.items():
+            self.lossy[r] = self.lossy.get(r, 0) + n
+
     def to_report(self) -> dict[str, object]:
         """JSON-ready summary (used by ``convert --report``)."""
         from convmerge.validate import REASONS
@@ -109,9 +129,16 @@ def convert_file(
     stats: ConvertStats | None = None,
     on_invalid: OnInvalid = "drop",
     emit_options: EmitOptions | None = None,
+    workers: int = 1,
 ) -> tuple[int, int]:
     """
     Read JSONL lines, parse with adapter, validate, write emitted JSONL.
+
+    ``workers > 1`` spreads parsing, conversion, and validation over that many
+    processes. Output order, stats, and reports are identical to a
+    single-process run. Adapters and formats are looked up by name in each
+    worker, so custom ones must be registered through entry points (or at
+    import time of a module the workers import).
 
     Each example is checked by :func:`convmerge.validate.validate_example`.
     ``on_invalid`` decides what happens to one that fails: ``"drop"``
@@ -144,7 +171,18 @@ def convert_file(
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     with output_path.open("w", encoding=encoding) as fout:
-        _run(input_path, fout, adapter, emitter, st, reporter, encoding, on_invalid, notes)
+        if workers > 1:
+            _run_parallel(
+                input_path,
+                fout,
+                st,
+                reporter,
+                encoding,
+                workers,
+                (adapter_name, adapter_options, output_format, emit_options, on_invalid),
+            )
+        else:
+            _run(input_path, fout, adapter, emitter, st, reporter, encoding, on_invalid, notes)
 
     reporter.done()
     return st.lines_read, st.written
@@ -186,44 +224,157 @@ def _run(
         for line in iter_jsonl(input_path, encoding=encoding, stats=read):
             if reporter is not None:
                 reporter.update()
-            obj = line.value
-            if not isinstance(obj, dict):
-                st.non_object += 1
-                continue
-            produced = 0
-            for example in adapter(obj):
-                produced += 1
-                reasons = validate_example(example)
-                if reasons:
-                    if on_invalid == "fail":
-                        raise InvalidExampleError(line.number, reasons)
-                    st.note(reasons, line.number)
-                    if on_invalid == "drop":
-                        st.dropped += 1
-                        continue
-                    st.kept_invalid += 1
-                if fout is None or emitter is None:
-                    st.written += 1
-                    continue
-                try:
-                    row = emitter(example)
-                except UnrepresentableExample as e:
-                    notes.clear()
-                    st.note([e.reason], line.number)
-                    st.dropped += 1
-                    continue
-                fout.write(json.dumps(row, ensure_ascii=False) + "\n")
-                st.written += 1
-                for note in notes:
-                    st.lossy[note] = st.lossy.get(note, 0) + 1
-                notes.clear()
-            if not produced:
-                st.no_example += 1
+            for row in _process(line.value, line.number, adapter, emitter, st, on_invalid, notes):
+                if fout is not None:
+                    fout.write(row)
     finally:
         st.lines_read = read.lines_read
         st.blank = read.blank
         st.invalid_json = read.invalid_json
         st.first_invalid_line = read.first_invalid_line
+
+
+def _process(
+    obj: object,
+    number: int,
+    adapter: AdapterFn,
+    emitter: EmitterFn | None,
+    st: ConvertStats,
+    on_invalid: OnInvalid,
+    notes: list[str],
+) -> list[str]:
+    """Convert one parsed record; return its output lines and update ``st``."""
+    if not isinstance(obj, dict):
+        st.non_object += 1
+        return []
+    rows: list[str] = []
+    produced = 0
+    for example in adapter(obj):
+        produced += 1
+        reasons = validate_example(example)
+        if reasons:
+            if on_invalid == "fail":
+                raise InvalidExampleError(number, reasons)
+            st.note(reasons, number)
+            if on_invalid == "drop":
+                st.dropped += 1
+                continue
+            st.kept_invalid += 1
+        if emitter is None:
+            st.written += 1
+            continue
+        try:
+            row = emitter(example)
+        except UnrepresentableExample as e:
+            notes.clear()
+            st.note([e.reason], number)
+            st.dropped += 1
+            continue
+        rows.append(json.dumps(row, ensure_ascii=False) + "\n")
+        st.written += 1
+        for note in notes:
+            st.lossy[note] = st.lossy.get(note, 0) + 1
+        notes.clear()
+    if not produced:
+        st.no_example += 1
+    return rows
+
+
+# --- parallel convert -------------------------------------------------------
+
+_CHUNK_LINES = 2_000
+_WORKER: dict[str, object] = {}
+
+
+def _worker_init(spec: tuple) -> None:
+    adapter_name, adapter_options, output_format, emit_options, on_invalid = spec
+    notes: list[str] = []
+    _WORKER.update(
+        adapter=resolve_adapter(adapter_name, adapter_options),
+        emitter=get_emitter(output_format, options=emit_options, notes=notes),
+        notes=notes,
+        on_invalid=on_invalid,
+    )
+
+
+def _worker_chunk(chunk: list[tuple[int, str]]) -> tuple[str, ConvertStats]:
+    st = ConvertStats()
+    out: list[str] = []
+    for number, raw in chunk:
+        try:
+            obj = json.loads(raw)
+        except json.JSONDecodeError:
+            st.invalid_json += 1
+            if st.first_invalid_line is None:
+                st.first_invalid_line = number
+            continue
+        out.extend(
+            _process(
+                obj,
+                number,
+                _WORKER["adapter"],  # type: ignore[arg-type]
+                _WORKER["emitter"],  # type: ignore[arg-type]
+                st,
+                _WORKER["on_invalid"],  # type: ignore[arg-type]
+                _WORKER["notes"],  # type: ignore[arg-type]
+            )
+        )
+    return "".join(out), st
+
+
+def _raw_chunks(path: Path, encoding: str, st: ConvertStats):
+    """Yield chunks of ``(line_number, text)``, counting lines and blanks in ``st``.
+
+    Mirrors :func:`convmerge.io.iter_jsonl`; JSON is parsed in the workers.
+    """
+    chunk: list[tuple[int, str]] = []
+    with path.open(encoding=encoding) as f:
+        for number, line in enumerate(f, 1):
+            st.lines_read += 1
+            raw = line.strip()
+            if number == 1:
+                raw = raw.removeprefix("\ufeff").strip()
+            if not raw:
+                st.blank += 1
+                continue
+            chunk.append((number, raw))
+            if len(chunk) >= _CHUNK_LINES:
+                yield chunk
+                chunk = []
+    if chunk:
+        yield chunk
+
+
+def _run_parallel(
+    input_path: Path,
+    fout: TextIO,
+    st: ConvertStats,
+    reporter: ProgressReporter,
+    encoding: str,
+    workers: int,
+    spec: tuple,
+) -> None:
+    from collections import deque
+    from concurrent.futures import ProcessPoolExecutor
+
+    # A bounded window of in-flight chunks keeps memory flat on huge inputs
+    # (Pool.imap would read the whole file ahead of the workers).
+    window = workers * 4
+    with ProcessPoolExecutor(workers, initializer=_worker_init, initargs=(spec,)) as pool:
+        pending: deque = deque()
+
+        def drain_one() -> None:
+            text, part = pending.popleft().result()
+            fout.write(text)
+            st.merge(part)
+
+        for chunk in _raw_chunks(input_path, encoding, st):
+            pending.append(pool.submit(_worker_chunk, chunk))
+            reporter.update(len(chunk))
+            if len(pending) >= window:
+                drain_one()
+        while pending:
+            drain_one()
 
 
 def convert_with_config(
@@ -235,6 +386,7 @@ def convert_with_config(
     stats: ConvertStats | None = None,
     on_invalid: OnInvalid = "drop",
     emit_options: EmitOptions | None = None,
+    workers: int = 1,
 ) -> tuple[int, int]:
     """Run :func:`convert_file` using a resolved :class:`convmerge.config.ConvertConfig`.
 
@@ -252,6 +404,7 @@ def convert_with_config(
         stats=stats,
         on_invalid=on_invalid,
         emit_options=emit_options if emit_options is not None else cfg.emit_options,
+        workers=workers,
     )
 
 

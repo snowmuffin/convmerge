@@ -36,10 +36,32 @@ convmerge fetch manifest.yaml -o ./raw
 Raw GitHub URLs and the Trees API use Python's `urllib.request` — no extra
 dependency for pure-GitHub manifests beyond PyYAML.
 
-GitHub raw/tree downloads reject Git LFS pointer files instead of treating the
-pointer text as dataset content. For LFS-backed data, use mode: clone with
-lfs: true; the same actionable error is raised if a pointer reaches
-normalization.
+Downloads are streamed to disk. When a `raw.githubusercontent.com` URL (or a
+file in `mode: tree`) turns out to be a Git LFS pointer, the real object is
+fetched through the repository's Git LFS batch API — no clone needed; the
+GitHub token (if any) is sent to `github.com` only, never to the object store.
+LFS pointers from other hosts are rejected with an actionable error, and the
+same error is raised if a pointer reaches normalization.
+
+### Sampling (`max_rows`)
+
+`max_rows: N` on an entry (or `--max-rows N` on the CLI, which applies to every
+entry) fetches only the first N records, so `inspect` and trial runs stay
+cheap on huge datasets:
+
+| Source | How it samples |
+|--------|----------------|
+| `hf` | opens the split in `datasets` streaming mode and writes the first N rows; nothing else is downloaded |
+| raw URL (`.jsonl` or other line files) | stops downloading after N lines (LFS objects included) |
+| `mode: tree` | first N lines of each line file; `.json` files are fetched whole |
+| raw `.json` / `.json.gz` | rejected — a JSON array cannot be cut by lines |
+| `mode: clone` | not supported (manifest error) |
+
+With `--max-rows` on the CLI (a global override), entries that cannot be
+sampled are fetched whole with a note instead of failing.
+
+In streaming mode, HF values JSON cannot represent (e.g. decoded images) are
+written as strings.
 
 ## Manifest schema (version 1)
 
@@ -89,6 +111,8 @@ datasets:
 - GitHub extras: `ext` (tuple of suffixes), `mode` (`tree` default, or `clone`),
   `lfs` (bool, only meaningful when `mode: clone`).
 - `output` — optional explicit path that overrides `defaults.output_root / name`.
+- `max_rows` — optional positive integer; fetch only the first N records (see
+  [Sampling](#sampling-max_rows)).
 
 ## Authentication
 
@@ -129,6 +153,9 @@ The output snapshot uses the file size and SHA-256 digest for files. Directory
 outputs record the relative files, sizes, and digests. A marker write failure
 does not discard a successful download; the next resume conservatively fetches
 it again.
+
+A sampled fetch records its `max_rows` in the marker, so a sample never
+satisfies a later full fetch (or a sample of a different size).
 
 With the marker present and valid, the runner skips:
 

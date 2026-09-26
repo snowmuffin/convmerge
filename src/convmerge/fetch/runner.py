@@ -9,7 +9,7 @@ import sys
 import tempfile
 import traceback
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 from convmerge.fetch.auth import AuthConfig, redact_url, resolve_token
@@ -46,13 +46,16 @@ def run_manifest(
     hf_token: str | None = None,
     github_token: str | None = None,
     log: LogFn | None = None,
+    max_rows: int | None = None,
 ) -> FetchResult:
     """Execute every selected entry in ``manifest`` sequentially.
 
     ``output_root`` overrides the manifest default when provided. ``only``
     filters the entries by name. ``hf_token`` / ``github_token`` take highest
     priority over the manifest ``auth`` block and process env. Progress lines
-    go to ``log`` (default: stderr).
+    go to ``log`` (default: stderr). ``max_rows`` samples every entry that
+    supports it (overriding per-entry values); clone entries and raw ``.json``
+    arrays are fetched whole, with a note in the log.
     """
     log = log or _log_stderr
     base_root = Path(output_root) if output_root else Path(manifest.defaults.output_root)
@@ -71,13 +74,20 @@ def run_manifest(
         except ValueError as e:
             _record_error(result, entry.name, str(e), on_error=manifest.defaults.on_error, log=log)
             continue
+        if max_rows is not None:
+            if _samplable(entry, kind):
+                entry = replace(entry, max_rows=max_rows)
+            else:
+                # A global override applies where it can; the rest are fetched whole.
+                log(f"[note] {entry.name}: cannot be sampled by rows; fetching it whole")
 
         if manifest.defaults.resume and _already_fetched(dst, kind, entry):
             log(f"[skip] {entry.name} (already present at {dst})")
             result.skipped.append(entry.name)
             continue
 
-        log(f"[fetch] {entry.name} ({kind}) -> {dst}")
+        sample = f", first {entry.max_rows:,} rows" if entry.max_rows else ""
+        log(f"[fetch] {entry.name} ({kind}{sample}) -> {dst}")
         try:
             output = _dispatch(entry, kind, dst, hf_tok=hf_tok, gh_tok=gh_tok)
         except Exception as e:  # noqa: BLE001  (report, let on_error decide)
@@ -87,7 +97,7 @@ def run_manifest(
             _record_error(result, entry.name, full, on_error=manifest.defaults.on_error, log=log)
             continue
         try:
-            _write_completion_marker(output)
+            _write_completion_marker(output, max_rows=entry.max_rows)
         except OSError as e:
             # The download itself succeeded.  A marker failure only means the
             # next resume will conservatively fetch again.
@@ -104,6 +114,14 @@ def run_manifest(
 def _log_stderr(message: str) -> None:
     # Progress lines are diagnostics, not data: keep stdout clean for piping.
     print(message, file=sys.stderr)
+
+
+def _samplable(entry: DatasetEntry, kind: EntryKind) -> bool:
+    if kind == "url_github_clone":
+        return False
+    if kind == "url_raw":
+        return _raw_suffix(entry.url or "") not in (".json", ".json.gz")
+    return True
 
 
 def _select_entries(
@@ -167,13 +185,16 @@ def _completion_snapshot(output: Path) -> dict[str, object] | None:
     return {"type": "directory", "files": files}
 
 
-def _write_completion_marker(output: Path) -> None:
+def _write_completion_marker(output: Path, *, max_rows: int | None = None) -> None:
     snapshot = _completion_snapshot(output)
     if snapshot is None:
         raise OSError(f"output does not exist after fetch: {output}")
     marker = _completion_marker_path(output)
     marker.parent.mkdir(parents=True, exist_ok=True)
-    payload = {"version": _COMPLETION_MARKER_VERSION, "snapshot": snapshot}
+    payload: dict[str, object] = {"version": _COMPLETION_MARKER_VERSION, "snapshot": snapshot}
+    if max_rows is not None:
+        # A sample must never satisfy a later full fetch (or a different sample).
+        payload["max_rows"] = max_rows
     fd, temporary = tempfile.mkstemp(prefix=f".{marker.name}.", suffix=".tmp", dir=marker.parent)
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as handle:
@@ -198,6 +219,8 @@ def _already_fetched(dst: Path, kind: EntryKind, entry: DatasetEntry) -> bool:
     except (OSError, ValueError):
         return False
     if payload.get("version") != _COMPLETION_MARKER_VERSION:
+        return False
+    if payload.get("max_rows") != entry.max_rows:
         return False
     return payload.get("snapshot") == _completion_snapshot(output)
 
@@ -233,6 +256,7 @@ def _run_hf(entry: DatasetEntry, dst: Path, *, token: str | None) -> Path:
         config=entry.config,
         split=entry.split,
         token=token,
+        max_rows=entry.max_rows,
     )
 
 
@@ -241,14 +265,18 @@ def _run_raw(entry: DatasetEntry, dst: Path, *, token: str | None) -> Path:
 
     url = entry.url or ""
     suffix = _raw_suffix(url)
+    if entry.max_rows is not None and suffix in (".json", ".json.gz"):
+        raise ValueError(
+            f"max_rows needs a line-delimited source; {suffix} files cannot be cut by rows"
+        )
     target = dst if dst.suffix else dst.with_suffix(suffix)
-    return download_raw_file(url, target, token=token)
+    return download_raw_file(url, target, token=token, max_rows=entry.max_rows)
 
 
 def _run_tree(entry: DatasetEntry, dst: Path, *, token: str | None) -> None:
     from convmerge.fetch.github import fetch_repo_tree_files
 
-    fetch_repo_tree_files(entry.url or "", dst, ext=entry.ext, token=token)
+    fetch_repo_tree_files(entry.url or "", dst, ext=entry.ext, token=token, max_rows=entry.max_rows)
 
 
 def _run_clone(entry: DatasetEntry, dst: Path, *, token: str | None) -> None:

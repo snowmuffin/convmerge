@@ -14,10 +14,10 @@ from convmerge.fetch import github as gh
 
 class _FakeResponse:
     def __init__(self, data: bytes) -> None:
-        self._data = data
+        self._buf = io.BytesIO(data)
 
-    def read(self) -> bytes:
-        return self._data
+    def read(self, n: int = -1) -> bytes:
+        return self._buf.read(n)
 
     def __enter__(self):
         return self
@@ -84,12 +84,16 @@ def test_download_raw_file_rejects_lfs_pointer(monkeypatch, tmp_path: Path) -> N
 
     monkeypatch.setattr(gh.urllib.request, "urlopen", fake_urlopen)
 
-    with pytest.raises(gh.LfsPointerError, match="mode: clone and lfs: true"):
+    with pytest.raises(gh.LfsPointerError, match="mode: clone with lfs: true"):
         gh.download_raw_file(
             "https://raw.githubusercontent.com/o/r/m/data.jsonl",
             tmp_path / "data.jsonl",
+            resolve_lfs=False,
         )
+    with pytest.raises(gh.LfsPointerError):
+        gh.download_raw_file("https://example.com/data.jsonl", tmp_path / "data.jsonl")
     assert not (tmp_path / "data.jsonl").exists()
+    assert list(tmp_path.iterdir()) == []
 
 
 def test_fetch_repo_tree_files_filters_by_ext(monkeypatch, tmp_path: Path) -> None:
@@ -162,3 +166,84 @@ def test_github_token_is_not_forwarded_on_redirect() -> None:
     )
     assert redirected is not None
     assert "abc" not in str(dict(redirected.header_items()))
+
+
+POINTER = b"version https://git-lfs.github.com/spec/v1\noid sha256:" + b"ab" * 32 + b"\nsize 42\n"
+
+
+def test_download_raw_file_resolves_lfs_via_batch_api(monkeypatch, tmp_path: Path) -> None:
+    calls: list[tuple[str, str, dict, bytes | None]] = []
+
+    def fake_urlopen(req, timeout=None):
+        headers = {k.lower(): v for k, v in req.header_items()}
+        calls.append((req.get_method(), req.full_url, headers, req.data))
+        if req.full_url.startswith("https://raw.githubusercontent.com/"):
+            return _FakeResponse(POINTER)
+        if req.full_url.endswith("/info/lfs/objects/batch"):
+            body = {
+                "objects": [
+                    {
+                        "oid": "ab" * 32,
+                        "size": 42,
+                        "actions": {
+                            "download": {
+                                "href": "https://lfs.example/obj",
+                                "header": {"X-Sig": "s1"},
+                            }
+                        },
+                    }
+                ]
+            }
+            return _FakeResponse(json.dumps(body).encode())
+        if req.full_url == "https://lfs.example/obj":
+            return _FakeResponse(b'{"a": 1}\n{"a": 2}\n{"a": 3}\n')
+        raise AssertionError(req.full_url)
+
+    monkeypatch.setattr(gh.urllib.request, "urlopen", fake_urlopen)
+    dst = tmp_path / "d.jsonl"
+    gh.download_raw_file(
+        "https://raw.githubusercontent.com/org/repo/main/data/d.jsonl", dst, token="TOK", max_rows=2
+    )
+    assert dst.read_bytes() == b'{"a": 1}\n{"a": 2}\n'
+
+    _, raw_url, raw_headers, _ = calls[0]
+    assert raw_headers["authorization"] == "token TOK"
+    method, batch_url, batch_headers, body = calls[1]
+    assert (method, batch_url) == ("POST", "https://github.com/org/repo.git/info/lfs/objects/batch")
+    assert json.loads(body)["objects"] == [{"oid": "ab" * 32, "size": 42}]
+    assert batch_headers["authorization"].startswith("Basic ")
+    _, obj_url, obj_headers, _ = calls[2]
+    assert obj_headers.get("x-sig") == "s1"
+    assert "authorization" not in obj_headers  # the token never reaches the object store
+
+
+def test_lfs_batch_error_is_reported(monkeypatch, tmp_path: Path) -> None:
+    def fake_urlopen(req, timeout=None):
+        if req.full_url.endswith("/batch"):
+            return _FakeResponse(
+                json.dumps(
+                    {"objects": [{"error": {"code": 404, "message": "Object does not exist"}}]}
+                ).encode()
+            )
+        return _FakeResponse(POINTER)
+
+    monkeypatch.setattr(gh.urllib.request, "urlopen", fake_urlopen)
+    with pytest.raises(gh.GitHubFetchError, match="Object does not exist"):
+        gh.download_raw_file(
+            "https://raw.githubusercontent.com/o/r/m/x.jsonl", tmp_path / "x.jsonl"
+        )
+    assert list(tmp_path.iterdir()) == []
+
+
+@pytest.mark.parametrize(
+    ("max_rows", "expected"),
+    [(None, b"1\n2\n3\n"), (1, b"1\n"), (3, b"1\n2\n3\n"), (10, b"1\n2\n3\n")],
+)
+def test_download_raw_file_max_rows(monkeypatch, tmp_path: Path, max_rows, expected) -> None:
+    monkeypatch.setattr(gh, "_CHUNK", 2)  # force row boundaries across chunks
+    monkeypatch.setattr(
+        gh.urllib.request, "urlopen", lambda req, timeout=None: _FakeResponse(b"1\n2\n3\n")
+    )
+    dst = tmp_path / "x.jsonl"
+    gh.download_raw_file("https://raw.githubusercontent.com/o/r/m/x.jsonl", dst, max_rows=max_rows)
+    assert dst.read_bytes() == expected

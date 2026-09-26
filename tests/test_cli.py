@@ -121,3 +121,30 @@ def test_cli_inspect(tmp_path: Path, capsys) -> None:
 def test_cli_inspect_missing_file(tmp_path: Path) -> None:
     with pytest.raises(SystemExit):
         main(["inspect", "--input", str(tmp_path / "nope.jsonl")])
+
+
+def test_fetch_raw_shortcut_names_file_once(monkeypatch, tmp_path: Path) -> None:
+    import convmerge.fetch.github as gh
+
+    seen: dict = {}
+
+    def fake_download(url, dst, *, token=None, max_rows=None):
+        seen["dst"], seen["max_rows"] = Path(dst), max_rows
+        Path(dst).write_text("{}\n", encoding="utf-8")
+        return Path(dst)
+
+    monkeypatch.setattr(gh, "download_raw_file", fake_download)
+    url = "https://raw.githubusercontent.com/o/r/main/data/train.jsonl"
+    main(["fetch", url, "-o", str(tmp_path), "--max-rows", "7"])
+    assert seen == {"dst": tmp_path / "train.jsonl", "max_rows": 7}
+
+
+def test_positive_int_options(capsys) -> None:
+    for argv in (
+        ["fetch", "hf://o/d", "--max-rows", "0"],
+        ["convert", "-i", "a", "-o", "b", "--workers", "0"],
+    ):
+        with pytest.raises(SystemExit) as exc:
+            main(argv)
+        assert exc.value.code == 2
+        assert "positive integer" in capsys.readouterr().err

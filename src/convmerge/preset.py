@@ -10,6 +10,7 @@ from convmerge.config import (
     AdapterOptions,
     ConvertConfig,
     chat_adapter_options_from_mapping,
+    check_preference,
     emit_options_from_mapping,
     sharegpt_adapter_options_from_mapping,
 )
@@ -31,6 +32,7 @@ adapter_options:
     # role_map:
     #   human: user
     #   gpt: assistant
+  # preference: chosen        # DPO / reward data: train on the chosen answer
   # Optional: sharegpt adapter (adapter: sharegpt)
   # sharegpt:
   #   turn_mode: full         # full (default, whole conversation) | pairs (0.5.x behavior)
@@ -86,10 +88,14 @@ def load_convert_preset(path: Path) -> ConvertConfig:
             raise ValueError("adapter_options.chat must be a mapping")
         if sg is not None and not isinstance(sg, dict):
             raise ValueError("adapter_options.sharegpt must be a mapping")
-        if ch is not None or sg is not None:
+        pref = ao.get("preference")
+        if pref is not None:
+            pref = check_preference(pref)
+        if ch is not None or sg is not None or pref is not None:
             adapter_options = AdapterOptions(
                 chat=chat_adapter_options_from_mapping(ch) if ch is not None else None,
                 sharegpt=sharegpt_adapter_options_from_mapping(sg) if sg is not None else None,
+                preference=pref,
             )
     emit_options = None
     oo = data.get("output_options")
@@ -114,15 +120,17 @@ def load_convert_preset(path: Path) -> ConvertConfig:
 
 def validate_preset_file(path: Path) -> None:
     """Raise ValueError with a clear message if the preset is invalid."""
-    from convmerge.adapters import ADAPTERS
-    from convmerge.emitters import EMITTERS
+    from convmerge.adapters import available_adapters
+    from convmerge.emitters import available_formats
 
     cfg = load_convert_preset(path)
-    if cfg.adapter not in ADAPTERS:
-        known = ", ".join(sorted(ADAPTERS))
+    adapters = available_adapters()
+    formats = available_formats()
+    if cfg.adapter not in adapters:
+        known = ", ".join(adapters)
         raise ValueError(f"unknown adapter {cfg.adapter!r}. Choose one of: {known}")
-    if cfg.output_format not in EMITTERS:
-        known = ", ".join(sorted(EMITTERS))
+    if cfg.output_format not in formats:
+        known = ", ".join(formats)
         raise ValueError(f"unknown output_format {cfg.output_format!r}. Choose one of: {known}")
     if cfg.adapter_options and cfg.adapter_options.chat:
         pm = cfg.adapter_options.chat.pairwise_mode
