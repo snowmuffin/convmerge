@@ -261,3 +261,16 @@ def test_template_is_a_valid_recipe(tmp_path: Path) -> None:
     recipe = load_recipe(tmp_path / "recipe.yaml")
     assert list(recipe.sources) == ["alpaca", "local_chat"]
     assert recipe.dedupe is not None and recipe.mix is not None
+
+
+def test_lock_prunes_removed_steps_and_files(project: Path) -> None:
+    recipe = load_recipe(project / "recipe.json")
+    run(recipe, log=_quiet)
+    data = json.loads((project / "recipe.json").read_text())
+    del data["dedupe"]
+    (project / "recipe.json").write_text(json.dumps(data))
+    (project / "build" / "mixed.jsonl").unlink()
+    run(load_recipe(project / "recipe.json"), log=_quiet)
+    lock = load_lock(project / "recipe.lock.json")
+    assert "dedupe" not in lock["steps"]
+    assert all((project / k).is_file() for k in lock["files"])

@@ -435,6 +435,8 @@ def run(
 
     known = {s.name for s in steps}
     lock["steps"] = {k: v for k, v in lock["steps"].items() if k in known}
+    # Forget cached digests of files that no longer exist.
+    lock["files"] = {k: v for k, v in lock["files"].items() if (recipe.base_dir / k).is_file()}
     _save_json(recipe.lock_path, lock)
     report["output"] = {
         "path": _display(recipe.output, recipe.base_dir),
