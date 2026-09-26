@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "convmerge"
-version = "0.8.0"
+version = "0.9.0"
 description = "Convert Alpaca / ShareGPT datasets to unified messages JSONL for LLM supervised fine-tuning — fetch from HuggingFace or GitHub, normalize, convert, mix, and dedupe in one CLI pipeline"
 readme = "README.md"
 license = "MIT"
@@ -29,7 +29,7 @@ keywords = [
   "chat-dataset",
 ]
 classifiers = [
-  "Development Status :: 3 - Alpha",
+  "Development Status :: 4 - Beta",
   "Environment :: Console",
   "Intended Audience :: Developers",
   "Intended Audience :: Science/Research",

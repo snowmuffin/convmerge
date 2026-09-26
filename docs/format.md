@@ -267,13 +267,13 @@ convmerge validate -i out.jsonl # same checks on an existing file; exit 1 if any
 ```
 
 From Python: `convert_file(..., on_invalid="drop", stats=ConvertStats())`,
-`convmerge.validate.validate_example(example)`, and
-`convmerge.convert.validate_file(path)`.
+`convmerge.validate_example(example)`, and `convmerge.validate_file(path)`.
 
 ## Normalization utilities
 
-`convmerge.normalize` and the `convmerge normalize / dedupe / turns`
-subcommands handle the pre-adapter cleanup step:
+These functions (all importable from `convmerge`) and the
+`convmerge normalize / dedupe / turns` subcommands handle the pre-adapter
+cleanup step:
 
 - `normalize_to_jsonl(src, dst)` — rewrites parquet, JSON arrays, concatenated
   single-line JSON, or already-valid JSONL into clean newline-delimited JSONL.
@@ -295,16 +295,17 @@ subcommands handle the pre-adapter cleanup step:
   for messages-style JSONL, plus a per-turn-count histogram.
 - `split_by_turns(src, single_out=..., multi_out=...)` — partitions a
   messages-style JSONL into single-turn and multi-turn files.
-- `single_turn_to_multi_turn_record` / `multi_turn_to_single_turn_record` —
-  round-trip between `{instruction, input, output}` and `{messages: [...]}`.
 - `profile_schema(path_or_records, max_rows=None)` — infer a structural profile
   of a `.json` / `.jsonl` file: per-field value types, presence ratio, sample
   values, and nested `items` (list-of-object) / `fields` (object) so paths like
   `messages[].role` are distinguishable from a top-level `role`. Exposed on the
   CLI as `convmerge inspect -i FILE [--max-rows N] [--max-examples K]`, which is
   the recommended first step before choosing an adapter / writing key mappings
-  for an unfamiliar dataset. (`key_frequency` / `is_uniform_schema` remain as
-  lighter-weight helpers.)
+  for an unfamiliar dataset.
+
+The other helpers `convmerge.normalize` used to re-export
+(`single_turn_to_multi_turn_record`, `key_frequency`, `load_jsonl`, …) are
+deprecated since 0.9; see [migration-1.0.md](migration-1.0.md).
 
 ### Progress reporting
 

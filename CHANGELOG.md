@@ -7,6 +7,63 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-09-26
+
+The last 0.x minor release: it defines what 1.0 will keep stable and
+deprecates what 1.0 will drop. Nothing is removed and converted data is
+byte-for-byte unchanged; code that runs on 0.9 without `DeprecationWarning`s
+will run on 1.0
+([migration-1.0.md](docs/migration-1.0.md)).
+
+### Added
+
+- `docs/stability.md`: what 1.x keeps compatible (public API, CLI flags and
+  exit codes, file formats, reproducibility), the deprecation policy, and the
+  Python version policy.
+- `convmerge.fetch` is public API as a module: `load_manifest`,
+  `run_manifest`, `Manifest`, `DatasetEntry`, `Defaults`, `AuthConfig`,
+  `TokenSpec`, `FetchResult`.
+- Top-level exports: `split_by_turns` and `analyze_turn_distribution` (the
+  `turns` command), and the types public functions return or raise:
+  `MixResult`, `JsonlLine`, `JsonlDecodeError`, `ReadStats`.
+- `"version": 1` in the JSON of `convert --report`, `validate`, and the
+  recipe `report.json` (fields are only ever added within a version).
+- Contract tests (`tests/contract/`): snapshots of public signatures and CLI
+  flags, files written by 0.8.0 that must keep working (the recipe lock is
+  honoured and reproduces 0.8's output byte for byte), and exit codes.
+
+### Changed
+
+- Exit codes follow one rule — `0` success, `1` the work failed, `2` invalid
+  invocation or configuration: a missing `fetch` manifest or `mix` config, an
+  unsupported `fetch` URL, and an invalid fetch manifest now exit 2
+  (previously 1 or a traceback).
+- Development status is now Beta.
+
+### Deprecated
+
+Each warns with `DeprecationWarning` and is removed in 1.0:
+
+- Re-exports from `convmerge.normalize` that are not public API:
+  `load_jsonl`, `count_turns`, `is_single_turn`, `detect_jsonl_shape`,
+  `iter_json_records`, `key_frequency`, `is_uniform_schema`,
+  `single_turn_to_multi_turn_record`, `multi_turn_to_single_turn_record`.
+- `load_jsonl()` returning `[]` when a line is malformed; use
+  `convmerge.iter_jsonl()`.
+- `convmerge.fetch.classify_entry`, `sanitize_name`, `redact_url`,
+  `resolve_token` (internal helpers).
+- `convmerge.cli.FETCH_FILE_EXTENSIONS` and `SIDECAR_SUFFIXES`.
+- `convmerge.convert.iter_converted_lines`.
+
+### Fixed
+
+- An invalid YAML recipe, mix config, preset, or manifest crashed with a
+  traceback; it is now reported as an error (exit 2), and `load_recipe()`
+  raises `RecipeError` for it.
+- `turns` and `dedupe` on a missing input file print an error (exit 1)
+  instead of a traceback; `turns --single-out` without `--multi-out` fails
+  before printing a report.
+
 ## [0.8.0] - 2026-09-26
 
 Reproducible pipelines. No breaking changes: existing commands behave

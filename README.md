@@ -196,6 +196,8 @@ See [docs/format.md](docs/format.md) for adapter / emitter schemas,
 [docs/fetch.md](docs/fetch.md) for manifest details, and
 [docs/api.md](docs/api.md) for the Python API and writing plugins
 (custom adapters / output formats via entry points).
+[docs/stability.md](docs/stability.md) lists what stays compatible across
+releases (API, CLI flags and exit codes, file formats).
 
 ### 6. `run` — the whole pipeline from one recipe
 
@@ -292,7 +294,7 @@ GitHub Actions secret.
 
 ## Changelog
 
-[CHANGELOG.md](CHANGELOG.md) · upgrading: [from 0.6](docs/migration-0.7.md), [from 0.5](docs/migration-0.6.md)
+[CHANGELOG.md](CHANGELOG.md) · upgrading: [to 1.0 (check on 0.9)](docs/migration-1.0.md), [from 0.6](docs/migration-0.7.md), [from 0.5](docs/migration-0.6.md)
 
 ## License
 

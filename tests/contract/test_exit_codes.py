@@ -50,6 +50,8 @@ CASES = [
          "--on-invalid", "fail"]),
     (1, ["turns", "-i", "{missing}"]),
     (1, ["inspect", "-i", "{missing}"]),
+    (1, ["dedupe", "-i", "{missing}", "-o", "{out}"]),
+    (1, ["normalize", "-i", "{missing}", "-o", "{dir}"]),
     # 2: invalid invocation or configuration
     (2, ["convert", "-i", "{good}", "-o", "{out}", "--no-such-flag"]),
     (2, ["convert", "-i", "{good}", "-o", "{out}"]),

@@ -105,7 +105,7 @@ datasets:
 ### Required fields per entry
 
 - `name` — unique label used to form the output subdirectory
-  (`sanitize_name` strips `<>:"/\|?*` and whitespace).
+  (characters `<>:"/\|?*` and whitespace become `_`).
 - Exactly one of `hf` or `url`.
 - HuggingFace extras: `split`, `config`.
 - GitHub extras: `ext` (tuple of suffixes), `mode` (`tree` default, or `clone`),
@@ -123,7 +123,7 @@ Tokens are resolved in this order, highest priority first:
 3. Environment variable at `auth.hf_token_env` / `auth.github_token_env`.
 
 Tokens are never printed. Any URL or error logged by the runner is passed
-through `convmerge.fetch.auth.redact_url` to strip `user:token@host` userinfo.
+through a redaction step that strips `user:token@host` userinfo.
 
 Where tokens are sent:
 

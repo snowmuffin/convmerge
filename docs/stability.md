@@ -39,8 +39,9 @@ exception messages (the exception *types* are covered).
     unsupported fetch URL, or a missing or invalid preset, manifest, mix
     config, or recipe.
 - Output streams: data goes to files or stdout; progress, warnings, and
-  errors go to stderr only. `inspect`, `validate`, `formats`, and
-  `run --plan` print to stdout.
+  errors go to stderr only. `inspect`, `validate`, `turns`, `formats`, and
+  `run --plan` print their result to stdout, as do `preset init` and
+  `run --init` without `-o`.
 
 The wording of `--help` and of stderr messages is not covered.
 
@@ -48,7 +49,7 @@ The wording of `--help` and of stderr messages is not covered.
 
 | File | Versioned by | Covered |
 |------|--------------|---------|
-| Output formats (`messages`, `alpaca`, `sharegpt`, `openai`, …) | — | Keys and their meaning, as in [format.md](format.md) |
+| Built-in output formats (`messages`, `alpaca`) | — | Keys and their meaning, as in [format.md](format.md) |
 | Drop / issue reason codes (`no_user`, `unresolved_image`, …) | — | Codes are never renamed or reused |
 | `convert --report`, `validate` JSON | `"version": 1` | Keys and meaning |
 | Recipe (`recipe.yaml`) | `version: 1` | Schema ([recipes.md](recipes.md)) |
