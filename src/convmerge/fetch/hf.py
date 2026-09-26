@@ -7,6 +7,7 @@ We never reimplement dataset loading; if you only need one dataset, call
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 
@@ -17,12 +18,17 @@ def download_hf_dataset(
     config: str | None = None,
     split: str | None = None,
     token: str | None = None,
+    max_rows: int | None = None,
 ) -> Path:
     """Load a HuggingFace dataset and dump it to a JSONL file.
 
     ``config`` and ``split`` default to ``None`` / ``"train"``, which matches
     the shape of most SFT datasets. Raises ``ImportError`` with an install hint
     when the ``datasets`` package is missing.
+
+    With ``max_rows`` the split is opened in streaming mode and only the first
+    N rows are written, so nothing else is downloaded. Values JSON cannot
+    represent (e.g. decoded images) are written as strings.
     """
     try:
         from datasets import load_dataset
@@ -42,6 +48,18 @@ def download_hf_dataset(
     if token:
         load_kwargs["token"] = token
 
-    ds = load_dataset(dataset_id, **load_kwargs)
-    ds.to_json(str(dst))
+    if max_rows is None:
+        ds = load_dataset(dataset_id, **load_kwargs)
+        ds.to_json(str(dst))
+        return dst
+
+    stream = load_dataset(dataset_id, streaming=True, **load_kwargs)
+    tmp = dst.with_name(f".{dst.name}.part")
+    try:
+        with tmp.open("w", encoding="utf-8") as f:
+            for row in stream.take(max_rows):
+                f.write(json.dumps(row, ensure_ascii=False, default=str) + "\n")
+        tmp.replace(dst)
+    finally:
+        tmp.unlink(missing_ok=True)
     return dst
