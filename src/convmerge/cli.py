@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import contextlib
 import json
+import logging
 import sys
 import warnings
 from collections import Counter
@@ -33,6 +34,7 @@ optional dependencies (pip install "convmerge[EXTRA]"):
 def main(argv: list[str] | None = None) -> None:
     parser = _build_parser()
     args = parser.parse_args(argv)
+    _configure_logging()
 
     if args.command == "convert":
         _cmd_convert(args)
@@ -55,6 +57,25 @@ def main(argv: list[str] | None = None) -> None:
         _cmd_mix(args)
     else:  # pragma: no cover - argparse enforces ``required=True``
         parser.error(f"unknown command: {args.command}")
+
+
+class _StderrHandler(logging.Handler):
+    """Write ``warning: ...`` lines to whatever ``sys.stderr`` is at emit time."""
+
+    def emit(self, record: logging.LogRecord) -> None:
+        try:
+            print(f"{record.levelname.lower()}: {record.getMessage()}", file=sys.stderr)
+        except Exception:  # noqa: BLE001 - logging must never break the command
+            self.handleError(record)
+
+
+def _configure_logging() -> None:
+    """Route library log records to stderr unless the host app configured logging."""
+    log = logging.getLogger("convmerge")
+    if logging.getLogger().handlers or any(isinstance(h, _StderrHandler) for h in log.handlers):
+        return
+    log.addHandler(_StderrHandler())
+    log.setLevel(logging.INFO)
 
 
 def _add_progress_flag(p: argparse.ArgumentParser) -> None:

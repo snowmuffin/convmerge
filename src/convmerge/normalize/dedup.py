@@ -10,6 +10,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from convmerge.io import ReadStats, iter_jsonl
+
 HashFn = Callable[[bytes], str]
 
 
@@ -167,32 +169,25 @@ def deduplicate_jsonl(
     dst_p.parent.mkdir(parents=True, exist_ok=True)
 
     st = stats if stats is not None else DedupeStats()
+    read = ReadStats()
     try:
-        with src_p.open(encoding="utf-8") as rf, dst_p.open("w", encoding="utf-8") as wf:
-            for line_number, line in enumerate(rf, 1):
-                line = line.strip()
-                if not line:
-                    continue
-                st.total += 1
+        with dst_p.open("w", encoding="utf-8") as wf:
+            for line in iter_jsonl(src_p, stats=read):
                 reporter.update()
-                try:
-                    data = json.loads(line)
-                except json.JSONDecodeError:
-                    # Corrupt rows are dropped and counted; re-run normalize to repair.
-                    st.invalid_json += 1
-                    if st.first_invalid_line is None:
-                        st.first_invalid_line = line_number
-                    continue
-                projection = _project(data, key_set)
+                projection = _project(line.value, key_set)
                 normalized = json.dumps(projection, sort_keys=True, ensure_ascii=False)
                 h = hasher(normalized.encode("utf-8"))
                 if not store.add(h):
                     st.duplicates += 1
                     continue
-                wf.write(line + "\n")
+                wf.write(line.raw + "\n")
                 st.kept += 1
     finally:
         store.close()
+        # Corrupt rows are dropped and counted; re-run normalize to repair.
+        st.invalid_json = read.invalid_json
+        st.first_invalid_line = read.first_invalid_line
+        st.total = st.kept + st.duplicates + st.invalid_json
     reporter.done()
     return st.total, st.kept
 
