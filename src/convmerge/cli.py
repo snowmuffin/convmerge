@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 
 from convmerge import __version__
-from convmerge.convert import convert_file
+from convmerge.convert import ConvertStats, convert_file
 
 FETCH_FILE_EXTENSIONS = (".parquet", ".json", ".jsonl")
 
@@ -148,6 +148,7 @@ def _cmd_convert(args: argparse.Namespace) -> None:
         sys.exit(2)
     from convmerge.progress import progress_enabled
 
+    stats = ConvertStats()
     n_in, n_out = convert_file(
         args.input,
         args.output,
@@ -156,8 +157,22 @@ def _cmd_convert(args: argparse.Namespace) -> None:
         encoding=cfg.encoding,
         adapter_options=cfg.adapter_options,
         progress=progress_enabled(args.progress),
+        stats=stats,
     )
     print(f"read {n_in} lines, wrote {n_out} examples", file=sys.stderr)
+    if stats.skipped:
+        print(
+            f"warning: skipped {stats.skipped:,} lines "
+            f"(invalid JSON={stats.invalid_json:,}, non-object={stats.non_object:,}, "
+            f"no example from adapter={stats.no_example:,})",
+            file=sys.stderr,
+        )
+    if stats.first_invalid_line is not None:
+        print(
+            f"warning: first invalid JSON at line {stats.first_invalid_line}; "
+            "run `convmerge normalize` first to repair the file",
+            file=sys.stderr,
+        )
 
 
 def _add_preset(sub: argparse._SubParsersAction) -> None:
@@ -344,9 +359,10 @@ def _add_dedupe(sub: argparse._SubParsersAction) -> None:
 
 
 def _cmd_dedupe(args: argparse.Namespace) -> None:
-    from convmerge.normalize.dedup import deduplicate_jsonl
+    from convmerge.normalize.dedup import DedupeStats, deduplicate_jsonl
     from convmerge.progress import progress_enabled
 
+    stats = DedupeStats()
     total, kept = deduplicate_jsonl(
         args.input,
         args.output,
@@ -355,13 +371,22 @@ def _cmd_dedupe(args: argparse.Namespace) -> None:
         progress=progress_enabled(args.progress),
         seen_store=args.seen_store,
         seen_db=args.seen_db,
+        stats=stats,
     )
     removed = total - kept
     pct = (removed / total * 100) if total else 0.0
     print(
-        f"total={total:,} kept={kept:,} removed={removed:,} ({pct:.2f}%)",
+        f"total={total:,} kept={kept:,} removed={removed:,} ({pct:.2f}%) "
+        f"[duplicates={stats.duplicates:,} invalid_json={stats.invalid_json:,}]",
         file=sys.stderr,
     )
+    if stats.first_invalid_line is not None:
+        print(
+            f"warning: dropped {stats.invalid_json:,} invalid JSON lines "
+            f"(first at line {stats.first_invalid_line}); "
+            "run `convmerge normalize` first to repair the file",
+            file=sys.stderr,
+        )
 
 
 def _add_turns(sub: argparse._SubParsersAction) -> None:
@@ -575,7 +600,12 @@ def _add_mix(sub: argparse._SubParsersAction) -> None:
     )
     p.add_argument("--output", "-o", type=Path, default=None, help="Output JSONL path")
     p.add_argument("--total", "-n", type=int, default=None, help="Target total record count")
-    p.add_argument("--seed", type=int, default=42, help="Random seed (default: 42)")
+    p.add_argument(
+        "--seed",
+        type=int,
+        default=None,
+        help="Random seed (default: config 'seed', else 42)",
+    )
     p.add_argument(
         "--oversample",
         action="store_true",
@@ -626,7 +656,7 @@ def _cmd_mix(args: argparse.Namespace) -> None:
     # CLI flags override config file values
     output = args.output or options.get("output")
     total = args.total if args.total is not None else options.get("total")
-    seed = args.seed if args.seed != 42 or "seed" not in options else options["seed"]
+    seed = args.seed if args.seed is not None else options.get("seed", 42)
     oversample = args.oversample or options.get("oversample", False)
 
     if output is None:

@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 from collections.abc import Callable, Iterable
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -24,6 +25,21 @@ _BUILTIN_HASHES: dict[str, HashFn] = {
     "md5": _md5_hex,
     "sha256": _sha256_hex,
 }
+
+
+@dataclass
+class DedupeStats:
+    """Counters filled by :func:`deduplicate_jsonl` when ``stats`` is passed.
+
+    ``total`` counts non-blank lines; each is either ``kept``, a
+    ``duplicates`` hit, or ``invalid_json`` (unparseable, dropped).
+    """
+
+    total: int = 0
+    kept: int = 0
+    duplicates: int = 0
+    invalid_json: int = 0
+    first_invalid_line: int | None = None
 
 
 class _MemorySeen:
@@ -104,6 +120,7 @@ def deduplicate_jsonl(
     progress: bool = False,
     seen_store: str = "memory",
     seen_db: str | Path | None = None,
+    stats: DedupeStats | None = None,
 ) -> tuple[int, int]:
     """Stream ``src`` JSONL into ``dst``, dropping duplicate rows.
 
@@ -122,6 +139,9 @@ def deduplicate_jsonl(
       tens of millions of unique rows, at some speed cost. ``seen_db`` chooses
       the database path; a temporary file is created and removed automatically
       when omitted.
+
+    Unparseable lines are dropped; pass a :class:`DedupeStats` as ``stats`` to
+    count them separately from true duplicates.
 
     Returns ``(total_rows, kept_rows)``.
     """
@@ -146,32 +166,35 @@ def deduplicate_jsonl(
     dst_p = Path(dst)
     dst_p.parent.mkdir(parents=True, exist_ok=True)
 
-    total = 0
-    kept = 0
+    st = stats if stats is not None else DedupeStats()
     try:
         with src_p.open(encoding="utf-8") as rf, dst_p.open("w", encoding="utf-8") as wf:
-            for line in rf:
+            for line_number, line in enumerate(rf, 1):
                 line = line.strip()
                 if not line:
                     continue
-                total += 1
+                st.total += 1
                 reporter.update()
                 try:
                     data = json.loads(line)
                 except json.JSONDecodeError:
-                    # Skip corrupt rows silently; caller can re-run normalize first.
+                    # Corrupt rows are dropped and counted; re-run normalize to repair.
+                    st.invalid_json += 1
+                    if st.first_invalid_line is None:
+                        st.first_invalid_line = line_number
                     continue
                 projection = _project(data, key_set)
                 normalized = json.dumps(projection, sort_keys=True, ensure_ascii=False)
                 h = hasher(normalized.encode("utf-8"))
                 if not store.add(h):
+                    st.duplicates += 1
                     continue
                 wf.write(line + "\n")
-                kept += 1
+                st.kept += 1
     finally:
         store.close()
     reporter.done()
-    return total, kept
+    return st.total, st.kept
 
 
 def _project(data: Any, keys: set[str] | None) -> Any:
