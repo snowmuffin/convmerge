@@ -120,6 +120,13 @@ convmerge convert -i ./jsonl/mixed.jsonl -o ./out.jsonl --preset convert_preset.
 Adapters: `alpaca`, `sharegpt`, `chat` (alias `auto`).  
 Emitters: `messages`, `alpaca`.
 
+> **ShareGPT multi-turn:** `--from sharegpt` currently splits each
+> conversation into independent user/assistant pairs (dropping the system
+> prompt and earlier context) and warns about it; the default switches to
+> keeping the whole conversation in 0.6.0. Opt in now with
+> `--adapter-kwargs '{"sharegpt": {"turn_mode": "full"}}'`, or pin
+> `"pairs"` to keep the old output. See [docs/format.md](docs/format.md#sharegpt).
+
 Presets and team-specific tuning: [docs/custom_presets.md](docs/custom_presets.md).
 
 > `chat` / `auto` is a **heuristic** adapter: it inspects the keys of each
