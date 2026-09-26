@@ -1,2 +1,2 @@
-{"messages": [{"role": "user", "content": "<image>Who is in the picture?"}, {"role": "assistant", "content": "Two people playing chess."}]}
-{"messages": [{"role": "user", "content": "<image>\nWhat colors is the bus?"}, {"role": "assistant", "content": "White and red."}, {"role": "user", "content": "Where is it?"}, {"role": "assistant", "content": "On a city street."}]}
+{"messages": [{"role": "user", "content": [{"type": "image_url", "image_url": {"url": "mllm_demo_data/1.jpg"}}, {"type": "text", "text": "Who is in the picture?"}]}, {"role": "assistant", "content": "Two people playing chess."}]}
+{"messages": [{"role": "user", "content": [{"type": "image_url", "image_url": {"url": "coco/train2017/000000033471.jpg"}}, {"type": "text", "text": "What colors is the bus?"}]}, {"role": "assistant", "content": "White and red."}, {"role": "user", "content": "Where is it?"}, {"role": "assistant", "content": "On a city street."}]}

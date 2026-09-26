@@ -32,8 +32,8 @@ class ChatAdapterOptions:
 class SharegptAdapterOptions:
     """Options passed to :func:`convmerge.adapters.sharegpt.iter_from_sharegpt_line`.
 
-    ``turn_mode=None`` keeps the pre-0.6 ``"pairs"`` behavior with a
-    :class:`FutureWarning`; set ``"pairs"`` or ``"full"`` explicitly.
+    ``turn_mode=None`` means the adapter default (``"full"`` since 0.6.0);
+    ``"pairs"`` restores the 0.5.x one-example-per-pair behavior.
     """
 
     turn_mode: str | None = None

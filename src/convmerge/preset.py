@@ -32,7 +32,7 @@ adapter_options:
     #   gpt: assistant
   # Optional: sharegpt adapter (adapter: sharegpt)
   # sharegpt:
-  #   turn_mode: full         # full (whole conversation) | pairs (pre-0.6 default)
+  #   turn_mode: full         # full (default, whole conversation) | pairs (0.5.x behavior)
 """
 
 

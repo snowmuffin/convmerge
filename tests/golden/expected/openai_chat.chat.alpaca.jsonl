@@ -1,4 +1,4 @@
 {"instruction": "What is 2+2?\nAnd times 3?", "input": "", "output": "12"}
 {"instruction": "Weather in Seoul?", "input": "", "output": "It is 21°C in Seoul."}
-{"instruction": "Say hi", "input": "", "output": ""}
+{"instruction": "Say hi", "input": "", "output": "Hi!"}
 {"instruction": "Hello", "input": "", "output": "Hello, Alice."}
