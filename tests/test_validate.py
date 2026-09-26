@@ -188,3 +188,19 @@ def test_cli_validate_exit_codes(tmp_path: Path, capsys) -> None:
     assert exc.value.code == 1
     out = json.loads(capsys.readouterr().out)
     assert (out["valid"], out["invalid"], out["drop_lines"]) == (1, 1, {"no_user": [2]})
+
+
+def test_parallel_fail_mode_reports_line(tmp_path: Path, monkeypatch) -> None:
+    import convmerge.convert as convmod
+
+    monkeypatch.setattr(convmod, "_CHUNK_LINES", 1)
+    src = _write(tmp_path / "in.jsonl", GOOD, GOOD, BAD, GOOD)
+    with pytest.raises(InvalidExampleError, match="line 3.*no_user"):
+        convert_file(
+            src,
+            tmp_path / "o.jsonl",
+            adapter_name="chat",
+            output_format="messages",
+            on_invalid="fail",
+            workers=2,
+        )
