@@ -75,7 +75,11 @@ def _cmd_fetch(args: argparse.Namespace) -> None:
     from convmerge.fetch.manifest import Defaults, load_manifest
     from convmerge.fetch.runner import run_manifest
 
-    manifest = load_manifest(manifest_path)
+    try:
+        manifest = load_manifest(manifest_path)
+    except _manifest_errors() as e:
+        print(f"error: {manifest_path}: {e}", file=sys.stderr)
+        sys.exit(2)
     if args.on_error is not None or args.no_resume:
         manifest = _with_overridden_defaults(
             manifest,
@@ -97,6 +101,16 @@ def _cmd_fetch(args: argparse.Namespace) -> None:
 
     # Defaults reference for type checker.
     _ = Defaults
+
+
+def _manifest_errors() -> tuple[type[Exception], ...]:
+    """Exceptions that mean "this manifest is invalid" (exit 2)."""
+    errors: tuple[type[Exception], ...] = (ValueError, ImportError, OSError)
+    try:
+        import yaml
+    except ImportError:
+        return errors
+    return (*errors, yaml.YAMLError)
 
 
 def _cmd_fetch_shortcut(args: argparse.Namespace, source: str) -> None:
@@ -163,7 +177,7 @@ def _cmd_fetch_shortcut(args: argparse.Namespace, source: str) -> None:
         "Only hf://, raw.githubusercontent.com, and github.com are supported.",
         file=sys.stderr,
     )
-    sys.exit(1)
+    sys.exit(2)
 
 
 def _with_overridden_defaults(manifest, *, on_error, resume):
