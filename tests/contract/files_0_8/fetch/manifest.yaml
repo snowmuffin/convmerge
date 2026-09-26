@@ -1,0 +1,9 @@
+version: 1
+defaults:
+  output_root: .
+  on_error: fail
+datasets:
+  - name: sample
+    url: https://raw.githubusercontent.com/example/data/main/sample.jsonl
+    output: sample.jsonl
+    max_rows: 5

@@ -1,0 +1,100 @@
+{
+  "convmerge": "0.8.0",
+  "steps": {
+    "alpaca.convert": {
+      "action": "ran",
+      "seconds": 0.002,
+      "stats": {
+        "lines_read": 42,
+        "written": 41,
+        "blank": 0,
+        "invalid_json": 0,
+        "non_object": 0,
+        "no_example": 0,
+        "first_invalid_line": null,
+        "dropped": 1,
+        "kept_invalid": 0,
+        "drop_reasons": {
+          "no_user": 1
+        },
+        "drop_lines": {
+          "no_user": [
+            42
+          ]
+        },
+        "lossy": {},
+        "skipped_lines": 0,
+        "reason_descriptions": {
+          "no_user": "there is no user message"
+        }
+      }
+    },
+    "chat.normalize": {
+      "action": "ran",
+      "seconds": 0.001,
+      "stats": {
+        "files": 1,
+        "records": 30
+      }
+    },
+    "chat.convert": {
+      "action": "ran",
+      "seconds": 0.002,
+      "stats": {
+        "lines_read": 30,
+        "written": 30,
+        "blank": 0,
+        "invalid_json": 0,
+        "non_object": 0,
+        "no_example": 0,
+        "first_invalid_line": null,
+        "dropped": 0,
+        "kept_invalid": 0,
+        "drop_reasons": {},
+        "drop_lines": {},
+        "lossy": {},
+        "skipped_lines": 0,
+        "reason_descriptions": {}
+      }
+    },
+    "mix": {
+      "action": "ran",
+      "seconds": 0.001,
+      "stats": {
+        "sampler": "v2",
+        "seed": 11,
+        "total_written": 50,
+        "sources": {
+          "alpaca": {
+            "weight": 0.6666666666666666,
+            "requested": 33,
+            "available": 41,
+            "written": 33
+          },
+          "chat": {
+            "weight": 0.3333333333333333,
+            "requested": 17,
+            "available": 30,
+            "written": 17
+          }
+        }
+      }
+    },
+    "dedupe": {
+      "action": "ran",
+      "seconds": 0.001,
+      "stats": {
+        "total": 50,
+        "kept": 50,
+        "duplicates": 0,
+        "invalid_json": 0,
+        "first_invalid_line": null
+      }
+    }
+  },
+  "output": {
+    "path": "train/mixed.jsonl",
+    "sha256": "73a1e6d998d973e57ce495bae63813bd697bdeffbf6243d9436f44b37a1fd42b",
+    "records": 50
+  }
+}

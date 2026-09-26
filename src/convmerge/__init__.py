@@ -44,6 +44,7 @@ _EXPORTS: dict[str, str] = {
     # other commands
     "mix_files": "convmerge.mix",
     "MixSource": "convmerge.mix",
+    "MixResult": "convmerge.mix",
     "deduplicate_jsonl": "convmerge.normalize.dedup",
     "DedupeStats": "convmerge.normalize.dedup",
     "normalize_to_jsonl": "convmerge.normalize.jsonl",
@@ -51,6 +52,9 @@ _EXPORTS: dict[str, str] = {
     "split_by_turns": "convmerge.normalize.turns",
     "analyze_turn_distribution": "convmerge.normalize.turns",
     "iter_jsonl": "convmerge.io",
+    "JsonlLine": "convmerge.io",
+    "JsonlDecodeError": "convmerge.io",
+    "ReadStats": "convmerge.io",
 }
 
 __all__ = [
@@ -64,7 +68,11 @@ __all__ = [
     "DedupeStats",
     "EmitOptions",
     "InvalidExampleError",
+    "JsonlDecodeError",
+    "JsonlLine",
+    "MixResult",
     "MixSource",
+    "ReadStats",
     "SharegptAdapterOptions",
     "ToolCall",
     "TrainingExample",
@@ -123,8 +131,8 @@ if TYPE_CHECKING:  # pragma: no cover - for type checkers and IDEs only
         available_formats,
         register_emitter,
     )
-    from convmerge.io import iter_jsonl
-    from convmerge.mix import MixSource, mix_files
+    from convmerge.io import JsonlDecodeError, JsonlLine, ReadStats, iter_jsonl
+    from convmerge.mix import MixResult, MixSource, mix_files
     from convmerge.models import ChatMessage, ContentPart, ToolCall, TrainingExample
     from convmerge.normalize.dedup import DedupeStats, deduplicate_jsonl
     from convmerge.normalize.jsonl import normalize_to_jsonl

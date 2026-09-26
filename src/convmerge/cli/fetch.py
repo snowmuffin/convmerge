@@ -6,6 +6,7 @@ import argparse
 import sys
 from pathlib import Path
 
+from convmerge.cli._common import config_errors
 from convmerge.cli._common import positive_int as _positive_int
 
 
@@ -70,14 +71,14 @@ def _cmd_fetch(args: argparse.Namespace) -> None:
             "Pass either a YAML manifest path, an hf://org/dataset URI, or a GitHub URL.",
             file=sys.stderr,
         )
-        sys.exit(1)
+        sys.exit(2)
 
     from convmerge.fetch.manifest import Defaults, load_manifest
     from convmerge.fetch.runner import run_manifest
 
     try:
         manifest = load_manifest(manifest_path)
-    except _manifest_errors() as e:
+    except config_errors() as e:
         print(f"error: {manifest_path}: {e}", file=sys.stderr)
         sys.exit(2)
     if args.on_error is not None or args.no_resume:
@@ -101,16 +102,6 @@ def _cmd_fetch(args: argparse.Namespace) -> None:
 
     # Defaults reference for type checker.
     _ = Defaults
-
-
-def _manifest_errors() -> tuple[type[Exception], ...]:
-    """Exceptions that mean "this manifest is invalid" (exit 2)."""
-    errors: tuple[type[Exception], ...] = (ValueError, ImportError, OSError)
-    try:
-        import yaml
-    except ImportError:
-        return errors
-    return (*errors, yaml.YAMLError)
 
 
 def _cmd_fetch_shortcut(args: argparse.Namespace, source: str) -> None:

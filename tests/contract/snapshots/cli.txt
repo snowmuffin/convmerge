@@ -1,0 +1,82 @@
+[convmerge]
+  --version (switch)
+[convmerge convert]
+  --input, -i required
+  --output, -o required
+  --preset
+  --from
+  --format, -f
+  --adapter-kwargs
+  --encoding default='utf-8'
+  --preference choices=chosen|rejected
+  --workers default=1
+  --on-invalid choices=drop|keep|fail default='drop'
+  --report
+  --tool-arguments choices=string|object
+  --keep-meta nargs=?
+  --meta-key
+  --alpaca-multiturn choices=flatten|history|drop
+  --progress (switch)
+[convmerge validate]
+  --input, -i required
+  --from default='chat'
+  --encoding default='utf-8'
+[convmerge formats]
+[convmerge inspect]
+  --input, -i required
+  --max-rows
+  --max-examples default=3
+[convmerge normalize]
+  --input, -i required
+  --output, -o required
+  --array-key default='conversation'
+[convmerge dedupe]
+  --input, -i required
+  --output, -o required
+  --keys nargs=+
+  --algorithm choices=md5|sha256 default='md5'
+  --seen-store choices=memory|sqlite default='memory'
+  --seen-db
+  --progress (switch)
+[convmerge turns]
+  --input, -i required
+  --single-out
+  --multi-out
+[convmerge fetch]
+  source
+  --output, -o
+  --hf-token
+  --github-token
+  --only nargs=+
+  --on-error choices=continue|fail
+  --no-resume (switch)
+  --max-rows
+  --ext nargs=+
+  --mode choices=tree|clone
+  --lfs (switch)
+  --split
+  --config
+[convmerge preset]
+[convmerge preset init]
+  -o, --output
+[convmerge preset validate]
+  path
+[convmerge mix]
+  config nargs=?
+  --input, -i nargs=+
+  --output, -o
+  --total, -n
+  --seed
+  --oversample (switch)
+  --sampler choices=v1|v2
+  --no-recipe (switch)
+  --encoding default='utf-8'
+[convmerge run]
+  recipe nargs=?
+  --plan (switch)
+  --frozen (switch)
+  --force nargs=*
+  --hf-token
+  --github-token
+  --init (switch)
+  -o, --output

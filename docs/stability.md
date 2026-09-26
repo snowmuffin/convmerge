@@ -30,14 +30,14 @@ exception messages (the exception *types* are covered).
   New commands, flags, and values may be added in minor versions.
 - Exit codes:
   - `0` success;
-  - `1` the work failed: a missing input file, invalid examples found by
+  - `1` the work failed: a missing input data file, invalid examples found by
     `validate` (or an invalid preset found by `preset validate`),
     `convert --on-invalid fail` hitting an invalid example, a failed fetch
     entry with `on_error: fail`, a failed recipe step, `run --frozen` with
     steps out of date, or any unexpected error;
   - `2` the invocation is invalid: bad flags or flag combinations, an
-    unsupported fetch URL, or an invalid preset, manifest, mix config, or
-    recipe passed to a command that uses it.
+    unsupported fetch URL, or a missing or invalid preset, manifest, mix
+    config, or recipe.
 - Output streams: data goes to files or stdout; progress, warnings, and
   errors go to stderr only. `inspect`, `validate`, `formats`, and
   `run --plan` print to stdout.
