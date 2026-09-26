@@ -9,7 +9,7 @@ from pathlib import Path
 
 from convmerge.adapter_resolve import resolve_adapter
 from convmerge.config import AdapterOptions, ConvertConfig
-from convmerge.emitters import get_emitter
+from convmerge.emitters import ToolArguments, get_emitter
 from convmerge.io import ReadStats, iter_jsonl
 
 
@@ -46,9 +46,14 @@ def convert_file(
     adapter_options: AdapterOptions | None = None,
     progress: bool = False,
     stats: ConvertStats | None = None,
+    tool_arguments: ToolArguments = "string",
 ) -> tuple[int, int]:
     """
     Read JSONL lines, parse with adapter, write emitted JSONL.
+
+    ``tool_arguments`` controls how tool-call arguments are written by the
+    ``messages`` format: ``"string"`` (JSON-encoded, OpenAI style) or
+    ``"object"``.
 
     Set ``progress=True`` to log periodic row counts to stderr (off by default;
     see :mod:`convmerge.progress`). Pass a :class:`ConvertStats` as ``stats``
@@ -60,7 +65,7 @@ def convert_file(
     from convmerge.progress import ProgressReporter
 
     adapter = resolve_adapter(adapter_name, adapter_options)
-    emitter = get_emitter(output_format)
+    emitter = get_emitter(output_format, tool_arguments=tool_arguments)
 
     st = stats if stats is not None else ConvertStats()
     reporter = ProgressReporter(f"convert {input_path.name}", enabled=progress)
@@ -102,6 +107,7 @@ def convert_with_config(
     *,
     progress: bool = False,
     stats: ConvertStats | None = None,
+    tool_arguments: ToolArguments = "string",
 ) -> tuple[int, int]:
     """Run :func:`convert_file` using a resolved :class:`convmerge.config.ConvertConfig`."""
     return convert_file(
@@ -113,6 +119,7 @@ def convert_with_config(
         adapter_options=cfg.adapter_options,
         progress=progress,
         stats=stats,
+        tool_arguments=tool_arguments,
     )
 
 
