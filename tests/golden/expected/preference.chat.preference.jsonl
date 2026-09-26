@@ -1,0 +1,6 @@
+{"prompt": [{"role": "system", "content": "Be kind."}, {"role": "user", "content": "Tell me a joke."}], "chosen": [{"role": "assistant", "content": "Why did the chicken cross the road?"}], "rejected": [{"role": "assistant", "content": "No."}]}
+{"prompt": [{"role": "user", "content": "Translate to French\ncat"}], "chosen": [{"role": "assistant", "content": "chat"}], "rejected": [{"role": "assistant", "content": "dog"}]}
+{"prompt": [{"role": "user", "content": "What is 2+2?"}], "chosen": [{"role": "assistant", "content": "4."}, {"role": "user", "content": "And 3+3?"}, {"role": "assistant", "content": "6."}], "rejected": [{"role": "assistant", "content": "5."}]}
+{"prompt": [{"role": "user", "content": "Name a color."}], "chosen": [{"role": "assistant", "content": "Blue."}], "rejected": [{"role": "assistant", "content": "Seven."}]}
+{"prompt": [{"role": "user", "content": "Capital of Korea?"}], "chosen": [{"role": "assistant", "content": "Seoul."}], "rejected": [{"role": "assistant", "content": "Busan."}]}
+{"prompt": [{"role": "user", "content": "Say hi"}], "chosen": [{"role": "assistant", "content": "Hi!"}], "rejected": [{"role": "assistant", "content": "..."}]}

@@ -6,18 +6,26 @@
       2,
       4,
       6
+    ],
+    "preference_record": [
+      1,
+      2,
+      3,
+      4,
+      5
     ]
   },
   "drop_reasons": {
-    "no_assistant": 4
+    "no_assistant": 4,
+    "preference_record": 6
   },
-  "dropped": 4,
+  "dropped": 6,
   "first_invalid_line": null,
   "invalid_json": 0,
   "kept_invalid": 0,
   "lines_read": 6,
   "lossy": {},
-  "no_example": 2,
+  "no_example": 0,
   "non_object": 0,
   "written": 0
 }
