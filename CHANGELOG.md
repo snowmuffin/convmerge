@@ -7,6 +7,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-09-26
+
+Scale and extension. See [docs/migration-0.7.md](docs/migration-0.7.md);
+`convert` output is byte-identical to 0.6.0 (checked on 17 real-dataset
+cases, with and without `--workers`).
+
+### Added
+
+- `convert --workers N`: parallel conversion over a bounded window of chunks;
+  output order, stats, drop reports, and `--on-invalid fail` errors are
+  identical to a single process (200k rows on 4 cores: 6.4 s → 1.7 s).
+- `convert --preference chosen|rejected` (preset
+  `adapter_options.preference`): fold the chosen or rejected answer of
+  preference data into the conversation — LLaMA-Factory ranking, HH-RLHF
+  transcripts, UltraFeedback-binarized lists, TRL prompt + continuation.
+- `fetch` sampling (#29): `max_rows` per manifest entry or `--max-rows N`.
+  HF entries stream only N rows; raw and tree line files stop after N lines.
+  Completion markers record `max_rows`, so a sample never satisfies a full
+  fetch.
+- `fetch` resolves Git LFS pointers from `raw.githubusercontent.com` (and
+  tree files) through the Git LFS batch API — no clone; the token is sent to
+  `github.com` only, never to the object store.
+- Plugins: `convmerge.adapters` / `convmerge.emitters` entry points,
+  `register_adapter()` / `register_emitter()`, `available_adapters()` /
+  `available_formats()`, and a `convmerge formats` command.
+- Public Python API: `from convmerge import ...` for everything in
+  `convmerge.__all__` (lazy imports), documented in `docs/api.md`.
+- `benchmarks/bench.py` (time and peak memory per command) and a design
+  proposal for declarative recipes (`docs/design/recipe.md`, targeted at 0.8).
+
+### Changed
+
+- **Breaking:** `mix` streams sources (sampler `v2`, #24): memory is bounded
+  by the sample (or one ~25k-line shuffle bucket when merging everything)
+  instead of the inputs — three 119 MB sources: 405 MB → 30 MB peak. The same
+  seed selects different lines than 0.6, and `--oversample` repeats every
+  record evenly. `--sampler v1` reproduces 0.6 mixes exactly; `.mix.json`
+  records the sampler.
+- `fetch` raw downloads stream to disk instead of being held in memory.
+- `convmerge.cli` is split into per-command modules (entry point and help
+  text unchanged).
+
+### Fixed
+
+- `fetch` URL shortcuts no longer name files `x.jsonl.jsonl`.
+- `--max-rows 0` / `--workers 0` are rejected instead of writing an empty
+  file / silently running single-process.
+
 ## [0.6.0] - 2026-09-26
 
 Output changes and how to get the 0.5 behavior back are listed in
