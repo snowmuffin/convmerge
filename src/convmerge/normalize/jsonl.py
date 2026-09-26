@@ -3,11 +3,15 @@
 from __future__ import annotations
 
 import json
+import logging
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any, Literal
 
+from convmerge.io import JsonlDecodeError, iter_jsonl
 from convmerge.lfs import ensure_not_lfs_pointer
+
+logger = logging.getLogger(__name__)
 
 JSONLShape = Literal["jsonl", "single_line", "json_array", "invalid", "empty"]
 
@@ -26,37 +30,38 @@ def load_jsonl(
     Empty lines are always skipped. ``on_error`` controls what happens when a
     line fails to parse:
 
-    - ``"fail"`` (default): print the failing location and return an empty
+    - ``"fail"`` (default): log the failing location and return an empty
       list, mirroring a common permissive notebook-style loader. The whole
       file is discarded so a partially corrupt input is never silently
       half-loaded.
     - ``"skip"``: log the failing line number and skip just that line, keeping
       every row that did parse. Use this for large files where one bad line
       should not lose all the good data.
+
+    Messages go to the ``convmerge`` logger (stderr by default).
     """
     ensure_not_lfs_pointer(path)
     out: list[dict[str, Any]] = []
-    with open(path, encoding="utf-8") as f:
-        for i, line in enumerate(f, 1):
+
+    def log_skip(err: JsonlDecodeError) -> None:
+        # The location is logged so the user can repair the source if desired.
+        logger.warning("[JSONL SKIP] %s", err)
+
+    try:
+        for line in iter_jsonl(
+            path,
+            on_error="skip" if on_error == "skip" else "raise",
+            on_invalid=log_skip,
+        ):
             if max_rows is not None and len(out) >= max_rows:
                 break
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                obj = json.loads(line)
-            except json.JSONDecodeError as e:
-                if on_error == "skip":
-                    # Skip just this line; the location is logged so the user
-                    # can repair the source if desired.
-                    print(f"[JSONL SKIP] {path} line {i}: {e} :: {line[:80]!r}")
-                    continue
-                # Caller gets an empty list; the failing location is still printed
-                # so the user can fix the source file.
-                print(f"[JSONL ERROR] {path} line {i}: {e} :: {line[:80]!r}")
-                return []
-            if isinstance(obj, dict):
-                out.append(obj)
+            if isinstance(line.value, dict):
+                out.append(line.value)
+    except JsonlDecodeError as err:
+        # Caller gets an empty list; the failing location is still logged so
+        # the user can fix the source file.
+        logger.warning("[JSONL ERROR] %s", err)
+        return []
     return out
 
 
@@ -99,17 +104,12 @@ def iter_json_records(path: str | Path, *, max_rows: int | None = None) -> Itera
 
 def _iter_jsonl_records(p: Path, *, max_rows: int | None) -> Iterator[dict[str, Any]]:
     yielded = 0
-    with p.open(encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if not line:
-                continue
-            obj = json.loads(line)
-            if isinstance(obj, dict):
-                yield obj
-                yielded += 1
-                if max_rows is not None and yielded >= max_rows:
-                    return
+    for line in iter_jsonl(p, on_error="raise"):
+        if isinstance(line.value, dict):
+            yield line.value
+            yielded += 1
+            if max_rows is not None and yielded >= max_rows:
+                return
 
 
 def detect_jsonl_shape(path: str | Path) -> JSONLShape:

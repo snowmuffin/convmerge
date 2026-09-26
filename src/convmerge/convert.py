@@ -10,6 +10,7 @@ from pathlib import Path
 from convmerge.adapter_resolve import resolve_adapter
 from convmerge.config import AdapterOptions, ConvertConfig
 from convmerge.emitters import get_emitter
+from convmerge.io import ReadStats, iter_jsonl
 
 
 @dataclass
@@ -66,36 +67,29 @@ def convert_file(
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    with (
-        input_path.open(encoding=encoding) as fin,
-        output_path.open("w", encoding=encoding) as fout,
-    ):
-        for raw in fin:
-            st.lines_read += 1
-            reporter.update()
-            raw = raw.strip()
-            if not raw:
-                st.blank += 1
-                continue
-            try:
-                obj = json.loads(raw)
-            except json.JSONDecodeError:
-                st.invalid_json += 1
-                if st.first_invalid_line is None:
-                    st.first_invalid_line = st.lines_read
-                continue
-            if not isinstance(obj, dict):
-                st.non_object += 1
-                continue
-            produced = 0
-            for example in adapter(obj):
-                row = emitter(example)
-                fout.write(json.dumps(row, ensure_ascii=False) + "\n")
-                produced += 1
-            if produced:
-                st.written += produced
-            else:
-                st.no_example += 1
+    read = ReadStats()
+    try:
+        with output_path.open("w", encoding=encoding) as fout:
+            for line in iter_jsonl(input_path, encoding=encoding, stats=read):
+                reporter.update()
+                obj = line.value
+                if not isinstance(obj, dict):
+                    st.non_object += 1
+                    continue
+                produced = 0
+                for example in adapter(obj):
+                    row = emitter(example)
+                    fout.write(json.dumps(row, ensure_ascii=False) + "\n")
+                    produced += 1
+                if produced:
+                    st.written += produced
+                else:
+                    st.no_example += 1
+    finally:
+        st.lines_read = read.lines_read
+        st.blank = read.blank
+        st.invalid_json = read.invalid_json
+        st.first_invalid_line = read.first_invalid_line
 
     reporter.done()
     return st.lines_read, st.written

@@ -1,0 +1,121 @@
+"""Shared JSONL reader."""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+import pytest
+
+from convmerge.io import JsonlDecodeError, ReadStats, iter_jsonl
+
+
+def _write(p: Path, text: str) -> Path:
+    p.write_text(text, encoding="utf-8")
+    return p
+
+
+def test_iter_jsonl_skips_blank_and_invalid_with_counts(tmp_path: Path) -> None:
+    p = _write(tmp_path / "a.jsonl", '﻿{"a": 1}\n\n  {bad\n[1]\r\n"s"  \n')
+    stats = ReadStats()
+    lines = list(iter_jsonl(p, stats=stats))
+    assert [(x.number, x.raw, x.value) for x in lines] == [
+        (1, '{"a": 1}', {"a": 1}),
+        (4, "[1]", [1]),
+        (5, '"s"', "s"),
+    ]
+    assert stats == ReadStats(lines_read=5, blank=1, invalid_json=1, first_invalid_line=3)
+
+
+def test_iter_jsonl_on_invalid_callback(tmp_path: Path) -> None:
+    p = _write(tmp_path / "a.jsonl", '{"a": 1}\n{bad\n')
+    seen: list[JsonlDecodeError] = []
+    assert len(list(iter_jsonl(p, on_invalid=seen.append))) == 1
+    assert [e.line_number for e in seen] == [2]
+    assert "line 2" in str(seen[0])
+
+
+def test_iter_jsonl_raise(tmp_path: Path) -> None:
+    p = _write(tmp_path / "a.jsonl", '{"a": 1}\n{bad\n')
+    it = iter_jsonl(p, on_error="raise")
+    assert next(it).value == {"a": 1}
+    with pytest.raises(JsonlDecodeError, match="line 2"):
+        next(it)
+
+
+def test_iter_jsonl_rejects_unknown_policy(tmp_path: Path) -> None:
+    p = _write(tmp_path / "a.jsonl", "{}\n")
+    with pytest.raises(ValueError, match="on_error"):
+        list(iter_jsonl(p, on_error="ignore"))  # type: ignore[arg-type]
+
+
+def test_convert_accepts_bom_prefixed_file(tmp_path: Path) -> None:
+    from convmerge.convert import ConvertStats, convert_file
+
+    src = _write(tmp_path / "in.jsonl", '﻿{"instruction": "a", "output": "b"}\n')
+    stats = ConvertStats()
+    convert_file(
+        src, tmp_path / "o.jsonl", adapter_name="alpaca", output_format="messages", stats=stats
+    )
+    assert (stats.written, stats.invalid_json) == (1, 0)
+
+
+def test_load_jsonl_logs_to_logger_not_stdout(tmp_path: Path, capsys, caplog) -> None:
+    from convmerge.normalize.jsonl import load_jsonl
+
+    p = _write(tmp_path / "a.jsonl", '{"a": 1}\n{bad\n{"b": 2}\n')
+    assert load_jsonl(p, on_error="skip") == [{"a": 1}, {"b": 2}]
+    assert load_jsonl(p) == []
+    assert capsys.readouterr().out == ""
+    messages = [r.getMessage() for r in caplog.records]
+    assert any("[JSONL SKIP]" in m and "line 2" in m for m in messages)
+    assert any("[JSONL ERROR]" in m and "line 2" in m for m in messages)
+
+
+def test_turns_reports_invalid_line_number(tmp_path: Path) -> None:
+    from convmerge.normalize.turns import analyze_turn_distribution
+
+    p = _write(tmp_path / "a.jsonl", '{"messages": []}\n{bad\n')
+    with pytest.raises(JsonlDecodeError, match="line 2"):
+        analyze_turn_distribution(p)
+
+
+def test_fetch_runner_logs_to_stderr_by_default(tmp_path: Path, capsys) -> None:
+    from convmerge.fetch.manifest import Defaults, Manifest
+    from convmerge.fetch.runner import run_manifest
+
+    run_manifest(Manifest(defaults=Defaults(output_root=str(tmp_path))))
+    out = capsys.readouterr()
+    assert out.out == ""
+    assert "[done]" in out.err
+
+
+def test_cli_prints_library_warnings_to_stderr(tmp_path: Path, capsys, monkeypatch) -> None:
+    import logging
+
+    from convmerge.cli import _StderrHandler, main
+
+    # Simulate a plain CLI process: pytest installs its own root handlers.
+    monkeypatch.setattr(logging.getLogger(), "handlers", [])
+    lib_logger = logging.getLogger("convmerge")
+    monkeypatch.setattr(lib_logger, "handlers", [])
+    monkeypatch.setattr(lib_logger, "level", logging.NOTSET)
+
+    src = _write(
+        tmp_path / "in.jsonl", '{"text": "t", "instruction": "only instruction, no output"}\n'
+    )
+    main(
+        [
+            "convert",
+            "-i",
+            str(src),
+            "-o",
+            str(tmp_path / "o.jsonl"),
+            "--from",
+            "chat",
+            "-f",
+            "messages",
+        ]
+    )
+    err = capsys.readouterr().err
+    assert "warning: chat adapter: routing record to the 'text' branch" in err
+    assert any(isinstance(h, _StderrHandler) for h in lib_logger.handlers)
