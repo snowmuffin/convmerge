@@ -10,6 +10,9 @@ present. Handles the common messy shapes seen across SFT datasets:
 - Plain ``text`` strings (yielded as a single assistant message).
 - Alpaca-style ``instruction`` / ``input`` / ``output`` (delegates to the
   existing alpaca adapter).
+- Tool-calling encodings other than OpenAI's: Hermes tags, Glaive
+  ``system`` + ``chat`` transcripts, and xLAM ``query`` / ``answers`` (see
+  :mod:`convmerge.adapters.tool_formats`).
 
 Around the turns it also keeps OpenAI content parts (text + media by
 reference), ``tool_calls`` / ``tool_call_id`` / ``name``, LLaMA-Factory
@@ -28,6 +31,7 @@ from typing import Any
 
 from convmerge.adapters._common import build_example, coerce_messages, source_meta
 from convmerge.adapters.alpaca import iter_from_alpaca_line
+from convmerge.adapters.tool_formats import glaive_messages, is_glaive, is_xlam, xlam_messages
 from convmerge.models import ChatMessage, TrainingExample
 
 logger = logging.getLogger(__name__)
@@ -113,6 +117,15 @@ def iter_from_chat_line(
             if msgs:
                 yield build_example(msgs, record, meta={"source": "chat"})
             return
+
+    if is_glaive(record):
+        msgs, tools = glaive_messages(record)
+        if msgs:
+            yield build_example(msgs, {**record, "tools": tools}, meta={"source": "chat:glaive"})
+        return
+    if is_xlam(record):
+        yield build_example(xlam_messages(record), record, meta={"source": "chat:xlam"})
+        return
 
     # Resolve Alpaca cues up front so a stray ``text`` field can't silently
     # shadow a well-formed instruction/output record (see issue #17).
