@@ -131,6 +131,9 @@ def _cmd_dedupe(args: argparse.Namespace) -> None:
     from convmerge.normalize.dedup import DedupeStats, deduplicate_jsonl
     from convmerge.progress import progress_enabled
 
+    if not Path(args.input).is_file():
+        print(f"error: input file not found: {args.input}", file=sys.stderr)
+        sys.exit(1)
     stats = DedupeStats()
     total, kept = deduplicate_jsonl(
         args.input,
