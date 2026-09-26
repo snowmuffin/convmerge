@@ -1,0 +1,2 @@
+{"messages": [{"role": "user", "content": "<image>Who is in the picture?"}, {"role": "assistant", "content": "Two people playing chess."}]}
+{"messages": [{"role": "user", "content": "<image>\nWhat colors is the bus?"}, {"role": "assistant", "content": "White and red."}, {"role": "user", "content": "Where is it?"}, {"role": "assistant", "content": "On a city street."}]}
