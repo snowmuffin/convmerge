@@ -7,6 +7,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-09-26
+
+Reads the datasets people actually train on. A catalog of 33 popular SFT,
+tool-calling, and preference datasets is now converted in the test suite
+(see "Tested datasets" in the README), and preference data can be written as
+DPO pairs.
+
+### Added
+
+- `--format preference`: chosen/rejected pairs in TRL's conversational
+  format (`{prompt, chosen, rejected}`, shared turns as the prompt) from
+  UltraFeedback-binarized / TRL, HH-RLHF, Orca DPO pairs, LLaMA-Factory
+  ranking, Capybara DPO, and Chatbot Arena (`winner`) records.
+  `TrainingExample` gains an optional `rejected` conversation.
+- Tool-calling layouts beyond OpenAI's are decoded into standard
+  `tool_calls` / `tool` turns / `tools`: Hermes `<tool_call>` /
+  `<tool_response>` / `<tools>` tags, Glaive v2 `system` + `chat`
+  transcripts, and xLAM `query` / `answers` / `tools`.
+- Template-rendered `text` columns are split back into turns: ChatML, Llama 2,
+  Llama 3, Gemma, Guanaco `### Human:`, HH `Human:` / `Assistant:`, and the
+  Alpaca prompt template.
+- Capybara-style `{input, output}` turn lists.
+- `tests/datasets/catalog.json` + `tests/test_datasets.py`: 33 datasets with
+  their real layouts, pinned outputs, and the README table generated from
+  them; `scripts/datasets.py check` converts real rows from the Hub.
+
+### Changed
+
+- A preference record that an SFT conversion cannot use is dropped with the
+  reason `preference_record` (and a CLI hint) instead of `no_assistant` or a
+  silent skip; the drop report counts it under `dropped`, no longer under
+  `no_example`.
+- `validate_example()` on an example with no messages returns the adapter's
+  issues when there are any, otherwise `no_messages` as before.
+
+### Changed output
+
+- Conversations with Hermes tool tags (a `tools` column, `tool` turns, or a
+  `<tools>` system block) now get structured `tool_calls` and one `tool` turn
+  per `<tool_response>`; previously the tags stayed in the text, or the
+  conversation was dropped as `orphan_tool_message`.
+
 ## [0.9.0] - 2026-09-26
 
 The last 0.x minor release: it defines what 1.0 will keep stable and

@@ -222,6 +222,17 @@ def test_fetch_source_and_manifest_reuse(tmp_path: Path, monkeypatch) -> None:
         ({"mix": {"weights": {"zzz": 1}}}, "mix.weights.zzz: no such source"),
         ({"mix": {"weights": {}}}, "mix.weights: missing weight for a"),
         ({"mix": {"sampler": "v3"}}, "mix.sampler"),
+        (
+            {
+                "sources": {
+                    "a": {
+                        "path": "a",
+                        "convert": {"from": "auto", "format": "preference", "preference": "chosen"},
+                    }
+                }
+            },
+            "use one or the other",
+        ),
         ({"dedupe": {"keys": "messages"}}, "dedupe.keys"),
         ({"extra": 1}, "extra: unknown key"),
     ],
