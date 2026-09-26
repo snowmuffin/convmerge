@@ -307,10 +307,11 @@ def load_lock(path: Path) -> dict[str, Any]:
     return lock
 
 
-def _save_json(path: Path, data: dict[str, Any]) -> None:
+def _save_json(path: Path, data: dict[str, Any], *, sort_keys: bool = True) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(f".{path.name}.part")
-    tmp.write_text(json.dumps(data, indent=2, ensure_ascii=False, sort_keys=True) + "\n", "utf-8")
+    text = json.dumps(data, indent=2, ensure_ascii=False, sort_keys=sort_keys)
+    tmp.write_text(text + "\n", "utf-8")
     os.replace(tmp, path)
 
 
@@ -440,7 +441,7 @@ def run(
         "sha256": digests.of(recipe.output),
         "records": _count_lines(recipe.output),
     }
-    _save_json(recipe.report_path, report)
+    _save_json(recipe.report_path, report, sort_keys=False)  # keep step order
     result.report = report
     return result
 

@@ -54,6 +54,15 @@ print(stats.written, stats.drop_reasons)
 | `profile_schema(path_or_records, *, max_rows, max_examples)` | The structure report behind `convmerge inspect`. |
 | `iter_jsonl(path, *, on_error, stats, on_invalid)` | The shared JSONL reader (BOM, blank, and invalid lines handled consistently). |
 
+## Recipes
+
+`convmerge.recipe` is public as a module: `load_recipe(path)`,
+`plan(recipe, force=None)` (list of `PlannedStep` with `action` / `reason`),
+`run(recipe, force=None, hf_token=None, github_token=None)` (returns
+`RunResult` with `ran`, `skipped`, `report`), `RecipeError` (invalid recipe;
+the message names the key), and `RecipeRunError` (a step failed). See
+[recipes.md](recipes.md).
+
 ## Extending convmerge
 
 ### Adapters
