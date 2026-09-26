@@ -20,6 +20,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - GitHub raw/tree fetch and JSON/JSONL normalization now reject Git LFS pointer
   files with guidance to use clone mode with LFS enabled (#28).
+- `fetch` resume now writes and validates completion sidecars, so interrupted
+  or modified outputs are fetched again instead of being skipped as complete
+  (#25).
 
 ## [0.5.0] - 2026-06-02
 
