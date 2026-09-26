@@ -255,7 +255,7 @@ GitHub Actions secret.
 
 ## Changelog
 
-[CHANGELOG.md](CHANGELOG.md)
+[CHANGELOG.md](CHANGELOG.md) · upgrading from 0.5: [docs/migration-0.6.md](docs/migration-0.6.md)
 
 ## License
 
