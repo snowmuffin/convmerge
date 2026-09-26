@@ -192,8 +192,10 @@ convmerge turns  -i ./train/mixed.dedup.jsonl \
   --multi-out  ./train/multi.jsonl
 ```
 
-See [docs/format.md](docs/format.md) for adapter / emitter schemas and
-[docs/fetch.md](docs/fetch.md) for manifest details.
+See [docs/format.md](docs/format.md) for adapter / emitter schemas,
+[docs/fetch.md](docs/fetch.md) for manifest details, and
+[docs/api.md](docs/api.md) for the Python API and writing plugins
+(custom adapters / output formats via entry points).
 
 ## Out of scope
 
