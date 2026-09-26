@@ -59,8 +59,9 @@ than a single user→assistant pair follows `--alpaca-multiturn`:
 | `history` | Last pair as `instruction`/`output`, earlier pairs in `history: [[user, assistant], ...]`. Lossless for strictly alternating conversations; others are dropped (`unrepresentable_multiturn`). |
 | `drop` | Multi-turn examples are dropped (`unrepresentable_multiturn`). |
 
-Examples with tool calls or media cannot be represented in this format and are
-always dropped (`unrepresentable_tool_calls` / `unrepresentable_media`).
+Examples with tool calls, a `tools` schema list, or media cannot be represented
+in this format and are always dropped (`unrepresentable_tool_calls` /
+`unrepresentable_media`).
 
 ### Provenance (`--keep-meta`)
 
@@ -171,13 +172,14 @@ Tries, in order:
      `sharegpt` adapter above.
 3. Plain `text` → emitted as a single assistant message — **but only when the
    record does not carry strong Alpaca cues.** If both an instruction key
-   (`instruction`/`question`/`prompt`) and an output key
-   (`output`/`response`/`answer`) are present, the record is routed to the
+   and an output key (see step 4) are present, the record is routed to the
    Alpaca branch (step 4) instead, so a stray `text` field cannot silently
    discard the instruction/output pair. When `text` is taken while only a
    partial Alpaca key is present, a `logging` warning is emitted.
-4. Fallback: alpaca-like keys (`instruction`/`question`/`prompt` + `output`/`response`/`answer`),
-   with the `alpaca` adapter's `system` / `history` handling.
+4. Fallback: flat question/answer keys — `instruction` / `question` / `prompt` /
+   `problem` / `query`, optional `input` / `context`, and the first of `output` /
+   `response` / `completion` / `solution` / `answer` (so a full `solution` wins over
+   a short final `answer`) — with the `alpaca` adapter's `system` / `history` handling.
 
 You can override every part (`conversation_keys`, `role_keys`, `content_keys`,
 `role_map`, `instruction_keys`, `input_keys`, `output_keys`, `pairwise_mode`)

@@ -10,6 +10,9 @@ from typing import Any
 from convmerge.adapters.chat import (
     DEFAULT_CONTENT_KEYS,
     DEFAULT_CONVERSATION_KEYS,
+    DEFAULT_INPUT_KEYS,
+    DEFAULT_INSTRUCTION_KEYS,
+    DEFAULT_OUTPUT_KEYS,
     DEFAULT_ROLE_KEYS,
 )
 from convmerge.emitters import EmitOptions
@@ -24,9 +27,9 @@ class ChatAdapterOptions:
     content_keys: tuple[str, ...] = DEFAULT_CONTENT_KEYS
     role_map: dict[str, str] | None = None
     pairwise_mode: str = "winner"
-    instruction_keys: tuple[str, ...] = ("instruction", "question", "prompt")
-    output_keys: tuple[str, ...] = ("output", "response", "answer")
-    input_keys: tuple[str, ...] = ("input", "context")
+    instruction_keys: tuple[str, ...] = DEFAULT_INSTRUCTION_KEYS
+    output_keys: tuple[str, ...] = DEFAULT_OUTPUT_KEYS
+    input_keys: tuple[str, ...] = DEFAULT_INPUT_KEYS
 
 
 @dataclass

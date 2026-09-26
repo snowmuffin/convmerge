@@ -56,6 +56,19 @@ DEFAULT_ROLE_KEYS: tuple[str, ...] = ("role", "from")
 # Keys treated as message content inside a chat-list entry.
 DEFAULT_CONTENT_KEYS: tuple[str, ...] = ("content", "value", "text")
 
+# Flat question/answer records (Alpaca, MATH/NuminaMath ``problem``, MetaMathQA
+# ``query``, prompt/completion). Output keys are in priority order: a full
+# ``solution`` beats a short final ``answer`` when a record has both.
+DEFAULT_INSTRUCTION_KEYS: tuple[str, ...] = (
+    "instruction",
+    "question",
+    "prompt",
+    "problem",
+    "query",
+)
+DEFAULT_OUTPUT_KEYS: tuple[str, ...] = ("output", "response", "completion", "solution", "answer")
+DEFAULT_INPUT_KEYS: tuple[str, ...] = ("input", "context")
+
 
 def iter_from_chat_line(
     record: dict[str, Any],
@@ -65,9 +78,9 @@ def iter_from_chat_line(
     content_keys: tuple[str, ...] = DEFAULT_CONTENT_KEYS,
     role_map: dict[str, str] | None = None,
     pairwise_mode: str = "winner",
-    instruction_keys: tuple[str, ...] = ("instruction", "question", "prompt"),
-    output_keys: tuple[str, ...] = ("output", "response", "answer"),
-    input_keys: tuple[str, ...] = ("input", "context"),
+    instruction_keys: tuple[str, ...] = DEFAULT_INSTRUCTION_KEYS,
+    output_keys: tuple[str, ...] = DEFAULT_OUTPUT_KEYS,
+    input_keys: tuple[str, ...] = DEFAULT_INPUT_KEYS,
 ) -> Iterator[TrainingExample]:
     """Yield zero or more :class:`TrainingExample` from a single raw record.
 

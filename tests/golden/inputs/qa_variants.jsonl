@@ -1,0 +1,6 @@
+{"question": "What is the last three digits of the product?", "solution": "Let t = log x ... so the product is 1995^2, ending in 025.", "answer": "25"}
+{"problem": "Find all real x with x^2 = 4.", "solution": "Taking square roots gives x = ±2.", "level": "Level 1", "type": "Algebra"}
+{"query": "James buys 5 packs of beef that are 4 pounds each. How many pounds?", "response": "5 * 4 = 20 pounds. The answer is: 20"}
+{"prompt": "Complete the sentence: The sky is", "completion": " blue."}
+{"question": "What is 7 * 6?", "answer": "7 * 6 = 42.\n#### 42"}
+{"input": "I feel stressed at work.", "output": "It sounds like you are under a lot of pressure. ..."}

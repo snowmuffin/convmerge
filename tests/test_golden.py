@@ -71,6 +71,7 @@ CASES: dict[str, tuple[str, str, str, dict | None]] = {
         {"chat": {"pairwise_mode": "both"}},
     ),
     "messy.chat.messages": ("messy", "chat", "messages", None),
+    "qa_variants.chat.messages": ("qa_variants", "chat", "messages", None),
     "sharegpt_basic.sharegpt-full.alpaca-history": (
         "sharegpt_basic",
         "sharegpt",
