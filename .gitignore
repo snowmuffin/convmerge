@@ -23,3 +23,5 @@ source.yml
 # Fetched/sampled data
 data/
 
+# ...except contract-test fixtures
+!tests/contract/files_0_8/project/data/
