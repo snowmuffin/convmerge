@@ -6,7 +6,12 @@ import json
 from pathlib import Path
 from typing import Any
 
-from convmerge.config import AdapterOptions, ConvertConfig, chat_adapter_options_from_mapping
+from convmerge.config import (
+    AdapterOptions,
+    ConvertConfig,
+    chat_adapter_options_from_mapping,
+    sharegpt_adapter_options_from_mapping,
+)
 
 PRESET_TEMPLATE_YAML = """# convmerge convert preset (v1)
 # See docs/custom_presets.md in the convmerge repository.
@@ -25,6 +30,9 @@ adapter_options:
     # role_map:
     #   human: user
     #   gpt: assistant
+  # Optional: sharegpt adapter (adapter: sharegpt)
+  # sharegpt:
+  #   turn_mode: full         # full (whole conversation) | pairs (pre-0.6 default)
 """
 
 
@@ -65,10 +73,16 @@ def load_convert_preset(path: Path) -> ConvertConfig:
         if not isinstance(ao, dict):
             raise ValueError("adapter_options must be a mapping")
         ch = ao.get("chat")
-        if ch is not None:
-            if not isinstance(ch, dict):
-                raise ValueError("adapter_options.chat must be a mapping")
-            adapter_options = AdapterOptions(chat=chat_adapter_options_from_mapping(ch))
+        sg = ao.get("sharegpt")
+        if ch is not None and not isinstance(ch, dict):
+            raise ValueError("adapter_options.chat must be a mapping")
+        if sg is not None and not isinstance(sg, dict):
+            raise ValueError("adapter_options.sharegpt must be a mapping")
+        if ch is not None or sg is not None:
+            adapter_options = AdapterOptions(
+                chat=chat_adapter_options_from_mapping(ch) if ch is not None else None,
+                sharegpt=sharegpt_adapter_options_from_mapping(sg) if sg is not None else None,
+            )
     if not isinstance(adapter, str) or not adapter.strip():
         raise ValueError("preset requires non-empty string 'adapter'")
     if not isinstance(output_format, str) or not output_format.strip():

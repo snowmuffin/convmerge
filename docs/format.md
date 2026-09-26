@@ -61,7 +61,18 @@ Output with `--format alpaca`:
 ### `sharegpt`
 
 Expects `conversations`: list of `{"from": "human"|"gpt"|..., "value": "..."}`.
-Emits one example per consecutive user→assistant pair.
+The `turn_mode` option controls how multi-turn conversations are emitted:
+
+| `turn_mode` | Output |
+|-------------|--------|
+| `full` | One example with the whole conversation — system prompt and every turn, in order. Turns with an empty value are dropped; the conversation needs at least one user and one assistant turn. |
+| `pairs` | One example per consecutive user→assistant pair. System prompts, unpaired turns, and earlier-turn context are dropped. |
+| *(unset)* | Same as `pairs` in 0.5.x, plus a `FutureWarning` for every record whose output would differ under `full`. **The default becomes `full` in 0.6.0.** |
+
+Set it with `--adapter-kwargs '{"sharegpt": {"turn_mode": "full"}}'` or in a
+preset under `adapter_options.sharegpt.turn_mode` (see
+[custom_presets.md](custom_presets.md)). Pin `pairs` explicitly if you rely on
+the pair-splitting behavior.
 
 <details>
 <summary>Sample input → output</summary>
