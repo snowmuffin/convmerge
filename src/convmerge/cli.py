@@ -775,6 +775,13 @@ def _add_mix(sub: argparse._SubParsersAction) -> None:
         help="Allow sampling with replacement when a source has fewer records than requested",
     )
     p.add_argument(
+        "--sampler",
+        choices=("v1", "v2"),
+        default=None,
+        help="v2 (default): streaming, bounded memory. v1: the 0.6 in-memory "
+        "sampler, to reproduce a mix made with an earlier version",
+    )
+    p.add_argument(
         "--no-recipe",
         action="store_true",
         help="Skip writing the .mix.json sidecar file",
@@ -821,6 +828,7 @@ def _cmd_mix(args: argparse.Namespace) -> None:
     total = args.total if args.total is not None else options.get("total")
     seed = args.seed if args.seed is not None else options.get("seed", 42)
     oversample = args.oversample or options.get("oversample", False)
+    sampler = args.sampler or options.get("sampler", "v2")
 
     if output is None:
         print("error: --output / -o is required (or set 'output' in config)", file=sys.stderr)
@@ -834,6 +842,7 @@ def _cmd_mix(args: argparse.Namespace) -> None:
             seed=seed,
             oversample=oversample,
             encoding=args.encoding,
+            sampler=sampler,
         )
     except (FileNotFoundError, ValueError) as e:
         print(f"error: {e}", file=sys.stderr)

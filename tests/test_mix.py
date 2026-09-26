@@ -400,3 +400,119 @@ def test_cli_seed_defaults_to_42_without_config(tmp_path):
     out = tmp_path / "out.jsonl"
     main(["mix", "--input", f"{src}:1", "--output", str(out)])
     assert json.loads(out.with_suffix(".mix.json").read_text())["seed"] == 42
+
+
+# --- sampler v2 (streaming) ---------------------------------------------------
+
+
+def _lines(path):
+    return path.read_text(encoding="utf-8").splitlines()
+
+
+def test_v2_is_deterministic_and_bucketed(tmp_path, monkeypatch):
+    import convmerge.mix as mixmod
+
+    src = tmp_path / "src.jsonl"
+    write_jsonl(src, [{"x": i} for i in range(1000)])
+    out_mem, out_bkt = tmp_path / "mem.jsonl", tmp_path / "bkt.jsonl"
+    mix_files([MixSource(src, 1.0)], out_mem, total=600, seed=5)
+    again = tmp_path / "again.jsonl"
+    mix_files([MixSource(src, 1.0)], again, total=600, seed=5)
+    assert _lines(out_mem) == _lines(again)
+
+    # Force the on-disk bucket path: same selection, bounded buckets.
+    monkeypatch.setattr(mixmod, "_BUCKET_LINES", 50)
+    result = mix_files([MixSource(src, 1.0)], out_bkt, total=600, seed=5)
+    assert result.total_written == 600
+    rows = [json.loads(x)["x"] for x in _lines(out_bkt)]
+    assert len(rows) == len(set(rows)) == 600
+    assert sorted(rows) == sorted(json.loads(x)["x"] for x in _lines(out_mem))
+    assert not any(p.name.startswith(".convmerge-mix-") for p in tmp_path.iterdir())
+
+
+def test_v2_merge_all_keeps_every_record_once(tmp_path, monkeypatch):
+    import convmerge.mix as mixmod
+
+    monkeypatch.setattr(mixmod, "_BUCKET_LINES", 7)
+    a, b = tmp_path / "a.jsonl", tmp_path / "b.jsonl"
+    write_jsonl(a, [{"s": "a", "i": i} for i in range(40)])
+    write_jsonl(b, [{"s": "b", "i": i} for i in range(25)])
+    out = tmp_path / "out.jsonl"
+    result = mix_files([MixSource(a, 1.0), MixSource(b, 9.0)], out, seed=1)
+    rows = [json.loads(x) for x in _lines(out)]
+    assert result.total_written == len(rows) == 65
+    assert sorted((r["s"], r["i"]) for r in rows) == sorted(
+        [("a", i) for i in range(40)] + [("b", i) for i in range(25)]
+    )
+    assert rows != sorted(rows, key=lambda r: (r["s"], r["i"]))  # shuffled
+
+
+def test_v2_oversample_repeats_every_record(tmp_path):
+    src = tmp_path / "src.jsonl"
+    write_jsonl(src, [{"x": i} for i in range(10)])
+    out = tmp_path / "out.jsonl"
+    result = mix_files([MixSource(src, 1.0)], out, total=25, oversample=True, seed=3)
+    counts = {}
+    for x in _lines(out):
+        k = json.loads(x)["x"]
+        counts[k] = counts.get(k, 0) + 1
+    assert result.total_written == 25
+    assert sorted(counts.values()) == [2] * 5 + [3] * 5
+
+
+def test_v2_large_fraction_uses_skip_set(tmp_path):
+    src = tmp_path / "src.jsonl"
+    write_jsonl(src, [{"x": i} for i in range(100)])
+    out = tmp_path / "out.jsonl"
+    mix_files([MixSource(src, 1.0)], out, total=90, seed=2)
+    rows = [json.loads(x)["x"] for x in _lines(out)]
+    assert len(rows) == len(set(rows)) == 90
+
+
+def test_v2_skips_invalid_lines_like_v1(tmp_path):
+    src = tmp_path / "src.jsonl"
+    src.write_text('\ufeff{"x": 1}\nnot json\n\n{"x": 2}\n', encoding="utf-8")
+    out = tmp_path / "out.jsonl"
+    result = mix_files([MixSource(src, 1.0)], out, seed=0)
+    assert result.sources[0].available == 2
+    assert sorted(json.loads(x)["x"] for x in _lines(out)) == [1, 2]
+
+
+def test_v1_sampler_still_available_and_recorded(tmp_path):
+    from convmerge.cli import main
+
+    src = tmp_path / "src.jsonl"
+    write_jsonl(src, [{"x": i} for i in range(50)])
+    out1, out2 = tmp_path / "v1.jsonl", tmp_path / "v1b.jsonl"
+    r1 = mix_files([MixSource(src, 1.0)], out1, total=20, seed=9, sampler="v1")
+    assert r1.sampler == "v1"
+    main(
+        [
+            "mix",
+            "-i",
+            f"{src}:1",
+            "-o",
+            str(out2),
+            "--total",
+            "20",
+            "--seed",
+            "9",
+            "--sampler",
+            "v1",
+        ]
+    )
+    assert _lines(out1) == _lines(out2)
+    assert json.loads(out2.with_suffix(".mix.json").read_text())["sampler"] == "v1"
+    with pytest.raises(ValueError, match="sampler"):
+        mix_files([MixSource(src, 1.0)], out1, sampler="v3")  # type: ignore[arg-type]
+
+
+def test_config_sampler_key(tmp_path):
+    src = tmp_path / "src.jsonl"
+    write_jsonl(src, [{"x": 1}])
+    cfg = tmp_path / "mix.json"
+    cfg.write_text(json.dumps({"sampler": "v1", "sources": [{"path": str(src), "weight": 1}]}))
+    assert load_mix_config(cfg)[1]["sampler"] == "v1"
+    cfg.write_text(json.dumps({"sampler": "fast", "sources": [{"path": str(src), "weight": 1}]}))
+    with pytest.raises(ValueError, match="sampler"):
+        load_mix_config(cfg)
