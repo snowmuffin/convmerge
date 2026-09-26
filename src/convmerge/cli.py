@@ -3,23 +3,30 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import sys
+import warnings
+from collections import Counter
+from collections.abc import Iterator
 from pathlib import Path
 
 from convmerge import __version__
-from convmerge.convert import convert_file
+from convmerge.convert import ConvertStats, convert_file
 
 FETCH_FILE_EXTENSIONS = (".parquet", ".json", ".jsonl")
+
+# Sidecars convmerge itself writes next to data files; never treat them as data.
+SIDECAR_SUFFIXES = (".fetch.json", ".mix.json")
 
 _INSTALL_EXTRAS_EPILOG = """
 optional dependencies (pip install "convmerge[EXTRA]"):
   (none)     convert, dedupe, turns on JSONL; normalize on .json/.jsonl only
-  fetch      YAML manifests and GitHub sources (PyYAML)
-  fetch-all  above + HuggingFace (datasets); same packages as fetch-hf
-  parquet    .parquet input for normalize
-  preset     YAML presets (convert --preset, preset validate)
-  all        fetch-all + parquet + preset (full CLI feature set)
+  [fetch]      YAML manifests and GitHub sources (PyYAML)
+  [fetch-all]  above + HuggingFace (datasets); same packages as fetch-hf
+  [parquet]    .parquet input for normalize
+  [preset]     YAML presets (convert --preset, preset validate)
+  [all]        fetch-all + parquet + preset (full CLI feature set)
 """.strip()
 
 
@@ -87,6 +94,8 @@ def _add_convert(sub: argparse._SubParsersAction) -> None:
     p = sub.add_parser(
         "convert",
         help="Convert a JSONL file using a source adapter and output format",
+        description="Convert a JSONL file using a source adapter and output format. "
+        "YAML presets require convmerge[preset].",
     )
     p.add_argument("--input", "-i", type=Path, required=True, help="Input JSONL path")
     p.add_argument("--output", "-o", type=Path, required=True, help="Output JSONL path")
@@ -115,7 +124,10 @@ def _add_convert(sub: argparse._SubParsersAction) -> None:
         "--adapter-kwargs",
         default=None,
         metavar="JSON",
-        help='JSON object merged on the preset, e.g. {"chat":{"pairwise_mode":"both"}}',
+        help=(
+            'JSON object merged on the preset, e.g. {"chat":{"pairwise_mode":"both"}} '
+            'or {"sharegpt":{"turn_mode":"full"}}'
+        ),
     )
     p.add_argument("--encoding", default="utf-8", help="File encoding (default: utf-8)")
     _add_progress_flag(p)
@@ -143,22 +155,59 @@ def _cmd_convert(args: argparse.Namespace) -> None:
         sys.exit(2)
     from convmerge.progress import progress_enabled
 
-    n_in, n_out = convert_file(
-        args.input,
-        args.output,
-        adapter_name=cfg.adapter,
-        output_format=cfg.output_format,
-        encoding=cfg.encoding,
-        adapter_options=cfg.adapter_options,
-        progress=progress_enabled(args.progress),
-    )
+    stats = ConvertStats()
+    with _count_future_warnings() as future:
+        n_in, n_out = convert_file(
+            args.input,
+            args.output,
+            adapter_name=cfg.adapter,
+            output_format=cfg.output_format,
+            encoding=cfg.encoding,
+            adapter_options=cfg.adapter_options,
+            progress=progress_enabled(args.progress),
+            stats=stats,
+        )
     print(f"read {n_in} lines, wrote {n_out} examples", file=sys.stderr)
+    for message, count in future.items():
+        print(f"warning: {message} [{count:,} records affected]", file=sys.stderr)
+    if stats.skipped:
+        print(
+            f"warning: skipped {stats.skipped:,} lines "
+            f"(invalid JSON={stats.invalid_json:,}, non-object={stats.non_object:,}, "
+            f"no example from adapter={stats.no_example:,})",
+            file=sys.stderr,
+        )
+    if stats.first_invalid_line is not None:
+        print(
+            f"warning: first invalid JSON at line {stats.first_invalid_line}; "
+            "run `convmerge normalize` first to repair the file",
+            file=sys.stderr,
+        )
+
+
+@contextlib.contextmanager
+def _count_future_warnings() -> Iterator[Counter[str]]:
+    """Collapse per-record FutureWarnings into one counted line per message."""
+    counts: Counter[str] = Counter()
+    with warnings.catch_warnings():
+        original = warnings.showwarning
+
+        def show(message, category, *args, **kwargs):
+            if issubclass(category, FutureWarning):
+                counts[str(message)] += 1
+            else:
+                original(message, category, *args, **kwargs)
+
+        warnings.simplefilter("always", FutureWarning)
+        warnings.showwarning = show
+        yield counts
 
 
 def _add_preset(sub: argparse._SubParsersAction) -> None:
     p = sub.add_parser(
         "preset",
         help="Create or validate convert preset files (install convmerge[preset] for YAML)",
+        description="Create or validate convert preset files. YAML requires convmerge[preset].",
     )
     subp = p.add_subparsers(dest="preset_action", required=True)
     pi = subp.add_parser("init", help="Write a commented YAML template")
@@ -245,6 +294,8 @@ def _add_normalize(sub: argparse._SubParsersAction) -> None:
             "Normalize parquet/json/jsonl files in a directory into clean JSONL "
             "(install convmerge[parquet] for .parquet inputs)"
         ),
+        description="Normalize parquet/json/jsonl files in a directory into clean JSONL. "
+        "Parquet inputs require convmerge[parquet].",
     )
     p.add_argument("--input", "-i", type=Path, required=True, help="Input file or directory")
     p.add_argument(
@@ -275,6 +326,11 @@ def _cmd_normalize(args: argparse.Namespace) -> None:
         if not in_path.is_file():
             continue
         if in_path.suffix.lower() not in FETCH_FILE_EXTENSIONS:
+            continue
+        if in_path.name.lower().endswith(SIDECAR_SUFFIXES):
+            continue
+        if any(part.startswith(".") for part in in_path.relative_to(src).parts):
+            # Hidden entries such as a cloned repo's .git directory.
             continue
         rel = in_path.relative_to(src).with_suffix(".jsonl")
         out_path = dst / rel
@@ -331,9 +387,10 @@ def _add_dedupe(sub: argparse._SubParsersAction) -> None:
 
 
 def _cmd_dedupe(args: argparse.Namespace) -> None:
-    from convmerge.normalize.dedup import deduplicate_jsonl
+    from convmerge.normalize.dedup import DedupeStats, deduplicate_jsonl
     from convmerge.progress import progress_enabled
 
+    stats = DedupeStats()
     total, kept = deduplicate_jsonl(
         args.input,
         args.output,
@@ -342,13 +399,22 @@ def _cmd_dedupe(args: argparse.Namespace) -> None:
         progress=progress_enabled(args.progress),
         seen_store=args.seen_store,
         seen_db=args.seen_db,
+        stats=stats,
     )
     removed = total - kept
     pct = (removed / total * 100) if total else 0.0
     print(
-        f"total={total:,} kept={kept:,} removed={removed:,} ({pct:.2f}%)",
+        f"total={total:,} kept={kept:,} removed={removed:,} ({pct:.2f}%) "
+        f"[duplicates={stats.duplicates:,} invalid_json={stats.invalid_json:,}]",
         file=sys.stderr,
     )
+    if stats.first_invalid_line is not None:
+        print(
+            f"warning: dropped {stats.invalid_json:,} invalid JSON lines "
+            f"(first at line {stats.first_invalid_line}); "
+            "run `convmerge normalize` first to repair the file",
+            file=sys.stderr,
+        )
 
 
 def _add_turns(sub: argparse._SubParsersAction) -> None:
@@ -389,8 +455,11 @@ def _add_fetch(sub: argparse._SubParsersAction) -> None:
         help=(
             "Fetch training data via a YAML manifest, or a single "
             "hf://org/dataset / GitHub URL shortcut "
-            "(convmerge[fetch] for YAML; [fetch-all] or [fetch-hf] for HF entries)"
+            "(convmerge[fetch] for YAML; [fetch-all], [fetch-hf], or [all] for HF entries)"
         ),
+        description="Fetch training data via a YAML manifest, or a single "
+        "hf://org/dataset / GitHub URL shortcut. "
+        "Use convmerge[fetch] for YAML, [fetch-all]/[fetch-hf] for HF, or [all].",
     )
     p.add_argument(
         "source",
@@ -482,6 +551,7 @@ def _cmd_fetch_shortcut(args: argparse.Namespace, source: str) -> None:
         return
 
     # http(s):// shortcuts
+    from convmerge.fetch.auth import redact_url
     from convmerge.fetch.git import clone_repo
     from convmerge.fetch.github import download_raw_file, fetch_repo_tree_files
     from convmerge.fetch.manifest import sanitize_name
@@ -497,7 +567,7 @@ def _cmd_fetch_shortcut(args: argparse.Namespace, source: str) -> None:
                 break
         dst = out_root / f"{name}{suffix}"
         download_raw_file(source, dst, token=args.github_token)
-        print(f"[ok] {source} -> {dst}", file=sys.stderr)
+        print(f"[ok] {redact_url(source)} -> {dst}", file=sys.stderr)
         return
 
     if "github.com" in lowered:
@@ -511,11 +581,11 @@ def _cmd_fetch_shortcut(args: argparse.Namespace, source: str) -> None:
                 ext=tuple(args.ext or ()),
                 token=args.github_token,
             )
-        print(f"[ok] {source} -> {dst}", file=sys.stderr)
+        print(f"[ok] {redact_url(source)} -> {dst}", file=sys.stderr)
         return
 
     print(
-        f"error: unsupported URL: {source!r}. "
+        f"error: unsupported URL: {redact_url(source)!r}. "
         "Only hf://, raw.githubusercontent.com, and github.com are supported.",
         file=sys.stderr,
     )
@@ -558,7 +628,12 @@ def _add_mix(sub: argparse._SubParsersAction) -> None:
     )
     p.add_argument("--output", "-o", type=Path, default=None, help="Output JSONL path")
     p.add_argument("--total", "-n", type=int, default=None, help="Target total record count")
-    p.add_argument("--seed", type=int, default=42, help="Random seed (default: 42)")
+    p.add_argument(
+        "--seed",
+        type=int,
+        default=None,
+        help="Random seed (default: config 'seed', else 42)",
+    )
     p.add_argument(
         "--oversample",
         action="store_true",
@@ -609,7 +684,7 @@ def _cmd_mix(args: argparse.Namespace) -> None:
     # CLI flags override config file values
     output = args.output or options.get("output")
     total = args.total if args.total is not None else options.get("total")
-    seed = args.seed if args.seed != 42 or "seed" not in options else options["seed"]
+    seed = args.seed if args.seed is not None else options.get("seed", 42)
     oversample = args.oversample or options.get("oversample", False)
 
     if output is None:

@@ -100,3 +100,16 @@ def test_dedup_unknown_seen_store(tmp_path: Path) -> None:
     dst = tmp_path / "out.jsonl"
     with pytest.raises(ValueError):
         deduplicate_jsonl(src, dst, seen_store="redis")
+
+
+def test_dedupe_stats_separates_invalid_from_duplicates(tmp_path: Path) -> None:
+    from convmerge.normalize.dedup import DedupeStats
+
+    src = tmp_path / "in.jsonl"
+    src.write_text('{"a": 1}\n{"a": 1}\nBAD\n{"a": 2}\n', encoding="utf-8")
+    stats = DedupeStats()
+    total, kept = deduplicate_jsonl(src, tmp_path / "out.jsonl", stats=stats)
+    assert (total, kept) == (4, 2)
+    assert stats.duplicates == 1
+    assert stats.invalid_json == 1
+    assert stats.first_invalid_line == 3

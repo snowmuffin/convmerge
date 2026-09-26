@@ -11,7 +11,7 @@ from convmerge.normalize.convert_turns import (
     multi_turn_to_single_turn_record,
     single_turn_to_multi_turn_record,
 )
-from convmerge.normalize.dedup import deduplicate_jsonl
+from convmerge.normalize.dedup import DedupeStats, deduplicate_jsonl
 from convmerge.normalize.jsonl import (
     detect_jsonl_shape,
     iter_json_records,
@@ -27,6 +27,7 @@ from convmerge.normalize.turns import (
 )
 
 __all__ = [
+    "DedupeStats",
     "analyze_turn_distribution",
     "count_turns",
     "deduplicate_jsonl",

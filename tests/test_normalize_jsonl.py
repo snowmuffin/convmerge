@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+from convmerge.lfs import LfsPointerError
 from convmerge.normalize.jsonl import (
     detect_jsonl_shape,
     iter_json_records,
@@ -43,6 +44,17 @@ def test_detect_shape_single_object(tmp_path: Path) -> None:
 def test_detect_shape_empty(tmp_path: Path) -> None:
     p = _write(tmp_path / "a.jsonl", "")
     assert detect_jsonl_shape(p) == "empty"
+
+
+def test_lfs_pointer_is_rejected_before_jsonl_parsing(tmp_path: Path) -> None:
+    p = _write(tmp_path / "pointer.jsonl", "version https://git-lfs.github.com/spec/v1\n")
+
+    with pytest.raises(LfsPointerError, match="mode: clone and lfs: true"):
+        detect_jsonl_shape(p)
+    with pytest.raises(LfsPointerError, match="mode: clone and lfs: true"):
+        load_jsonl(p)
+    with pytest.raises(LfsPointerError, match="mode: clone and lfs: true"):
+        list(iter_json_records(p))
 
 
 def test_normalize_json_array(tmp_path: Path) -> None:
@@ -147,3 +159,17 @@ def test_normalize_pretty_printed_json_array(tmp_path: Path) -> None:
 def test_detect_shape_array_with_leading_whitespace(tmp_path: Path) -> None:
     p = _write(tmp_path / "a.json", '  \n[\n  {"a": 1}\n]\n')
     assert detect_jsonl_shape(p) == "json_array"
+
+
+def test_is_lfs_pointer_only_inspects_head() -> None:
+    from convmerge.lfs import is_lfs_pointer
+
+    assert is_lfs_pointer(b"version https://git-lfs.github.com/spec/v1\noid sha256:x\n")
+    assert not is_lfs_pointer(b'{"a": 1}\n' * 1000)
+    assert not is_lfs_pointer(b"")
+
+
+def test_iter_json_records_json_suffix_with_jsonl_content(tmp_path: Path) -> None:
+    p = _write(tmp_path / "rows.json", '{"a": 1}\n{"a": 2}\n')
+    assert list(iter_json_records(p)) == [{"a": 1}, {"a": 2}]
+    assert list(iter_json_records(p, max_rows=1)) == [{"a": 1}]

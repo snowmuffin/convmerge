@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-09-26
+
+### Security
+
+- `fetch` (`mode: clone`): the token is no longer embedded in the clone URL.
+  It is passed to `git` / `git lfs` as a host-scoped `Authorization` header via
+  git's environment config (git ≥ 2.31), so it no longer lands in
+  `.git/config`, the process list, or git error messages (which the runner
+  logged). Existing clones are now pulled with the token, and a token that
+  0.5.0 or earlier stored in `origin` is scrubbed on the next fetch.
+  **If you cloned private repos with an earlier version, rotate that token.**
+- `fetch` (raw URL / Trees API): the GitHub token is only sent to
+  `github.com`, `api.github.com`, and `raw.githubusercontent.com`, and is no
+  longer forwarded when a request is redirected to another host. Raw URLs on
+  other hosts are fetched anonymously.
+- Runner failure logs and `fetch` shortcut output are passed through
+  `redact_url`.
+
 ### Added
 
 - `inspect` command + `profile_schema()`: profile a `.json` / `.jsonl` file's
@@ -15,6 +33,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   fields) so `messages[].role` is distinguishable from a top-level `role`.
   Intended as the first step for designing input → output key mappings on
   unfamiliar datasets.
+- `sharegpt` adapter: `turn_mode` option — `full` emits the whole
+  conversation (system prompt and all turns), `pairs` keeps the previous
+  one-example-per-user/assistant-pair behavior. Set via
+  `--adapter-kwargs '{"sharegpt": {"turn_mode": "full"}}'`, a preset's
+  `adapter_options.sharegpt`, or `AdapterOptions(sharegpt=...)` (#23).
+- `convert_file(..., stats=ConvertStats())` and
+  `deduplicate_jsonl(..., stats=DedupeStats())` report why rows were dropped
+  (invalid JSON, non-object rows, records the adapter could not map, true
+  duplicates). Return values are unchanged.
+
+### Deprecated
+
+- `sharegpt` adapter: leaving `turn_mode` unset keeps `pairs` for now but
+  emits a `FutureWarning` for each record whose output would change; the
+  default becomes `full` in 0.6.0. Set `turn_mode` explicitly to pin either
+  behavior. The CLI prints one summary line with the affected-record count.
+
+### Fixed
+
+- GitHub raw/tree fetch and JSON/JSONL normalization now reject Git LFS pointer
+  files with guidance to use clone mode with LFS enabled (#28).
+- `fetch` resume now writes and validates completion sidecars, so interrupted
+  or modified outputs are fetched again instead of being skipped as complete
+  (#25). Outputs fetched by earlier versions have no sidecar and are fetched
+  once more on upgrade. Directory snapshots ignore `.git`.
+- `normalize` on a directory skips convmerge sidecars (`*.fetch.json`,
+  `*.mix.json`) and hidden paths such as a cloned repo's `.git`, instead of
+  converting them as data.
+- `convert` / `dedupe` no longer drop malformed rows silently: the CLI warns
+  with counts and the first invalid line number, and `dedupe` reports invalid
+  lines separately from duplicates.
+- `iter_json_records` (and so `inspect`): a `.json` file that actually holds
+  JSONL is re-read as JSONL instead of failing with `FileNotFoundError`.
+- `mix`: an explicit `--seed` now always overrides the config file's `seed`
+  (previously `--seed 42` was ignored when the config set one).
+- `convert_with_config` now forwards `progress`.
+- `sharegpt` adapter no longer crashes on a non-string `value`.
+
+### Changed
+
+- CI installs `.[dev,all]` so fetch tests run against the full extra set.
+- CLI help, error hints, and docs consistently mention the umbrella `[all]`
+  extra next to each narrow extra.
 
 ## [0.5.0] - 2026-06-02
 

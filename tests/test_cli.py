@@ -20,6 +20,15 @@ def test_cli_help_runs(capsys) -> None:
         assert cmd in out
 
 
+def test_cli_help_lists_all_install_extra(capsys) -> None:
+    with pytest.raises(SystemExit) as exc:
+        main(["--help"])
+    assert exc.value.code == 0
+    out = capsys.readouterr().out
+    for extra in ("[all]", "[parquet]", "[preset]", "[fetch-all]"):
+        assert extra in out
+
+
 def test_cli_normalize_on_json_array(tmp_path: Path) -> None:
     src = tmp_path / "in.json"
     src.write_text(json.dumps([{"a": 1}, {"a": 2}]), encoding="utf-8")
@@ -27,6 +36,20 @@ def test_cli_normalize_on_json_array(tmp_path: Path) -> None:
     main(["normalize", "--input", str(src), "--output", str(dst)])
     assert dst.is_file()
     assert dst.read_text(encoding="utf-8").count("\n") == 2
+
+
+def test_cli_normalize_dir_skips_sidecars_and_hidden(tmp_path: Path) -> None:
+    raw = tmp_path / "raw"
+    (raw / "repo" / ".git").mkdir(parents=True)
+    (raw / "data.jsonl").write_text('{"a": 1}\n', encoding="utf-8")
+    (raw / "data.jsonl.fetch.json").write_text('{"version": 1}', encoding="utf-8")
+    (raw / "train.mix.json").write_text('{"version": 1}', encoding="utf-8")
+    (raw / "repo" / ".git" / "meta.json").write_text('{"x": 1}', encoding="utf-8")
+    (raw / "repo" / "rows.json").write_text('[{"b": 2}]', encoding="utf-8")
+    out = tmp_path / "out"
+    main(["normalize", "--input", str(raw), "--output", str(out)])
+    produced = sorted(p.relative_to(out).as_posix() for p in out.rglob("*") if p.is_file())
+    assert produced == ["data.jsonl", "repo/rows.jsonl"]
 
 
 def test_cli_dedupe(tmp_path: Path) -> None:
