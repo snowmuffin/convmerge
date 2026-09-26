@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
+import os
+import tempfile
 import traceback
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -17,6 +21,7 @@ from convmerge.fetch.manifest import (
 )
 
 LogFn = Callable[[str], None]
+_COMPLETION_MARKER_VERSION = 1
 
 
 @dataclass
@@ -64,20 +69,26 @@ def run_manifest(
             _record_error(result, entry.name, str(e), on_error=manifest.defaults.on_error, log=log)
             continue
 
-        if manifest.defaults.resume and _already_fetched(dst, kind):
+        if manifest.defaults.resume and _already_fetched(dst, kind, entry):
             log(f"[skip] {entry.name} (already present at {dst})")
             result.skipped.append(entry.name)
             continue
 
         log(f"[fetch] {entry.name} ({kind}) -> {dst}")
         try:
-            _dispatch(entry, kind, dst, hf_tok=hf_tok, gh_tok=gh_tok)
+            output = _dispatch(entry, kind, dst, hf_tok=hf_tok, gh_tok=gh_tok)
         except Exception as e:  # noqa: BLE001  (report, let on_error decide)
             detail = f"{type(e).__name__}: {e}"
             trace_tail = traceback.format_exc(limit=2).strip().splitlines()[-1:]
             full = detail + (f" | {trace_tail[0]}" if trace_tail else "")
             _record_error(result, entry.name, full, on_error=manifest.defaults.on_error, log=log)
             continue
+        try:
+            _write_completion_marker(output)
+        except OSError as e:
+            # The download itself succeeded.  A marker failure only means the
+            # next resume will conservatively fetch again.
+            log(f"[warn] {entry.name}: could not write completion marker: {e}")
         result.succeeded.append(entry.name)
 
     log(
@@ -106,23 +117,76 @@ def _entry_output_path(entry: DatasetEntry, base_root: Path) -> Path:
     return base_root / sanitize_name(entry.name)
 
 
-def _already_fetched(dst: Path, kind: EntryKind) -> bool:
-    if kind in ("hf", "url_raw"):
-        # These write a single file (.jsonl / raw). Treat as done if it exists
-        # with non-zero size, or if the parent directory contains a non-empty file
-        # (covers the ``output: dir`` override + default ``{name}.jsonl`` name).
-        if dst.is_file() and dst.stat().st_size > 0:
-            return True
-        if dst.is_dir():
-            return any(p.is_file() and p.stat().st_size > 0 for p in dst.iterdir())
-        parent_file = dst.with_suffix(".jsonl")
-        if parent_file.is_file() and parent_file.stat().st_size > 0:
-            return True
+def _output_path(entry: DatasetEntry, kind: EntryKind, dst: Path) -> Path:
+    if kind == "hf":
+        return dst if dst.suffix else dst.with_suffix(".jsonl")
+    if kind == "url_raw":
+        return dst if dst.suffix else dst.with_suffix(_raw_suffix(entry.url or ""))
+    return dst
+
+
+def _completion_marker_path(output: Path) -> Path:
+    return output.with_name(f"{output.name}.fetch.json")
+
+
+def _file_digest(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _completion_snapshot(output: Path) -> dict[str, object] | None:
+    if output.is_file():
+        return {"type": "file", "size": output.stat().st_size, "sha256": _file_digest(output)}
+    if not output.is_dir():
+        return None
+    files: list[dict[str, object]] = []
+    for path in sorted(p for p in output.rglob("*") if p.is_file()):
+        files.append(
+            {
+                "path": str(path.relative_to(output)),
+                "size": path.stat().st_size,
+                "sha256": _file_digest(path),
+            }
+        )
+    return {"type": "directory", "files": files}
+
+
+def _write_completion_marker(output: Path) -> None:
+    snapshot = _completion_snapshot(output)
+    if snapshot is None:
+        raise OSError(f"output does not exist after fetch: {output}")
+    marker = _completion_marker_path(output)
+    marker.parent.mkdir(parents=True, exist_ok=True)
+    payload = {"version": _COMPLETION_MARKER_VERSION, "snapshot": snapshot}
+    fd, temporary = tempfile.mkstemp(prefix=f".{marker.name}.", suffix=".tmp", dir=marker.parent)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle, ensure_ascii=False, sort_keys=True)
+            handle.write("\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, marker)
+    except BaseException:
+        try:
+            os.unlink(temporary)
+        except FileNotFoundError:
+            pass
+        raise
+
+
+def _already_fetched(dst: Path, kind: EntryKind, entry: DatasetEntry) -> bool:
+    output = _output_path(entry, kind, dst)
+    marker = _completion_marker_path(output)
+    try:
+        payload = json.loads(marker.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
         return False
-    # Tree / clone produce a directory with one or more files.
-    if not dst.is_dir():
+    if payload.get("version") != _COMPLETION_MARKER_VERSION:
         return False
-    return any(dst.iterdir())
+    return payload.get("snapshot") == _completion_snapshot(output)
 
 
 def _dispatch(
@@ -132,27 +196,25 @@ def _dispatch(
     *,
     hf_tok: str | None,
     gh_tok: str | None,
-) -> None:
+) -> Path:
     if kind == "hf":
-        _run_hf(entry, dst, token=hf_tok)
-        return
+        return _run_hf(entry, dst, token=hf_tok)
     if kind == "url_raw":
-        _run_raw(entry, dst, token=gh_tok)
-        return
+        return _run_raw(entry, dst, token=gh_tok)
     if kind == "url_github_tree":
         _run_tree(entry, dst, token=gh_tok)
-        return
+        return dst
     if kind == "url_github_clone":
         _run_clone(entry, dst, token=gh_tok)
-        return
+        return dst
     raise AssertionError(f"Unhandled entry kind: {kind!r}")
 
 
-def _run_hf(entry: DatasetEntry, dst: Path, *, token: str | None) -> None:
+def _run_hf(entry: DatasetEntry, dst: Path, *, token: str | None) -> Path:
     from convmerge.fetch.hf import download_hf_dataset
 
     target = dst if dst.suffix else dst.with_suffix(".jsonl")
-    download_hf_dataset(
+    return download_hf_dataset(
         entry.hf or "",
         target,
         config=entry.config,
@@ -161,13 +223,13 @@ def _run_hf(entry: DatasetEntry, dst: Path, *, token: str | None) -> None:
     )
 
 
-def _run_raw(entry: DatasetEntry, dst: Path, *, token: str | None) -> None:
+def _run_raw(entry: DatasetEntry, dst: Path, *, token: str | None) -> Path:
     from convmerge.fetch.github import download_raw_file
 
     url = entry.url or ""
     suffix = _raw_suffix(url)
     target = dst if dst.suffix else dst.with_suffix(suffix)
-    download_raw_file(url, target, token=token)
+    return download_raw_file(url, target, token=token)
 
 
 def _run_tree(entry: DatasetEntry, dst: Path, *, token: str | None) -> None:
