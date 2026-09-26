@@ -110,3 +110,7 @@ class TrainingExample:
     issues: list[str] = field(default_factory=list)
     """Problems an adapter noticed while mapping the record (e.g.
     ``unresolved_image``); reported by validation, never emitted."""
+    rejected: list[ChatMessage] | None = None
+    """For preference data: the whole *rejected* conversation, while
+    ``messages`` holds the chosen one. The shared leading turns are the prompt
+    (see the ``preference`` output format); other formats ignore it."""

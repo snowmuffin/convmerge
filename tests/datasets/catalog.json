@@ -1,0 +1,711 @@
+[
+ {
+  "id": "HuggingFaceH4/ultrachat_200k",
+  "kind": "sft",
+  "shape": "messages",
+  "config": null,
+  "split": "train_sft",
+  "format": "messages",
+  "record": {
+   "prompt": "How do tides work?",
+   "prompt_id": "a1",
+   "messages": [
+    {
+     "role": "user",
+     "content": "How do tides work?"
+    },
+    {
+     "role": "assistant",
+     "content": "The Moon's gravity pulls the oceans."
+    },
+    {
+     "role": "user",
+     "content": "And the Sun?"
+    },
+    {
+     "role": "assistant",
+     "content": "It adds a smaller pull."
+    }
+   ]
+  }
+ },
+ {
+  "id": "allenai/tulu-3-sft-mixture",
+  "kind": "sft",
+  "shape": "messages",
+  "config": null,
+  "split": "train",
+  "format": "messages",
+  "record": {
+   "id": "oasst1_1",
+   "messages": [
+    {
+     "role": "user",
+     "content": "Name a prime."
+    },
+    {
+     "role": "assistant",
+     "content": "7"
+    }
+   ],
+   "source": "ai2-adapt-dev/oasst1_converted"
+  }
+ },
+ {
+  "id": "HuggingFaceTB/smoltalk",
+  "kind": "sft",
+  "shape": "messages",
+  "config": "all",
+  "split": "train",
+  "format": "messages",
+  "record": {
+   "messages": [
+    {
+     "role": "system",
+     "content": "You are helpful."
+    },
+    {
+     "role": "user",
+     "content": "Hi"
+    },
+    {
+     "role": "assistant",
+     "content": "Hello!"
+    }
+   ],
+   "source": "everyday-conversations"
+  }
+ },
+ {
+  "id": "lmsys/lmsys-chat-1m",
+  "kind": "sft",
+  "shape": "messages",
+  "config": null,
+  "split": "train",
+  "format": "messages",
+  "gated": true,
+  "record": {
+   "conversation_id": "c1",
+   "model": "vicuna-13b",
+   "conversation": [
+    {
+     "role": "user",
+     "content": "Hello"
+    },
+    {
+     "role": "assistant",
+     "content": "Hi there!"
+    }
+   ],
+   "turn": 1,
+   "language": "English",
+   "openai_moderation": [],
+   "redacted": false
+  }
+ },
+ {
+  "id": "open-r1/OpenR1-Math-220k",
+  "kind": "sft",
+  "shape": "messages",
+  "config": null,
+  "split": "train",
+  "format": "messages",
+  "record": {
+   "problem": "What is 2+2?",
+   "solution": "2+2=4",
+   "answer": "4",
+   "uuid": "u1",
+   "generations": [
+    "<think>2+2</think> 4"
+   ],
+   "messages": [
+    {
+     "role": "user",
+     "content": "What is 2+2?"
+    },
+    {
+     "role": "assistant",
+     "content": "<think>\n2+2=4\n</think>\nThe answer is 4."
+    }
+   ]
+  }
+ },
+ {
+  "id": "teknium/OpenHermes-2.5",
+  "kind": "sft",
+  "shape": "sharegpt",
+  "config": null,
+  "split": "train",
+  "format": "messages",
+  "record": {
+   "conversations": [
+    {
+     "from": "system",
+     "value": "You are an AI assistant.",
+     "weight": null
+    },
+    {
+     "from": "human",
+     "value": "Capital of France?",
+     "weight": null
+    },
+    {
+     "from": "gpt",
+     "value": "Paris.",
+     "weight": null
+    }
+   ],
+   "source": "airoboros2.2",
+   "category": "general"
+  }
+ },
+ {
+  "id": "Open-Orca/SlimOrca",
+  "kind": "sft",
+  "shape": "sharegpt",
+  "config": null,
+  "split": "train",
+  "format": "messages",
+  "record": {
+   "conversations": [
+    {
+     "from": "system",
+     "value": "Think step by step.",
+     "weight": null
+    },
+    {
+     "from": "human",
+     "value": "Is 9 odd?",
+     "weight": 0.0
+    },
+    {
+     "from": "gpt",
+     "value": "Yes, 9 is odd.",
+     "weight": 1.0
+    }
+   ]
+  }
+ },
+ {
+  "id": "Magpie-Align/Magpie-Pro-300K-Filtered",
+  "kind": "sft",
+  "shape": "sharegpt",
+  "config": null,
+  "split": "train",
+  "format": "messages",
+  "record": {
+   "conversations": [
+    {
+     "from": "human",
+     "value": "Write a haiku."
+    },
+    {
+     "from": "gpt",
+     "value": "Old pond, frog jumps in."
+    }
+   ],
+   "uuid": "m1"
+  }
+ },
+ {
+  "id": "LDJnr/Capybara",
+  "kind": "sft",
+  "shape": "input/output turns",
+  "config": null,
+  "split": "train",
+  "format": "messages",
+  "record": {
+   "source": "Airoboros",
+   "conversation": [
+    {
+     "input": "What is entropy?",
+     "output": "A measure of disorder."
+    },
+    {
+     "input": "Give an example.",
+     "output": "Ice melting."
+    }
+   ]
+  }
+ },
+ {
+  "id": "tatsu-lab/alpaca",
+  "kind": "sft",
+  "shape": "alpaca",
+  "config": null,
+  "split": "train",
+  "format": "messages",
+  "record": {
+   "instruction": "Give three tips for staying healthy.",
+   "input": "",
+   "output": "Eat well, exercise, sleep.",
+   "text": "Below is an instruction that describes a task. Write a response that appropriately completes the request.\n\n### Instruction:\nGive three tips for staying healthy.\n\n### Response:\nEat well, exercise, sleep."
+  }
+ },
+ {
+  "id": "yahma/alpaca-cleaned",
+  "kind": "sft",
+  "shape": "alpaca",
+  "config": null,
+  "split": "train",
+  "format": "messages",
+  "record": {
+   "instruction": "Translate to French",
+   "input": "cat",
+   "output": "chat"
+  }
+ },
+ {
+  "id": "databricks/databricks-dolly-15k",
+  "kind": "sft",
+  "shape": "instruction/context/response",
+  "config": null,
+  "split": "train",
+  "format": "messages",
+  "record": {
+   "instruction": "When was Virgin Australia founded?",
+   "context": "Virgin Australia commenced services in 2000.",
+   "response": "In 2000.",
+   "category": "closed_qa"
+  }
+ },
+ {
+  "id": "garage-bAInd/Open-Platypus",
+  "kind": "sft",
+  "shape": "alpaca",
+  "config": null,
+  "split": "train",
+  "format": "messages",
+  "record": {
+   "input": "",
+   "output": "The answer is 5.",
+   "instruction": "Compute 2+3.",
+   "data_source": "MATH/PRM-800K"
+  }
+ },
+ {
+  "id": "meta-math/MetaMathQA",
+  "kind": "sft",
+  "shape": "query/response",
+  "config": null,
+  "split": "train",
+  "format": "messages",
+  "record": {
+   "type": "GSM_Rephrased",
+   "query": "Tom has 3 apples and buys 2. How many?",
+   "original_question": "Tom has 3 apples...",
+   "response": "3+2=5. The answer is: 5"
+  }
+ },
+ {
+  "id": "microsoft/orca-math-word-problems-200k",
+  "kind": "sft",
+  "shape": "question/answer",
+  "config": null,
+  "split": "train",
+  "format": "messages",
+  "record": {
+   "question": "A train travels 60 km in 1 hour. Speed?",
+   "answer": "60 km/h."
+  }
+ },
+ {
+  "id": "nvidia/HelpSteer2",
+  "kind": "sft",
+  "shape": "prompt/response",
+  "config": null,
+  "split": "train",
+  "format": "messages",
+  "record": {
+   "prompt": "Summarize: cats sleep a lot.",
+   "response": "Cats sleep often.",
+   "helpfulness": 3,
+   "correctness": 3,
+   "coherence": 4,
+   "complexity": 1,
+   "verbosity": 1
+  }
+ },
+ {
+  "id": "beomi/KoAlpaca-v1.1a",
+  "kind": "sft",
+  "shape": "alpaca",
+  "config": null,
+  "split": "train",
+  "format": "messages",
+  "record": {
+   "instruction": "양파는 어떤 식물 부위인가요?",
+   "output": "양파는 잎이 변형된 비늘줄기입니다.",
+   "url": "https://kin.naver.com/qna/detail.naver?d1id=11"
+  }
+ },
+ {
+  "id": "kyujinpy/KOR-OpenOrca-Platypus-v3",
+  "kind": "sft",
+  "shape": "alpaca",
+  "config": null,
+  "split": "train",
+  "format": "messages",
+  "record": {
+   "id": "1",
+   "input": "",
+   "instruction": "2+3은?",
+   "output": "5입니다."
+  }
+ },
+ {
+  "id": "timdettmers/openassistant-guanaco",
+  "kind": "sft",
+  "shape": "text (### Human:)",
+  "config": null,
+  "split": "train",
+  "format": "messages",
+  "record": {
+   "text": "### Human: What is monopsony?### Assistant: A market with one buyer.### Human: Now explain it to a dog"
+  }
+ },
+ {
+  "id": "OpenAssistant/oasst_top1_2023-08-25",
+  "kind": "sft",
+  "shape": "text (ChatML)",
+  "config": null,
+  "split": "train",
+  "format": "messages",
+  "record": {
+   "text": "<|im_start|>user\nExplain calculus<|im_end|>\n<|im_start|>assistant\nIt studies change.<|im_end|>\n"
+  }
+ },
+ {
+  "id": "mlabonne/guanaco-llama2-1k",
+  "kind": "sft",
+  "shape": "text (Llama 2)",
+  "config": null,
+  "split": "train",
+  "format": "messages",
+  "record": {
+   "text": "<s>[INST] Me gradué hace poco. ¿Consejos? [/INST] Busca un mentor y aprende cada día. </s>"
+  }
+ },
+ {
+  "id": "liuhaotian/LLaVA-Instruct-150K",
+  "kind": "sft",
+  "shape": "sharegpt + image",
+  "config": null,
+  "split": "train",
+  "format": "messages",
+  "live": false,
+  "note": "JSON files; fetch with convmerge fetch, images stay by reference",
+  "record": {
+   "id": "000000033471",
+   "image": "000000033471.jpg",
+   "conversations": [
+    {
+     "from": "human",
+     "value": "<image>\nWhat colors is the bus?"
+    },
+    {
+     "from": "gpt",
+     "value": "White and red."
+    }
+   ]
+  }
+ },
+ {
+  "id": "glaiveai/glaive-function-calling-v2",
+  "kind": "tools",
+  "shape": "Glaive system + chat",
+  "config": null,
+  "split": "train",
+  "format": "messages",
+  "record": {
+   "system": "SYSTEM: You are a helpful assistant with access to the following functions. Use them if required -\n{\n    \"name\": \"get_news\",\n    \"description\": \"Latest headlines\",\n    \"parameters\": {\n        \"type\": \"object\",\n        \"properties\": {\n            \"country\": {\n                \"type\": \"string\"\n            }\n        },\n        \"required\": [\n            \"country\"\n        ]\n    }\n}\n",
+   "chat": "USER: News for Japan?\n\n\nASSISTANT: <functioncall> {\"name\": \"get_news\", \"arguments\": '{\"country\": \"Japan\"}'} <|endoftext|>\n\n\nFUNCTION RESPONSE: {\"headlines\": [\"A\"]}\n\n\nASSISTANT: The headline is A. <|endoftext|>\n\n\n"
+  }
+ },
+ {
+  "id": "NousResearch/hermes-function-calling-v1",
+  "kind": "tools",
+  "shape": "Hermes <tool_call> tags",
+  "config": "func_calling",
+  "split": "train",
+  "format": "messages",
+  "record": {
+   "id": "h1",
+   "conversations": [
+    {
+     "from": "system",
+     "value": "You are a function calling AI model. You are provided with function signatures within <tools> </tools> XML tags.\n<tools>\n[{\"type\": \"function\", \"function\": {\"name\": \"get_news\", \"description\": \"Latest headlines\", \"parameters\": {\"type\": \"object\", \"properties\": {\"country\": {\"type\": \"string\"}}, \"required\": [\"country\"]}}}]\n</tools>\nFor each function call return a json object with function name and arguments within <tool_call> </tool_call> tags."
+    },
+    {
+     "from": "human",
+     "value": "News for Japan?"
+    },
+    {
+     "from": "gpt",
+     "value": "<tool_call>\n{\"name\": \"get_news\", \"arguments\": {\"country\": \"Japan\"}}\n</tool_call>\n"
+    },
+    {
+     "from": "tool",
+     "value": "<tool_response>\n{\"name\": \"get_news\", \"content\": {\"headlines\": [\"A\"]}}\n</tool_response>\n"
+    },
+    {
+     "from": "gpt",
+     "value": "The headline is A."
+    }
+   ],
+   "tools": "[{\"type\": \"function\", \"function\": {\"name\": \"get_news\", \"description\": \"Latest headlines\", \"parameters\": {\"type\": \"object\", \"properties\": {\"country\": {\"type\": \"string\"}}, \"required\": [\"country\"]}}}]",
+   "category": "News",
+   "subcategory": "Headlines",
+   "task": "Get news"
+  }
+ },
+ {
+  "id": "Salesforce/xlam-function-calling-60k",
+  "kind": "tools",
+  "shape": "xLAM query/answers/tools",
+  "config": null,
+  "split": "train",
+  "format": "messages",
+  "gated": true,
+  "record": {
+   "id": 1,
+   "query": "News for Japan?",
+   "answers": "[{\"name\": \"get_news\", \"arguments\": {\"country\": \"Japan\"}}]",
+   "tools": "[{\"name\": \"get_news\", \"description\": \"Latest headlines\", \"parameters\": {\"type\": \"object\", \"properties\": {\"country\": {\"type\": \"string\"}}, \"required\": [\"country\"]}}]"
+  }
+ },
+ {
+  "id": "llamafactory/glaive_toolcall_en",
+  "kind": "tools",
+  "shape": "LLaMA-Factory function_call",
+  "config": null,
+  "split": "train",
+  "format": "messages",
+  "record": {
+   "conversations": [
+    {
+     "from": "human",
+     "value": "News for Japan?"
+    },
+    {
+     "from": "function_call",
+     "value": "{\"name\": \"get_news\", \"arguments\": {\"country\": \"Japan\"}}"
+    },
+    {
+     "from": "observation",
+     "value": "{\"headlines\": [\"A\"]}"
+    },
+    {
+     "from": "gpt",
+     "value": "The headline is A."
+    }
+   ],
+   "tools": "[{\"name\": \"get_news\", \"description\": \"Latest headlines\", \"parameters\": {\"type\": \"object\", \"properties\": {\"country\": {\"type\": \"string\"}}, \"required\": [\"country\"]}}]"
+  }
+ },
+ {
+  "id": "HuggingFaceH4/ultrafeedback_binarized",
+  "kind": "preference",
+  "shape": "prompt + chosen/rejected lists",
+  "config": null,
+  "split": "train_prefs",
+  "format": "preference",
+  "record": {
+   "prompt": "Name a fruit.",
+   "prompt_id": "p1",
+   "chosen": [
+    {
+     "role": "user",
+     "content": "Name a fruit."
+    },
+    {
+     "role": "assistant",
+     "content": "Apple."
+    }
+   ],
+   "rejected": [
+    {
+     "role": "user",
+     "content": "Name a fruit."
+    },
+    {
+     "role": "assistant",
+     "content": "Carrot."
+    }
+   ],
+   "messages": [
+    {
+     "role": "user",
+     "content": "Name a fruit."
+    },
+    {
+     "role": "assistant",
+     "content": "Apple."
+    }
+   ],
+   "score_chosen": 8.0,
+   "score_rejected": 3.0
+  }
+ },
+ {
+  "id": "trl-lib/ultrafeedback_binarized",
+  "kind": "preference",
+  "shape": "chosen/rejected lists",
+  "config": null,
+  "split": "train",
+  "format": "preference",
+  "record": {
+   "chosen": [
+    {
+     "role": "user",
+     "content": "Name a fruit."
+    },
+    {
+     "role": "assistant",
+     "content": "Apple."
+    }
+   ],
+   "rejected": [
+    {
+     "role": "user",
+     "content": "Name a fruit."
+    },
+    {
+     "role": "assistant",
+     "content": "Carrot."
+    }
+   ],
+   "score_chosen": 8.0,
+   "score_rejected": 3.0
+  }
+ },
+ {
+  "id": "Anthropic/hh-rlhf",
+  "kind": "preference",
+  "shape": "Human:/Assistant: transcripts",
+  "config": null,
+  "split": "train",
+  "format": "preference",
+  "record": {
+   "chosen": "\n\nHuman: Any tips for sleep?\n\nAssistant: Keep a regular schedule.",
+   "rejected": "\n\nHuman: Any tips for sleep?\n\nAssistant: No."
+  }
+ },
+ {
+  "id": "Intel/orca_dpo_pairs",
+  "kind": "preference",
+  "shape": "system/question + chosen/rejected strings",
+  "config": null,
+  "split": "train",
+  "format": "preference",
+  "record": {
+   "system": "You are an AI assistant.",
+   "question": "Is the sky blue?",
+   "chosen": "Yes, on a clear day.",
+   "rejected": "No."
+  }
+ },
+ {
+  "id": "argilla/distilabel-capybara-dpo-7k-binarized",
+  "kind": "preference",
+  "shape": "chosen/rejected lists",
+  "config": null,
+  "split": "train",
+  "format": "preference",
+  "record": {
+   "source": "Airoboros",
+   "conversation": [
+    {
+     "input": "Is 7 prime?",
+     "output": "Yes."
+    }
+   ],
+   "prompt": "Is 7 prime?",
+   "chosen": [
+    {
+     "role": "user",
+     "content": "Is 7 prime?"
+    },
+    {
+     "role": "assistant",
+     "content": "Yes, 7 is prime."
+    }
+   ],
+   "rejected": [
+    {
+     "role": "user",
+     "content": "Is 7 prime?"
+    },
+    {
+     "role": "assistant",
+     "content": "No."
+    }
+   ],
+   "rating_chosen": 5,
+   "rating_rejected": 2,
+   "chosen_model": "gpt-4",
+   "rejected_model": "mistral"
+  }
+ },
+ {
+  "id": "llamafactory/DPO-En-Zh-20k",
+  "kind": "preference",
+  "shape": "LLaMA-Factory ranking",
+  "config": "en",
+  "split": "train",
+  "format": "preference",
+  "record": {
+   "conversations": [
+    {
+     "from": "human",
+     "value": "Say hello in Chinese."
+    }
+   ],
+   "chosen": {
+    "from": "gpt",
+    "value": "你好"
+   },
+   "rejected": {
+    "from": "gpt",
+    "value": "Hello"
+   }
+  }
+ },
+ {
+  "id": "lmsys/chatbot_arena_conversations",
+  "kind": "preference",
+  "shape": "Arena conversation_a/b + winner",
+  "config": null,
+  "split": "train",
+  "format": "preference",
+  "gated": true,
+  "record": {
+   "question_id": "q1",
+   "model_a": "a",
+   "model_b": "b",
+   "winner": "model_b",
+   "conversation_a": [
+    {
+     "role": "user",
+     "content": "2+2?"
+    },
+    {
+     "role": "assistant",
+     "content": "5"
+    }
+   ],
+   "conversation_b": [
+    {
+     "role": "user",
+     "content": "2+2?"
+    },
+    {
+     "role": "assistant",
+     "content": "4"
+    }
+   ],
+   "turn": 1,
+   "language": "English"
+  }
+ }
+]

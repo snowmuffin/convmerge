@@ -24,12 +24,23 @@ REASONS: dict[str, str] = {
     "tool_call_id_mismatch": "a tool message's tool_call_id matches no earlier tool call",
 }
 
+# Adapter-reported issues with a fixed meaning (media issues are described
+# per media type by ``convert``).
+ISSUES: dict[str, str] = {
+    "preference_record": (
+        "a chosen/rejected preference record: write DPO pairs with --format preference, "
+        "or train on one side with --preference chosen"
+    ),
+}
+
 
 def validate_example(example: TrainingExample) -> list[str]:
     """Return the reason codes that make ``example`` unfit for SFT (empty = valid)."""
     msgs = example.messages
     if not msgs:
-        return ["no_messages", *example.issues]
+        # An adapter that yields an empty example to explain a skipped record
+        # (e.g. ``preference_record``) has already said what is wrong.
+        return list(example.issues) or ["no_messages"]
 
     unknown_role = empty = has_user = has_assistant = has_tool = False
     for m in msgs:

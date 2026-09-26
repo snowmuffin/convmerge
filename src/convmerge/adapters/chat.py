@@ -4,12 +4,18 @@ Routes a raw record to the right internal shape by looking at which keys are
 present. Handles the common messy shapes seen across SFT datasets:
 
 - ``messages`` / ``conversation`` / ``conversations`` lists with
-  ``{role, content}`` or ``{from, value}`` entries.
+  ``{role, content}`` or ``{from, value}`` entries, or Capybara-style
+  ``{input, output}`` turn pairs.
 - Pairwise preference rows (``conversation_a`` / ``conversation_b``), with an
   optional ``winner`` field; emits only the winner branch by default.
-- Plain ``text`` strings (yielded as a single assistant message).
+- A ``text`` string rendered with a known chat template (ChatML, Llama 2/3,
+  Gemma, Guanaco, HH-RLHF, the Alpaca prompt) is split back into turns;
+  any other ``text`` is yielded as a single assistant message.
 - Alpaca-style ``instruction`` / ``input`` / ``output`` (delegates to the
   existing alpaca adapter).
+- Tool-calling encodings other than OpenAI's: Hermes tags, Glaive
+  ``system`` + ``chat`` transcripts, and xLAM ``query`` / ``answers`` (see
+  :mod:`convmerge.adapters.tool_formats`).
 
 Around the turns it also keeps OpenAI content parts (text + media by
 reference), ``tool_calls`` / ``tool_call_id`` / ``name``, LLaMA-Factory
@@ -28,6 +34,8 @@ from typing import Any
 
 from convmerge.adapters._common import build_example, coerce_messages, source_meta
 from convmerge.adapters.alpaca import iter_from_alpaca_line
+from convmerge.adapters.text_chat import parse_text_chat
+from convmerge.adapters.tool_formats import glaive_messages, is_glaive, is_xlam, xlam_messages
 from convmerge.models import ChatMessage, TrainingExample
 
 logger = logging.getLogger(__name__)
@@ -109,10 +117,19 @@ def iter_from_chat_line(
         if isinstance(convs, list) and convs:
             msgs = coerce_messages(
                 convs, role_keys=role_keys, content_keys=content_keys, role_map=role_map
-            )
+            ) or _input_output_turns(convs)
             if msgs:
                 yield build_example(msgs, record, meta={"source": "chat"})
             return
+
+    if is_glaive(record):
+        msgs, tools = glaive_messages(record)
+        if msgs:
+            yield build_example(msgs, {**record, "tools": tools}, meta={"source": "chat:glaive"})
+        return
+    if is_xlam(record):
+        yield build_example(xlam_messages(record), record, meta={"source": "chat:xlam"})
+        return
 
     # Resolve Alpaca cues up front so a stray ``text`` field can't silently
     # shadow a well-formed instruction/output record (see issue #17).
@@ -122,6 +139,10 @@ def iter_from_chat_line(
 
     txt = record.get("text")
     if isinstance(txt, str) and txt.strip() and not has_strong_alpaca:
+        turns = parse_text_chat(txt)
+        if turns:
+            yield build_example(turns, record, meta={"source": "chat:text"})
+            return
         if instr is not None or out is not None:
             logger.warning(
                 "chat adapter: routing record to the 'text' branch even though "
@@ -179,6 +200,22 @@ def _iter_pairwise(
         )
         if msgs:
             yield build_example(msgs, record, meta={"source": "chat:pairwise", "branch": label})
+
+
+def _input_output_turns(convs: list[Any]) -> list[ChatMessage]:
+    """Capybara-style turns: ``[{"input": user, "output": assistant}, ...]``."""
+    msgs: list[ChatMessage] = []
+    for item in convs:
+        if not isinstance(item, dict):
+            return []
+        user, answer = item.get("input"), item.get("output")
+        if not isinstance(user, str) or not isinstance(answer, str):
+            return []
+        if user.strip():
+            msgs.append(ChatMessage("user", user))
+        if answer.strip():
+            msgs.append(ChatMessage("assistant", answer))
+    return msgs
 
 
 def _remap_for_alpaca(

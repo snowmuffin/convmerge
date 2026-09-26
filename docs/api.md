@@ -40,7 +40,7 @@ print(stats.written, stats.drop_reasons)
 
 | Name | Purpose |
 |------|---------|
-| `TrainingExample(messages, meta={}, tools=None, issues=[])` | One example between adapter and emitter. |
+| `TrainingExample(messages, meta={}, tools=None, issues=[], rejected=None)` | One example between adapter and emitter. For preference data `messages` is the chosen conversation and `rejected` the rejected one (read by the `preference` format). |
 | `ChatMessage(role, content, tool_calls=(), tool_call_id=None, name=None)` | `content` is a string, a sequence of `ContentPart`, or `None`; `.text` gives the text-only view, `.media` the media parts. |
 | `ContentPart(type, text=None, url=None)` | `text`, or `image` / `audio` / `video` by reference (`url` is a URL or path). |
 | `ToolCall(name, arguments="{}", id=None)` | `arguments` is a JSON string; `ToolCall.from_any(name, dict_or_str)` builds one from a dict. |
