@@ -137,3 +137,14 @@ def test_fetch_raw_shortcut_names_file_once(monkeypatch, tmp_path: Path) -> None
     url = "https://raw.githubusercontent.com/o/r/main/data/train.jsonl"
     main(["fetch", url, "-o", str(tmp_path), "--max-rows", "7"])
     assert seen == {"dst": tmp_path / "train.jsonl", "max_rows": 7}
+
+
+def test_positive_int_options(capsys) -> None:
+    for argv in (
+        ["fetch", "hf://o/d", "--max-rows", "0"],
+        ["convert", "-i", "a", "-o", "b", "--workers", "0"],
+    ):
+        with pytest.raises(SystemExit) as exc:
+            main(argv)
+        assert exc.value.code == 2
+        assert "positive integer" in capsys.readouterr().err
