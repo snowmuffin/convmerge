@@ -4,7 +4,8 @@ Routes a raw record to the right internal shape by looking at which keys are
 present. Handles the common messy shapes seen across SFT datasets:
 
 - ``messages`` / ``conversation`` / ``conversations`` lists with
-  ``{role, content}`` or ``{from, value}`` entries.
+  ``{role, content}`` or ``{from, value}`` entries, or Capybara-style
+  ``{input, output}`` turn pairs.
 - Pairwise preference rows (``conversation_a`` / ``conversation_b``), with an
   optional ``winner`` field; emits only the winner branch by default.
 - A ``text`` string rendered with a known chat template (ChatML, Llama 2/3,
@@ -116,7 +117,7 @@ def iter_from_chat_line(
         if isinstance(convs, list) and convs:
             msgs = coerce_messages(
                 convs, role_keys=role_keys, content_keys=content_keys, role_map=role_map
-            )
+            ) or _input_output_turns(convs)
             if msgs:
                 yield build_example(msgs, record, meta={"source": "chat"})
             return
@@ -199,6 +200,22 @@ def _iter_pairwise(
         )
         if msgs:
             yield build_example(msgs, record, meta={"source": "chat:pairwise", "branch": label})
+
+
+def _input_output_turns(convs: list[Any]) -> list[ChatMessage]:
+    """Capybara-style turns: ``[{"input": user, "output": assistant}, ...]``."""
+    msgs: list[ChatMessage] = []
+    for item in convs:
+        if not isinstance(item, dict):
+            return []
+        user, answer = item.get("input"), item.get("output")
+        if not isinstance(user, str) or not isinstance(answer, str):
+            return []
+        if user.strip():
+            msgs.append(ChatMessage("user", user))
+        if answer.strip():
+            msgs.append(ChatMessage("assistant", answer))
+    return msgs
 
 
 def _remap_for_alpaca(
