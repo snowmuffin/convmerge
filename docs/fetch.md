@@ -57,6 +57,9 @@ cheap on huge datasets:
 | raw `.json` / `.json.gz` | rejected — a JSON array cannot be cut by lines |
 | `mode: clone` | not supported (manifest error) |
 
+With `--max-rows` on the CLI (a global override), entries that cannot be
+sampled are fetched whole with a note instead of failing.
+
 In streaming mode, HF values JSON cannot represent (e.g. decoded images) are
 written as strings.
 
