@@ -171,7 +171,9 @@ sources:
 
 Weights are normalized automatically and need not sum to 1.0. When a source
 has fewer records than its allocation it is clipped; pass `--oversample` to
-sample with replacement instead. A sidecar `.mix.json` is written alongside
+repeat records instead. `mix` streams: it reads each source twice and shuffles
+through temporary files next to the output, so memory stays small even when
+merging multi-GB sources (`--sampler v1` reproduces mixes made before 0.7). A sidecar `.mix.json` is written alongside
 the output recording the exact seed, weights, and per-source counts for full
 reproducibility. Omit `--total` to merge all records from every source.
 
