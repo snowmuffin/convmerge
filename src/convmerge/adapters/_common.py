@@ -186,6 +186,11 @@ def attach_media(
 
     issues: list[str] = []
     out: list[ChatMessage] = []
+    if queues and not _has_placeholder(messages, tokens):
+        # No <image>-style token or media placeholder anywhere: the media
+        # belongs to the conversation as a whole, so lead the first user turn
+        # with it (the usual convention) rather than reporting it unused.
+        messages = _prepend_media(messages, queues)
     for m in messages:
         content = m.content
         if isinstance(content, str) and tokens:
@@ -214,12 +219,47 @@ def collapse_text(content: Any) -> Any:
     return content
 
 
+def _has_placeholder(messages: list[ChatMessage], tokens: dict[str, str]) -> bool:
+    for m in messages:
+        if isinstance(m.content, str):
+            if any(tok in m.content for tok in tokens.values()):
+                return True
+        elif any(p.is_media and p.url is None for p in m.media):
+            return True
+    return False
+
+
+def _prepend_media(messages: list[ChatMessage], queues: dict[str, list[str]]) -> list[ChatMessage]:
+    idx = next((i for i, m in enumerate(messages) if m.role == "user"), None)
+    if idx is None:
+        return messages
+    m = messages[idx]
+    parts = [ContentPart(media, url=ref) for media, refs in queues.items() for ref in refs]
+    for refs in queues.values():
+        refs.clear()
+    if isinstance(m.content, str):
+        rest: tuple[ContentPart, ...] = (
+            (ContentPart("text", text=m.content),) if m.content.strip() else ()
+        )
+    else:
+        rest = tuple(m.content or ())
+    new = ChatMessage(
+        m.role, (*parts, *rest), tool_calls=m.tool_calls, tool_call_id=m.tool_call_id, name=m.name
+    )
+    return [*messages[:idx], new, *messages[idx + 1 :]]
+
+
 def _media_refs(value: Any) -> list[str]:
-    if isinstance(value, str) and value:
-        return [value]
-    if isinstance(value, list):
-        return [v for v in value if isinstance(v, str) and v]
-    return []
+    """String references from a media column: a string, a list, or HF
+    ``datasets`` ``{"path": ...}`` objects (inline bytes are not references)."""
+    items = value if isinstance(value, list) else [value]
+    refs: list[str] = []
+    for v in items:
+        if isinstance(v, dict):
+            v = v.get("path") or v.get("url")
+        if isinstance(v, str) and v:
+            refs.append(v)
+    return refs
 
 
 def _split_tokens(text: str, tokens: dict[str, str]) -> str | tuple[ContentPart, ...]:

@@ -157,3 +157,23 @@ def test_alpaca_history_skips_malformed_pairs() -> None:
         )
     )
     assert [m.content for m in ex.messages] == ["q1", "a1", "q2b", "a2b", "q3", "a3"]
+
+
+def test_media_without_placeholders_leads_first_user_turn() -> None:
+    ex = _one(
+        iter_from_chat_line(
+            {
+                "messages": [
+                    {"role": "system", "content": "Describe images."},
+                    {"role": "user", "content": "What is this?"},
+                    {"role": "assistant", "content": "A bus."},
+                ],
+                "images": [{"path": "bus.jpg", "bytes": None}, {"bytes": "AAAA"}],
+            }
+        )
+    )
+    assert ex.messages[1].content == (
+        ContentPart("image", url="bus.jpg"),
+        ContentPart("text", text="What is this?"),
+    )
+    assert ex.issues == []
