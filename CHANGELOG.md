@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- `chat` / `auto` flat Q&A records: `problem` and `query` count as the
+  question, and `completion` / `solution` as the answer. Output keys are tried
+  in the order `output`, `response`, `completion`, `solution`, `answer`, so a
+  full `solution` is kept instead of a short final `answer` (e.g. LIMO,
+  NuminaMath), and `problem`/`solution` (MATH) and `query`/`response`
+  (MetaMathQA) records are no longer dropped. Found while validating 0.6.0rc1
+  on real datasets.
+
 ## [0.6.0rc1] - 2026-09-26
 
 Release candidate: `pip install convmerge==0.6.0rc1`. Output changes are

@@ -1,0 +1,6 @@
+{"messages": [{"role": "user", "content": "What is the last three digits of the product?"}, {"role": "assistant", "content": "Let t = log x ... so the product is 1995^2, ending in 025."}]}
+{"messages": [{"role": "user", "content": "Find all real x with x^2 = 4."}, {"role": "assistant", "content": "Taking square roots gives x = ±2."}]}
+{"messages": [{"role": "user", "content": "James buys 5 packs of beef that are 4 pounds each. How many pounds?"}, {"role": "assistant", "content": "5 * 4 = 20 pounds. The answer is: 20"}]}
+{"messages": [{"role": "user", "content": "Complete the sentence: The sky is"}, {"role": "assistant", "content": "blue."}]}
+{"messages": [{"role": "user", "content": "What is 7 * 6?"}, {"role": "assistant", "content": "7 * 6 = 42.\n#### 42"}]}
+{"messages": [{"role": "user", "content": "I feel stressed at work."}, {"role": "assistant", "content": "It sounds like you are under a lot of pressure. ..."}]}
