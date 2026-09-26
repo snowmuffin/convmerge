@@ -31,27 +31,45 @@ def validate_example(example: TrainingExample) -> list[str]:
     if not msgs:
         return ["no_messages", *example.issues]
 
+    unknown_role = empty = has_user = has_assistant = has_tool = False
+    for m in msgs:
+        role = m.role
+        if role not in ALLOWED_ROLES:
+            unknown_role = True
+        is_empty = _is_empty(m)
+        empty = empty or is_empty
+        if role == "user":
+            has_user = True
+        elif role == "assistant":
+            has_assistant = has_assistant or not is_empty
+        elif role == "tool":
+            has_tool = True
+
     reasons: list[str] = []
-    if any(m.role not in ALLOWED_ROLES for m in msgs):
+    if unknown_role:
         reasons.append("unknown_role")
-    if any(_is_empty(m) for m in msgs):
+    if empty:
         reasons.append("empty_message")
-    if not any(m.role == "user" for m in msgs):
+    if not has_user:
         reasons.append("no_user")
-    if not any(m.role == "assistant" and not _is_empty(m) for m in msgs):
+    if not has_assistant:
         reasons.append("no_assistant")
-    reasons.extend(_tool_pairing(msgs))
+    if has_tool:
+        reasons.extend(_tool_pairing(msgs))
     reasons.extend(example.issues)
     return _dedupe(reasons)
 
 
 def _is_empty(m: ChatMessage) -> bool:
+    content = m.content
+    if type(content) is str and not m.tool_calls:
+        return not content.strip()
     if m.tool_calls:
         return False
-    if m.content is None:
+    if content is None:
         return True
-    if isinstance(m.content, str):
-        return not m.content.strip()
+    if isinstance(content, str):
+        return not content.strip()
     return not (m.text.strip() or m.media)
 
 

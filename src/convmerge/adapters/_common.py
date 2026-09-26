@@ -41,6 +41,8 @@ _MEDIA_COLUMNS: tuple[tuple[str, str, str], ...] = (
     ("audio", "audio", "<audio>"),
 )
 
+_MEDIA_COLUMN_NAMES: frozenset[str] = frozenset(c for c, _, _ in _MEDIA_COLUMNS)
+
 MISSING = object()
 
 
@@ -174,6 +176,10 @@ def attach_media(
     is left alone. Returns the new messages and a list of issues (unresolved
     placeholders or unused media) for validation to report.
     """
+    if not any(column in record for column in _MEDIA_COLUMN_NAMES) and not any(
+        isinstance(m.content, tuple) for m in messages
+    ):
+        return messages, []
     queues: dict[str, list[str]] = {}
     tokens: dict[str, str] = {}
     for column, media, token in _MEDIA_COLUMNS:
@@ -333,9 +339,21 @@ def coerce_messages(
     they carry tool calls; with ``strip=True`` text is also stripped.
     """
     out: list[ChatMessage] = []
+    rk0, ck0 = role_keys[0], content_keys[0]
     for item in convs:
         if not isinstance(item, dict):
             continue
+        if len(item) == 2:
+            # Fast path for the common plain turn: exactly {role, content}
+            # strings under the primary keys. Same result as the general path.
+            role_v, content_v = item.get(rk0), item.get(ck0)
+            if type(role_v) is str and type(content_v) is str:
+                role = role_v.strip().lower()
+                if role and role not in FUNCTION_CALL_ROLES:
+                    if content_v.strip():
+                        text = content_v.strip() if strip else content_v
+                        out.append(ChatMessage(role_map.get(role, role), text))
+                    continue
         role_raw = first_role(item, role_keys)
         if role_raw is None:
             continue
