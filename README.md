@@ -128,6 +128,12 @@ Emitters: `messages`, `alpaca`.
 > 0.6.0 (`turn_mode: pairs` restores the old split). See
 > [docs/format.md](docs/format.md#sharegpt).
 
+Every example is validated before it is written; ones with no user turn,
+empty messages, or unmatched tool results are dropped and counted by reason
+(`--on-invalid keep|fail` to change that, `--report PATH` for details,
+`convmerge validate -i FILE` to check an existing file). See
+[docs/format.md](docs/format.md#validation).
+
 Presets and team-specific tuning: [docs/custom_presets.md](docs/custom_presets.md).
 
 > `chat` / `auto` is a **heuristic** adapter: it inspects the keys of each

@@ -177,6 +177,40 @@ Plain `text`:
 
 </details>
 
+## Validation
+
+Every example `convert` produces is checked before it is written. Examples
+that would train badly are **dropped by default** and counted by reason:
+
+| Reason | Meaning |
+|--------|---------|
+| `no_messages` | the example has no messages |
+| `unknown_role` | a role is not `system` / `user` / `assistant` / `tool` (e.g. an undecodable `function_call` turn) |
+| `empty_message` | a message has neither content nor tool calls |
+| `no_user` | there is no user message (e.g. a plain `text` record) |
+| `no_assistant` | there is no assistant message with content or tool calls |
+| `orphan_tool_message` | a `tool` message is not preceded by an assistant tool call |
+| `tool_call_id_mismatch` | a `tool_call_id` matches no earlier tool call id |
+| `unresolved_image` / `_video` / `_audio` | a media placeholder has no matching reference in the record |
+| `unused_image` / `_video` / `_audio` | the record lists more media references than placeholders |
+| `unrepresentable_*` | the output format cannot hold the example losslessly (see `alpaca` below) |
+
+Adapters skip blank turns (such as an empty system prompt) instead of
+failing the whole example. Tool calls without ids (LLaMA-Factory) are paired
+with tool results by order.
+
+```bash
+convmerge convert -i in.jsonl -o out.jsonl --from auto -f messages \
+  --on-invalid drop \          # drop (default) | keep | fail
+  --report out.report.json      # counts, reasons, first line numbers per reason
+
+convmerge validate -i out.jsonl # same checks on an existing file; exit 1 if any fail
+```
+
+From Python: `convert_file(..., on_invalid="drop", stats=ConvertStats())`,
+`convmerge.validate.validate_example(example)`, and
+`convmerge.convert.validate_file(path)`.
+
 ## Normalization utilities
 
 `convmerge.normalize` and the `convmerge normalize / dedupe / turns`
