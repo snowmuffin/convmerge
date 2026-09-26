@@ -13,6 +13,7 @@ wild. The content is made up, but the structure matches each source format.
 | `alpaca` | instruction / input / output, `response` alias, LLaMA-Factory `system` + `history` |
 | `chat_variants` | `conversation` key, plain `text`, pairwise `conversation_a/b` with winner or tie, `question`/`answer`, `prompt`/`response` with stray `text`, `messages` using `from`/`value` |
 | `qa_variants` | flat Q&A shapes: `question`/`solution`/`answer` (LIMO), `problem`/`solution` (MATH), `query`/`response` (MetaMathQA), `prompt`/`completion`, `question`/`answer` (GSM8K), `input`/`output` only |
+| `preference` | chosen/rejected records: LLaMA-Factory ranking (sharegpt and alpaca), HH-RLHF transcripts, UltraFeedback-binarized message lists, TRL prompt + continuation (list and string prompt) |
 | `messy` | blank line, invalid JSON, non-object rows, unmappable object, empty and assistant-only conversations |
 
 `expected/` holds the convert output for each case in `tests/test_golden.py`

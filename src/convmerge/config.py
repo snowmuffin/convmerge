@@ -49,6 +49,9 @@ class AdapterOptions:
 
     chat: ChatAdapterOptions | None = None
     sharegpt: SharegptAdapterOptions | None = None
+    preference: str | None = None
+    """``"chosen"`` / ``"rejected"``: fold that answer of a preference record
+    into the conversation before adapting (see :mod:`convmerge.adapters.preference`)."""
 
 
 @dataclass
@@ -63,6 +66,14 @@ class ConvertConfig:
 
 
 _EMIT_OPTION_KEYS = ("tool_arguments", "keep_meta", "meta_key", "alpaca_multiturn")
+
+
+def check_preference(value: Any) -> str:
+    from convmerge.adapters.preference import PREFERENCES
+
+    if value not in PREFERENCES:
+        raise ValueError(f"preference must be one of {list(PREFERENCES)}, got {value!r}")
+    return value
 
 
 def emit_options_from_mapping(data: dict[str, Any]) -> EmitOptions:
@@ -176,6 +187,7 @@ def build_convert_config(
     adapter_options: AdapterOptions | None = None,
     adapter_kwargs_json: str | None = None,
     emit_overrides: dict[str, Any] | None = None,
+    preference: str | None = None,
 ) -> ConvertConfig:
     """
     Merge preset file, explicit CLI/API arguments, and optional JSON adapter kwargs.
@@ -184,7 +196,8 @@ def build_convert_config(
     preset, then ``--adapter-kwargs``, then explicit ``adapter_options``.
     Explicit ``adapter`` / ``output_format`` / ``encoding`` override the preset,
     and ``emit_overrides`` (keys of :class:`EmitOptions`) override the
-    preset's ``output_options``.
+    preset's ``output_options``. ``preference`` (``--preference``) overrides
+    ``adapter_options.preference`` from the preset or ``--adapter-kwargs``.
     """
     from convmerge.preset import load_convert_preset
 
@@ -194,6 +207,7 @@ def build_convert_config(
     cfg_emit: EmitOptions | None = None
     chat_layers: list[dict[str, Any]] = []
     sharegpt_layers: list[dict[str, Any]] = []
+    cfg_preference: str | None = None
 
     if preset_path is not None:
         p = load_convert_preset(preset_path)
@@ -205,6 +219,8 @@ def build_convert_config(
             chat_layers.append(_chat_options_to_override_dict(p.adapter_options.chat))
         if p.adapter_options and p.adapter_options.sharegpt:
             sharegpt_layers.append(_sharegpt_options_to_override_dict(p.adapter_options.sharegpt))
+        if p.adapter_options and p.adapter_options.preference:
+            cfg_preference = p.adapter_options.preference
 
     if adapter_kwargs_json:
         try:
@@ -223,7 +239,13 @@ def build_convert_config(
             if not isinstance(sg, dict):
                 raise ValueError("--adapter-kwargs: 'sharegpt' must be an object")
             sharegpt_layers.append(sg)
+        if raw.get("preference") is not None:
+            cfg_preference = check_preference(raw["preference"])
 
+    if adapter_options and adapter_options.preference:
+        cfg_preference = check_preference(adapter_options.preference)
+    if preference is not None:
+        cfg_preference = check_preference(preference)
     if adapter_options and adapter_options.chat:
         chat_layers.append(_chat_options_to_override_dict(adapter_options.chat))
     if adapter_options and adapter_options.sharegpt:
@@ -242,8 +264,9 @@ def build_convert_config(
         )
 
     adapter_opts: AdapterOptions | None = None
-    if chat_layers or sharegpt_layers:
+    if chat_layers or sharegpt_layers or cfg_preference:
         adapter_opts = AdapterOptions(
+            preference=cfg_preference,
             chat=(
                 chat_adapter_options_from_mapping(_merge_chat_dicts(*chat_layers))
                 if chat_layers

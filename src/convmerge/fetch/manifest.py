@@ -30,6 +30,9 @@ class DatasetEntry:
     mode: Literal["tree", "clone"] | None = None
     lfs: bool = False
 
+    # Keep only the first N records (HF streaming / line files); None = all.
+    max_rows: int | None = None
+
     # Optional output override (directory relative to manifest or absolute).
     output: str | None = None
 
@@ -153,7 +156,23 @@ def _entry_from_dict(item: dict[str, Any], *, index: int) -> DatasetEntry:
         mode=mode,
         lfs=bool(item.get("lfs", False)),
         output=item.get("output"),
+        max_rows=_max_rows(item.get("max_rows"), index=index, name=name, mode=mode),
     )
+
+
+def _max_rows(value: Any, *, index: int, name: str, mode: Any) -> int | None:
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+        raise ValueError(
+            f"datasets[{index}] ({name!r}) max_rows must be a positive integer, got {value!r}"
+        )
+    if mode == "clone":
+        raise ValueError(
+            f"datasets[{index}] ({name!r}) max_rows does not apply to mode: clone; "
+            "use a raw URL or mode: tree to sample files"
+        )
+    return value
 
 
 _RAW_GITHUB_HOSTS = ("raw.githubusercontent.com",)

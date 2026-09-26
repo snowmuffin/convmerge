@@ -1,0 +1,23 @@
+{
+  "blank": 0,
+  "drop_lines": {
+    "no_assistant": [
+      1,
+      2,
+      4,
+      6
+    ]
+  },
+  "drop_reasons": {
+    "no_assistant": 4
+  },
+  "dropped": 4,
+  "first_invalid_line": null,
+  "invalid_json": 0,
+  "kept_invalid": 0,
+  "lines_read": 6,
+  "lossy": {},
+  "no_example": 2,
+  "non_object": 0,
+  "written": 0
+}

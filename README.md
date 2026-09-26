@@ -129,6 +129,12 @@ Emitters: `messages`, `alpaca`.
 > 0.6.0 (`turn_mode: pairs` restores the old split). See
 > [docs/format.md](docs/format.md#sharegpt).
 
+Preference (DPO / reward) datasets: `--preference chosen` trains on the chosen
+answer (LLaMA-Factory ranking, HH-RLHF, UltraFeedback, TRL shapes).
+
+Large files: `--workers N` converts with N processes (same output and
+stats as a single process; ~3.8x faster with 4 workers in our benchmark).
+
 Every example is validated before it is written; ones with no user turn,
 empty messages, or unmatched tool results are dropped and counted by reason
 (`--on-invalid keep|fail` to change that, `--report PATH` for details,
@@ -171,7 +177,9 @@ sources:
 
 Weights are normalized automatically and need not sum to 1.0. When a source
 has fewer records than its allocation it is clipped; pass `--oversample` to
-sample with replacement instead. A sidecar `.mix.json` is written alongside
+repeat records instead. `mix` streams: it reads each source twice and shuffles
+through temporary files next to the output, so memory stays small even when
+merging multi-GB sources (`--sampler v1` reproduces mixes made before 0.7). A sidecar `.mix.json` is written alongside
 the output recording the exact seed, weights, and per-source counts for full
 reproducibility. Omit `--total` to merge all records from every source.
 
@@ -184,8 +192,10 @@ convmerge turns  -i ./train/mixed.dedup.jsonl \
   --multi-out  ./train/multi.jsonl
 ```
 
-See [docs/format.md](docs/format.md) for adapter / emitter schemas and
-[docs/fetch.md](docs/fetch.md) for manifest details.
+See [docs/format.md](docs/format.md) for adapter / emitter schemas,
+[docs/fetch.md](docs/fetch.md) for manifest details, and
+[docs/api.md](docs/api.md) for the Python API and writing plugins
+(custom adapters / output formats via entry points).
 
 ## Out of scope
 
@@ -255,7 +265,7 @@ GitHub Actions secret.
 
 ## Changelog
 
-[CHANGELOG.md](CHANGELOG.md) · upgrading from 0.5: [docs/migration-0.6.md](docs/migration-0.6.md)
+[CHANGELOG.md](CHANGELOG.md) · upgrading: [from 0.6](docs/migration-0.7.md), [from 0.5](docs/migration-0.6.md)
 
 ## License
 
