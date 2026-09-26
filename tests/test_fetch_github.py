@@ -129,3 +129,36 @@ def test_fetch_repo_tree_files_filters_by_ext(monkeypatch, tmp_path: Path) -> No
         assert p.read_bytes().startswith(b"FILE:")
     # Tree API was queried with recursive=1.
     assert any("/git/trees/main?recursive=1" in url for url in calls)
+
+
+def _capture_headers(monkeypatch) -> list[dict[str, str]]:
+    seen: list[dict[str, str]] = []
+
+    def fake_urlopen(req, timeout=None):
+        seen.append({k.lower(): v for k, v in req.header_items()})
+        return _FakeResponse(b"{}")
+
+    monkeypatch.setattr(gh.urllib.request, "urlopen", fake_urlopen)
+    return seen
+
+
+def test_download_raw_file_no_token_for_non_github_host(monkeypatch, tmp_path: Path) -> None:
+    seen = _capture_headers(monkeypatch)
+    gh.download_raw_file("https://example.com/data.jsonl", tmp_path / "a.jsonl", token="abc")
+    gh.download_raw_file(
+        "https://raw.githubusercontent.com.evil.test/x.jsonl", tmp_path / "b.jsonl", token="abc"
+    )
+    assert all("authorization" not in h for h in seen)
+
+
+def test_github_token_is_not_forwarded_on_redirect() -> None:
+    import urllib.request
+
+    req = urllib.request.Request("https://raw.githubusercontent.com/o/r/m/a.jsonl")
+    gh._add_auth(req, "abc")
+    assert req.get_header("Authorization") == "token abc"
+    redirected = urllib.request.HTTPRedirectHandler().redirect_request(
+        req, None, 302, "Found", {}, "https://other.example/blob"
+    )
+    assert redirected is not None
+    assert "abc" not in str(dict(redirected.header_items()))

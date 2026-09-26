@@ -498,6 +498,7 @@ def _cmd_fetch_shortcut(args: argparse.Namespace, source: str) -> None:
         return
 
     # http(s):// shortcuts
+    from convmerge.fetch.auth import redact_url
     from convmerge.fetch.git import clone_repo
     from convmerge.fetch.github import download_raw_file, fetch_repo_tree_files
     from convmerge.fetch.manifest import sanitize_name
@@ -513,7 +514,7 @@ def _cmd_fetch_shortcut(args: argparse.Namespace, source: str) -> None:
                 break
         dst = out_root / f"{name}{suffix}"
         download_raw_file(source, dst, token=args.github_token)
-        print(f"[ok] {source} -> {dst}", file=sys.stderr)
+        print(f"[ok] {redact_url(source)} -> {dst}", file=sys.stderr)
         return
 
     if "github.com" in lowered:
@@ -527,11 +528,11 @@ def _cmd_fetch_shortcut(args: argparse.Namespace, source: str) -> None:
                 ext=tuple(args.ext or ()),
                 token=args.github_token,
             )
-        print(f"[ok] {source} -> {dst}", file=sys.stderr)
+        print(f"[ok] {redact_url(source)} -> {dst}", file=sys.stderr)
         return
 
     print(
-        f"error: unsupported URL: {source!r}. "
+        f"error: unsupported URL: {redact_url(source)!r}. "
         "Only hf://, raw.githubusercontent.com, and github.com are supported.",
         file=sys.stderr,
     )

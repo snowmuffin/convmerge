@@ -265,6 +265,7 @@ def _record_error(
     on_error: str,
     log: LogFn,
 ) -> None:
+    msg = redact_url(msg)
     log(f"[fail] {name}: {msg}")
     result.failed.append((name, msg))
     if on_error == "fail":

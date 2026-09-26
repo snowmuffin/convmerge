@@ -11,6 +11,7 @@ import re
 import urllib.error
 import urllib.request
 from pathlib import Path
+from urllib.parse import urlparse
 
 from convmerge.lfs import LfsPointerError, is_lfs_pointer
 
@@ -20,6 +21,9 @@ _GITHUB_REPO_RE = re.compile(
 
 _DEFAULT_TIMEOUT = 60
 
+# Hosts that may receive a GitHub token. Other URLs are fetched anonymously.
+_GITHUB_TOKEN_HOSTS = frozenset({"github.com", "api.github.com", "raw.githubusercontent.com"})
+
 
 class GitHubFetchError(RuntimeError):
     """Raised when a GitHub API or download call fails."""
@@ -28,15 +32,15 @@ class GitHubFetchError(RuntimeError):
 def download_raw_file(url: str, dst: str | Path, *, token: str | None = None) -> Path:
     """Download one raw URL (``raw.githubusercontent.com`` or similar) to ``dst``.
 
-    Parent directories are created. Any ``Authorization`` header is only sent
-    when ``token`` is provided.
+    Parent directories are created. An ``Authorization`` header is only sent
+    when ``token`` is provided and the URL is on a GitHub host; it is never
+    forwarded across redirects.
     """
     dst_p = Path(dst)
     dst_p.parent.mkdir(parents=True, exist_ok=True)
 
     req = urllib.request.Request(url)
-    if token:
-        req.add_header("Authorization", f"token {token}")
+    _add_auth(req, token)
     req.add_header("User-Agent", "convmerge-fetch/0.2")
 
     try:
@@ -119,8 +123,7 @@ def _github_api_json(url: str, *, token: str | None) -> dict:
     req = urllib.request.Request(url)
     req.add_header("Accept", "application/vnd.github.v3+json")
     req.add_header("User-Agent", "convmerge-fetch/0.2")
-    if token:
-        req.add_header("Authorization", f"token {token}")
+    _add_auth(req, token)
     try:
         with urllib.request.urlopen(req, timeout=_DEFAULT_TIMEOUT) as resp:
             return json.loads(resp.read().decode("utf-8"))
@@ -128,3 +131,17 @@ def _github_api_json(url: str, *, token: str | None) -> dict:
         raise GitHubFetchError(f"HTTP {e.code} calling {url}: {e.reason}") from e
     except urllib.error.URLError as e:
         raise GitHubFetchError(f"Network error calling {url}: {e.reason}") from e
+
+
+def _add_auth(req: urllib.request.Request, token: str | None) -> None:
+    """Attach the token only for GitHub hosts, and never across redirects.
+
+    urllib copies ordinary headers onto redirected requests, even to another
+    host; "unredirected" headers are sent on the original request only.
+    """
+    if not token:
+        return
+    host = (urlparse(req.full_url).hostname or "").lower()
+    if host not in _GITHUB_TOKEN_HOSTS:
+        return
+    req.add_unredirected_header("Authorization", f"token {token}")
