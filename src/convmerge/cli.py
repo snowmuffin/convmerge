@@ -168,9 +168,26 @@ def _add_convert(sub: argparse._SubParsersAction) -> None:
     p.add_argument(
         "--tool-arguments",
         choices=("string", "object"),
-        default="string",
+        default=None,
         help="messages format: write tool-call arguments as a JSON string "
         "(default, OpenAI style) or as a JSON object",
+    )
+    p.add_argument(
+        "--keep-meta",
+        nargs="?",
+        const="*",
+        default=None,
+        metavar="KEYS",
+        help="Also write provenance (source, id, branch) under 'meta'; "
+        "optionally only these comma-separated keys, e.g. --keep-meta source,id",
+    )
+    p.add_argument("--meta-key", default=None, help="Output key for --keep-meta (default: meta)")
+    p.add_argument(
+        "--alpaca-multiturn",
+        choices=("flatten", "history", "drop"),
+        default=None,
+        help="alpaca format, conversations longer than one pair: flatten into one "
+        "instruction (default, lossy), write a LLaMA-Factory 'history' list, or drop",
     )
     _add_progress_flag(p)
 
@@ -188,6 +205,7 @@ def _cmd_convert(args: argparse.Namespace) -> None:
             output_format=args.output_format,
             encoding=args.encoding,
             adapter_kwargs_json=args.adapter_kwargs,
+            emit_overrides=_emit_overrides(args),
         )
     except (ValueError, OSError) as e:
         print(f"error: {e}", file=sys.stderr)
@@ -209,8 +227,8 @@ def _cmd_convert(args: argparse.Namespace) -> None:
             adapter_options=cfg.adapter_options,
             progress=progress_enabled(args.progress),
             stats=stats,
-            tool_arguments=args.tool_arguments,
             on_invalid=args.on_invalid,
+            emit_options=cfg.emit_options,
         )
     except InvalidExampleError as e:
         print(f"error: {e} (use --on-invalid drop or keep to continue)", file=sys.stderr)
@@ -234,7 +252,22 @@ def _cmd_convert(args: argparse.Namespace) -> None:
         )
 
 
+def _emit_overrides(args: argparse.Namespace) -> dict[str, object]:
+    out: dict[str, object] = {}
+    if args.tool_arguments is not None:
+        out["tool_arguments"] = args.tool_arguments
+    if args.keep_meta is not None:
+        keys = [k.strip() for k in args.keep_meta.split(",") if k.strip()]
+        out["keep_meta"] = True if args.keep_meta == "*" else tuple(keys)
+    if args.meta_key is not None:
+        out["meta_key"] = args.meta_key
+    if args.alpaca_multiturn is not None:
+        out["alpaca_multiturn"] = args.alpaca_multiturn
+    return out
+
+
 def _print_drop_summary(stats: ConvertStats, *, kept: bool = False) -> None:
+    _print_lossy_summary(stats)
     if not stats.drop_reasons:
         return
     reasons = ", ".join(f"{r}={n:,}" for r, n in sorted(stats.drop_reasons.items()))
@@ -242,6 +275,16 @@ def _print_drop_summary(stats: ConvertStats, *, kept: bool = False) -> None:
         print(f"warning: kept {stats.kept_invalid:,} invalid examples ({reasons})", file=sys.stderr)
     if stats.dropped:
         print(f"warning: dropped {stats.dropped:,} examples ({reasons})", file=sys.stderr)
+
+
+def _print_lossy_summary(stats: ConvertStats) -> None:
+    for reason, n in sorted(stats.lossy.items()):
+        hint = (
+            " (use --alpaca-multiturn history to keep turns, or drop)"
+            if reason == "lossy_multiturn_flattened"
+            else ""
+        )
+        print(f"warning: {n:,} examples written lossily: {reason}{hint}", file=sys.stderr)
 
 
 def _write_report(path: Path, stats: ConvertStats) -> None:

@@ -1,22 +1,24 @@
 {
   "blank": 0,
   "drop_lines": {
+    "unrepresentable_multiturn": [
+      1
+    ],
     "unrepresentable_tool_calls": [
       2
     ]
   },
   "drop_reasons": {
+    "unrepresentable_multiturn": 1,
     "unrepresentable_tool_calls": 1
   },
-  "dropped": 1,
+  "dropped": 2,
   "first_invalid_line": null,
   "invalid_json": 0,
   "kept_invalid": 0,
   "lines_read": 4,
-  "lossy": {
-    "lossy_multiturn_flattened": 1
-  },
+  "lossy": {},
   "no_example": 0,
   "non_object": 0,
-  "written": 3
+  "written": 2
 }

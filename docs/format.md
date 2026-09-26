@@ -17,17 +17,57 @@ OpenAI-style chat JSONL:
 {"messages": [{"role": "user", "content": "..."}, {"role": "assistant", "content": "..."}]}
 ```
 
-Roles are normalized to `user`, `assistant`, or `system` where applicable.
+Roles are `system`, `user`, `assistant`, or `tool`. Plain-text turns look
+exactly like the line above; richer data adds only what it needs:
+
+- **Tool calling** — assistant `tool_calls` (`{"id"?, "type": "function",
+  "function": {"name", "arguments"}}`), `tool` messages with `tool_call_id`
+  when the source had ids, and a top-level `tools` list of schemas.
+  `arguments` is a JSON string (OpenAI style); `--tool-arguments object`
+  writes an object instead, which some Hugging Face chat templates expect.
+- **Multimodal** — `content` becomes a list of parts:
+  `{"type": "text", "text"}`, `{"type": "image_url", "image_url": {"url"}}`,
+  and `audio_url` / `video_url` in the same shape (vLLM / Qwen-VL
+  convention). The URL is whatever reference the source held (URL or path);
+  media is never downloaded. An unresolved placeholder stays as
+  `{"type": "image"}` and fails validation.
+- `name` on a message when the source had one.
+
+```json
+{"messages": [
+  {"role": "user", "content": "Weather in Seoul?"},
+  {"role": "assistant", "content": null, "tool_calls": [{"id": "call_1", "type": "function", "function": {"name": "get_weather", "arguments": "{\"city\": \"Seoul\"}"}}]},
+  {"role": "tool", "content": "{\"temp_c\": 21}", "tool_call_id": "call_1"},
+  {"role": "assistant", "content": "It is 21°C in Seoul."}],
+ "tools": [{"type": "function", "function": {"name": "get_weather", "parameters": {"type": "object"}}}]}
+```
 
 ### `alpaca`
 
-Instruction tuning JSONL:
+Instruction tuning JSONL (LLaMA-Factory compatible):
 
 ```json
-{"instruction": "...", "input": "", "output": "..."}
+{"instruction": "...", "input": "", "output": "...", "system": "..."}
 ```
 
-For multi-turn internal examples, user contents are joined into `instruction` and the last assistant reply becomes `output` (MVP flattening).
+`system` is written only when the example has a system prompt. Anything other
+than a single user→assistant pair follows `--alpaca-multiturn`:
+
+| Value | Result |
+|-------|--------|
+| `flatten` *(default)* | User turns joined into `instruction`, last assistant turn as `output`. Earlier assistant turns are lost; each case is counted as `lossy_multiturn_flattened`. |
+| `history` | Last pair as `instruction`/`output`, earlier pairs in `history: [[user, assistant], ...]`. Lossless for strictly alternating conversations; others are dropped (`unrepresentable_multiturn`). |
+| `drop` | Multi-turn examples are dropped (`unrepresentable_multiturn`). |
+
+Examples with tool calls or media cannot be represented in this format and are
+always dropped (`unrepresentable_tool_calls` / `unrepresentable_media`).
+
+### Provenance (`--keep-meta`)
+
+`--keep-meta` adds the example's provenance under `meta` (`--meta-key` to
+rename it): `source` (the adapter branch, e.g. `sharegpt`, `chat:pairwise`),
+the record's own `id` when it has one, and the pairwise `branch`.
+`--keep-meta source,id` keeps only those keys. Off by default.
 
 ## Source adapters (`--from`)
 

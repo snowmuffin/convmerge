@@ -7,6 +7,7 @@
   "invalid_json": 0,
   "kept_invalid": 0,
   "lines_read": 4,
+  "lossy": {},
   "no_example": 0,
   "non_object": 0,
   "written": 4

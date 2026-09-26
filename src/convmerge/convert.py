@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Literal, TextIO
 
 from convmerge.adapter_resolve import resolve_adapter
 from convmerge.config import AdapterOptions, ConvertConfig
-from convmerge.emitters import EmitterFn, ToolArguments, UnrepresentableExample, get_emitter
+from convmerge.emitters import EmitOptions, EmitterFn, UnrepresentableExample, get_emitter
 from convmerge.io import ReadStats, iter_jsonl
 from convmerge.validate import validate_example
 
@@ -44,7 +44,9 @@ class ConvertStats:
     codes, see :mod:`convmerge.validate`, or an output format that cannot
     represent the example) and ``drop_lines`` keeps the first few input line
     numbers per reason. With ``on_invalid="keep"``, invalid examples are
-    written anyway and counted in ``kept_invalid``.
+    written anyway and counted in ``kept_invalid``. ``lossy`` counts examples
+    that were written but simplified by the output format (e.g.
+    ``lossy_multiturn_flattened`` for ``alpaca``).
     """
 
     lines_read: int = 0
@@ -58,6 +60,7 @@ class ConvertStats:
     kept_invalid: int = 0
     drop_reasons: dict[str, int] = field(default_factory=dict)
     drop_lines: dict[str, list[int]] = field(default_factory=dict)
+    lossy: dict[str, int] = field(default_factory=dict)
 
     @property
     def skipped(self) -> int:
@@ -104,8 +107,8 @@ def convert_file(
     adapter_options: AdapterOptions | None = None,
     progress: bool = False,
     stats: ConvertStats | None = None,
-    tool_arguments: ToolArguments = "string",
     on_invalid: OnInvalid = "drop",
+    emit_options: EmitOptions | None = None,
 ) -> tuple[int, int]:
     """
     Read JSONL lines, parse with adapter, validate, write emitted JSONL.
@@ -115,9 +118,10 @@ def convert_file(
     (default; counted in ``stats``), ``"keep"`` (written anyway), or
     ``"fail"`` (raise :class:`InvalidExampleError`).
 
-    ``tool_arguments`` controls how tool-call arguments are written by the
-    ``messages`` format: ``"string"`` (JSON-encoded, OpenAI style) or
-    ``"object"``.
+    ``emit_options`` (:class:`convmerge.emitters.EmitOptions`) tunes the
+    output format: tool-call argument encoding, ``--keep-meta``, and how
+    ``alpaca`` handles multi-turn conversations. Lossy-but-kept conversions
+    are counted in ``stats.lossy``.
 
     Set ``progress=True`` to log periodic row counts to stderr (off by default;
     see :mod:`convmerge.progress`). Pass a :class:`ConvertStats` as ``stats``
@@ -131,7 +135,8 @@ def convert_file(
     if on_invalid not in ("drop", "keep", "fail"):
         raise ValueError(f"on_invalid must be 'drop', 'keep', or 'fail', got {on_invalid!r}")
     adapter = resolve_adapter(adapter_name, adapter_options)
-    emitter = get_emitter(output_format, tool_arguments=tool_arguments)
+    notes: list[str] = []
+    emitter = get_emitter(output_format, options=emit_options, notes=notes)
 
     st = stats if stats is not None else ConvertStats()
     reporter = ProgressReporter(f"convert {input_path.name}", enabled=progress)
@@ -139,7 +144,7 @@ def convert_file(
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     with output_path.open("w", encoding=encoding) as fout:
-        _run(input_path, fout, adapter, emitter, st, reporter, encoding, on_invalid)
+        _run(input_path, fout, adapter, emitter, st, reporter, encoding, on_invalid, notes)
 
     reporter.done()
     return st.lines_read, st.written
@@ -161,7 +166,7 @@ def validate_file(
     """
     st = ConvertStats()
     adapter = resolve_adapter(adapter_name, adapter_options)
-    _run(input_path, None, adapter, None, st, None, encoding, "drop")
+    _run(input_path, None, adapter, None, st, None, encoding, "drop", [])
     return st
 
 
@@ -174,6 +179,7 @@ def _run(
     reporter: ProgressReporter | None,
     encoding: str,
     on_invalid: OnInvalid,
+    notes: list[str],
 ) -> None:
     read = ReadStats()
     try:
@@ -202,11 +208,15 @@ def _run(
                 try:
                     row = emitter(example)
                 except UnrepresentableExample as e:
+                    notes.clear()
                     st.note([e.reason], line.number)
                     st.dropped += 1
                     continue
                 fout.write(json.dumps(row, ensure_ascii=False) + "\n")
                 st.written += 1
+                for note in notes:
+                    st.lossy[note] = st.lossy.get(note, 0) + 1
+                notes.clear()
             if not produced:
                 st.no_example += 1
     finally:
@@ -223,10 +233,14 @@ def convert_with_config(
     *,
     progress: bool = False,
     stats: ConvertStats | None = None,
-    tool_arguments: ToolArguments = "string",
     on_invalid: OnInvalid = "drop",
+    emit_options: EmitOptions | None = None,
 ) -> tuple[int, int]:
-    """Run :func:`convert_file` using a resolved :class:`convmerge.config.ConvertConfig`."""
+    """Run :func:`convert_file` using a resolved :class:`convmerge.config.ConvertConfig`.
+
+    ``emit_options`` defaults to ``cfg.emit_options`` (from a preset's
+    ``output_options``).
+    """
     return convert_file(
         input_path,
         output_path,
@@ -236,8 +250,8 @@ def convert_with_config(
         adapter_options=cfg.adapter_options,
         progress=progress,
         stats=stats,
-        tool_arguments=tool_arguments,
         on_invalid=on_invalid,
+        emit_options=emit_options if emit_options is not None else cfg.emit_options,
     )
 
 
