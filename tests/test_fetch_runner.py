@@ -221,3 +221,14 @@ def test_runner_only_filter(monkeypatch, tmp_path: Path) -> None:
     manifest = _make_manifest(entries, tmp_path)
     runner.run_manifest(manifest, only=["keep"], log=lambda _msg: None)
     assert seen == ["org/keep"]
+
+
+def test_completion_snapshot_ignores_git_metadata(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    (repo / ".git").mkdir(parents=True)
+    (repo / "data.jsonl").write_text("{}\n", encoding="utf-8")
+    (repo / ".git" / "FETCH_HEAD").write_text("a", encoding="utf-8")
+    before = runner._completion_snapshot(repo)
+    (repo / ".git" / "FETCH_HEAD").write_text("b", encoding="utf-8")
+    assert runner._completion_snapshot(repo) == before
+    assert [f["path"] for f in before["files"]] == ["data.jsonl"]

@@ -144,9 +144,14 @@ def _completion_snapshot(output: Path) -> dict[str, object] | None:
         return None
     files: list[dict[str, object]] = []
     for path in sorted(p for p in output.rglob("*") if p.is_file()):
+        rel = path.relative_to(output)
+        # git metadata churns on every pull/status and can be huge; only the
+        # working tree is the fetched content.
+        if rel.parts[0] == ".git":
+            continue
         files.append(
             {
-                "path": str(path.relative_to(output)),
+                "path": rel.as_posix(),
                 "size": path.stat().st_size,
                 "sha256": _file_digest(path),
             }

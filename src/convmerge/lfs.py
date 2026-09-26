@@ -13,8 +13,8 @@ class LfsPointerError(ValueError):
 
 def is_lfs_pointer(data: bytes) -> bool:
     """Return whether *data* starts with a Git LFS pointer header."""
-    lines = data.splitlines()
-    first_line = lines[0].strip() if lines else b""
+    # Only the head matters; avoid splitting a multi-GB download into lines.
+    first_line = data[:256].split(b"\n", 1)[0].strip()
     return first_line == LFS_POINTER_VERSION
 
 
