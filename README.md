@@ -99,8 +99,9 @@ convmerge normalize -i ./raw -o ./jsonl
 ```
 
 Handles parquet (streamed via `pyarrow`), top-level JSON arrays, concatenated
-single-line JSON (`{...}{...}{...}`), and already-valid JSONL. A directory
-input is walked recursively and mirrored under the output directory.
+single-line JSON (`{...}{...}{...}`), JSONL whose lines are arrays (wrapped as
+`{"conversation": [...]}`), and already-valid JSONL. A directory input is
+walked recursively and mirrored under the output directory.
 
 ### 3. `convert` — adapter + emitter pipeline
 

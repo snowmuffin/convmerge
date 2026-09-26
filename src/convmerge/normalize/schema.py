@@ -123,13 +123,24 @@ def _profile_field(
     examples: list[Any] = []
     child_dicts: list[dict[str, Any]] = []
     list_item_dicts: list[dict[str, Any]] = []
+    element_types: Counter[str] = Counter()
+    element_examples: list[Any] = []
 
     for v in values:
         types[_type_name(v)] += 1
         if isinstance(v, dict):
             child_dicts.append(v)
         elif isinstance(v, list):
-            list_item_dicts.extend(item for item in v if isinstance(item, dict))
+            for item in v:
+                element_types[_type_name(item)] += 1
+                if isinstance(item, dict):
+                    list_item_dicts.append(item)
+                elif isinstance(item, list):
+                    continue
+                elif item is not None and len(element_examples) < max_examples:
+                    ex = _example(item)
+                    if ex not in element_examples:
+                        element_examples.append(ex)
         elif v is not None and len(examples) < max_examples:
             ex = _example(v)
             if ex not in examples:
@@ -142,6 +153,12 @@ def _profile_field(
     }
     if examples:
         profile["examples"] = examples
+    if element_types:
+        # Element-level view of list fields, including lists of scalars or of
+        # lists (e.g. turns stored as bare strings), which ``items`` omits.
+        profile["element_types"] = dict(element_types)
+    if element_examples:
+        profile["element_examples"] = element_examples
     if child_dicts:
         profile["fields"] = _profile_records(child_dicts, max_examples=max_examples)
     if list_item_dicts:

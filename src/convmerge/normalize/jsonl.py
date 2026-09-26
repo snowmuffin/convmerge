@@ -13,7 +13,12 @@ from convmerge.lfs import ensure_not_lfs_pointer
 
 logger = logging.getLogger(__name__)
 
-JSONLShape = Literal["jsonl", "single_line", "json_array", "invalid", "empty"]
+JSONLShape = Literal["jsonl", "jsonl_of_arrays", "single_line", "json_array", "invalid", "empty"]
+
+# Key a top-level JSON array record is wrapped under, so that a "one
+# conversation (list of turns) per line" file becomes object records the
+# chat adapter reads (its default conversation keys include this one).
+DEFAULT_ARRAY_KEY = "conversation"
 
 # Bytes scanned from the head of a file to decide its shape without loading everything.
 _HEAD_PEEK_BYTES = 65536
@@ -65,18 +70,25 @@ def load_jsonl(
     return out
 
 
-def iter_json_records(path: str | Path, *, max_rows: int | None = None) -> Iterator[dict[str, Any]]:
+def iter_json_records(
+    path: str | Path,
+    *,
+    max_rows: int | None = None,
+    array_key: str | None = DEFAULT_ARRAY_KEY,
+) -> Iterator[dict[str, Any]]:
     """Iterate dict records from a ``.json`` or ``.jsonl`` file.
 
     For ``.json`` the file is expected to contain a top-level array of objects
     (or a single object, which is yielded as one record). For ``.jsonl`` one
-    JSON object per line is expected.
+    JSON object per line is expected. Records that are themselves arrays are
+    yielded as ``{array_key: [...]}`` — the shape ``normalize`` writes — or
+    skipped when ``array_key`` is ``None``.
     """
     p = Path(path)
     ensure_not_lfs_pointer(p)
     suffix = p.suffix.lower()
     if suffix == ".jsonl":
-        yield from _iter_jsonl_records(p, max_rows=max_rows)
+        yield from _iter_jsonl_records(p, max_rows=max_rows, array_key=array_key)
         return
 
     if suffix == ".json":
@@ -86,7 +98,7 @@ def iter_json_records(path: str | Path, *, max_rows: int | None = None) -> Itera
             except json.JSONDecodeError:
                 # Fallback: treat the same file as JSONL (some datasets ship
                 # ``.json`` files that are really line-delimited).
-                yield from _iter_jsonl_records(p, max_rows=max_rows)
+                yield from _iter_jsonl_records(p, max_rows=max_rows, array_key=array_key)
                 return
         if isinstance(data, dict):
             yield data
@@ -95,18 +107,30 @@ def iter_json_records(path: str | Path, *, max_rows: int | None = None) -> Itera
             for i, item in enumerate(data):
                 if max_rows is not None and i >= max_rows:
                     return
-                if isinstance(item, dict):
-                    yield item
+                record = _as_record(item, array_key)
+                if record is not None:
+                    yield record
         return
 
     raise ValueError(f"Unsupported file extension for iter_json_records: {p.suffix!r}")
 
 
-def _iter_jsonl_records(p: Path, *, max_rows: int | None) -> Iterator[dict[str, Any]]:
+def _as_record(value: Any, array_key: str | None) -> dict[str, Any] | None:
+    if isinstance(value, dict):
+        return value
+    if isinstance(value, list) and array_key is not None:
+        return {array_key: value}
+    return None
+
+
+def _iter_jsonl_records(
+    p: Path, *, max_rows: int | None, array_key: str | None
+) -> Iterator[dict[str, Any]]:
     yielded = 0
     for line in iter_jsonl(p, on_error="raise"):
-        if isinstance(line.value, dict):
-            yield line.value
+        record = _as_record(line.value, array_key)
+        if record is not None:
+            yield record
             yielded += 1
             if max_rows is not None and yielded >= max_rows:
                 return
@@ -116,6 +140,8 @@ def detect_jsonl_shape(path: str | Path) -> JSONLShape:
     """Classify the layout of a ``.json`` / ``.jsonl`` file without loading it all.
 
     - ``jsonl``       : multiple non-empty lines, each a JSON object.
+    - ``jsonl_of_arrays`` : multiple non-empty lines, each a JSON array (e.g.
+      one conversation per line as a list of turns).
     - ``single_line`` : exactly one line containing one or more JSON objects
       (common for dumps that forgot to add newlines; e.g. ``{...}{...}``).
     - ``json_array``  : one line that parses as a JSON array.
@@ -134,10 +160,14 @@ def detect_jsonl_shape(path: str | Path) -> JSONLShape:
     # many lines, so detect this before the multi-line ``jsonl`` heuristic
     # below — otherwise an array like ``[\n  {...},\n  {...}\n]`` is mistaken
     # for line-delimited JSON and breaks normalization.
+    non_empty_lines = [line for line in text.splitlines() if line.strip()]
     if text.lstrip()[:1] == "[":
+        # ...unless the first line is a complete array and more lines follow:
+        # that is JSONL whose records are arrays.
+        if len(non_empty_lines) >= 2 and _is_json_array(non_empty_lines[0]):
+            return "jsonl_of_arrays"
         return "json_array"
 
-    non_empty_lines = [line for line in text.splitlines() if line.strip()]
     if len(non_empty_lines) >= 2:
         return "jsonl"
 
@@ -161,13 +191,24 @@ def detect_jsonl_shape(path: str | Path) -> JSONLShape:
     return "invalid"
 
 
-def normalize_to_jsonl(src: str | Path, dst: str | Path) -> int:
+def _is_json_array(line: str) -> bool:
+    try:
+        return isinstance(json.loads(line.strip().removeprefix("\ufeff")), list)
+    except json.JSONDecodeError:
+        return False
+
+
+def normalize_to_jsonl(
+    src: str | Path, dst: str | Path, *, array_key: str = DEFAULT_ARRAY_KEY
+) -> int:
     """Rewrite ``src`` into a well-formed JSONL file at ``dst``.
 
     Returns the number of records written. Handles:
 
     - Already-valid JSONL (copies while skipping empty lines).
-    - Top-level JSON arrays (``[ {...}, {...}, ... ]``).
+    - JSONL whose lines are arrays: each array becomes ``{array_key: [...]}``.
+    - Top-level JSON arrays (``[ {...}, {...}, ... ]``); array elements that
+      are themselves arrays are wrapped the same way.
     - Single-line concatenated objects (``{...}{...}{...}``).
     """
     src_p = Path(src)
@@ -182,8 +223,10 @@ def normalize_to_jsonl(src: str | Path, dst: str | Path) -> int:
 
     if shape == "jsonl":
         return _rewrite_jsonl(src_p, dst_p)
+    if shape == "jsonl_of_arrays":
+        return _rewrite_jsonl_of_arrays(src_p, dst_p, array_key)
     if shape == "json_array":
-        return _rewrite_json_array(src_p, dst_p)
+        return _rewrite_json_array(src_p, dst_p, array_key)
     if shape == "single_line":
         return _rewrite_single_line(src_p, dst_p)
     raise ValueError(f"Cannot normalize {src_p}: shape detected as {shape!r}")
@@ -215,15 +258,28 @@ def _sanitize_line(line: str, *, line_number: int) -> str:
     return line
 
 
-def _rewrite_json_array(src: Path, dst: Path) -> int:
-    with src.open(encoding="utf-8") as fin:
+def _wrap_array(value: Any, array_key: str) -> Any:
+    return {array_key: value} if isinstance(value, list) else value
+
+
+def _rewrite_jsonl_of_arrays(src: Path, dst: Path, array_key: str) -> int:
+    n = 0
+    with dst.open("w", encoding="utf-8") as fout:
+        for line in iter_jsonl(src, on_error="raise"):
+            fout.write(json.dumps(_wrap_array(line.value, array_key), ensure_ascii=False) + "\n")
+            n += 1
+    return n
+
+
+def _rewrite_json_array(src: Path, dst: Path, array_key: str = DEFAULT_ARRAY_KEY) -> int:
+    with src.open(encoding="utf-8-sig") as fin:
         data = json.load(fin)
     if not isinstance(data, list):
         raise ValueError(f"{src} is not a JSON array")
     n = 0
     with dst.open("w", encoding="utf-8") as fout:
         for obj in data:
-            fout.write(json.dumps(obj, ensure_ascii=False) + "\n")
+            fout.write(json.dumps(_wrap_array(obj, array_key), ensure_ascii=False) + "\n")
             n += 1
     return n
 
