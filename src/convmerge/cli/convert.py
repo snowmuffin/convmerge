@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 
 from convmerge.cli._common import add_progress_flag as _add_progress_flag
+from convmerge.cli._common import config_errors
 from convmerge.cli._common import positive_int as _positive_int
 from convmerge.convert import REPORT_VERSION, ConvertStats, convert_file
 
@@ -125,10 +126,7 @@ def _cmd_convert(args: argparse.Namespace) -> None:
             emit_overrides=_emit_overrides(args),
             preference=args.preference,
         )
-    except (ValueError, OSError) as e:
-        print(f"error: {e}", file=sys.stderr)
-        sys.exit(2)
-    except ImportError as e:
+    except config_errors() as e:
         print(f"error: {e}", file=sys.stderr)
         sys.exit(2)
     from convmerge.convert import InvalidExampleError
@@ -305,10 +303,7 @@ def _cmd_preset_validate(args: argparse.Namespace) -> None:
 
     try:
         validate_preset_file(args.path)
-    except (ValueError, OSError) as e:
-        print(f"error: {e}", file=sys.stderr)
-        sys.exit(1)
-    except ImportError as e:
+    except config_errors() as e:
         print(f"error: {e}", file=sys.stderr)
         sys.exit(1)
     print("ok", file=sys.stderr)

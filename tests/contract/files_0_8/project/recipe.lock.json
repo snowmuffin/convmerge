@@ -1,0 +1,222 @@
+{
+  "convmerge": "0.8.0",
+  "files": {
+    "build/alpaca/converted.jsonl": [
+      4499,
+      1790429992341313013,
+      "e5f93567add2c981c4cfdd04c4016315516202ceecdfd2e6f44834fda2165615"
+    ],
+    "build/chat/converted.jsonl": [
+      4304,
+      1790429992345150240,
+      "6b393172c815a6b3ac7daf1489f76509177924d5f2b93d8a81c3d34e2eaacb65"
+    ],
+    "build/chat/jsonl/sharegpt.jsonl": [
+      3812,
+      1790429992342968234,
+      "9b83a18b60964b855378909f5cc7b3b46a58375691d0b3b7201fe32a1ad8b606"
+    ],
+    "build/mixed.jsonl": [
+      6101,
+      1790429992348301589,
+      "73a1e6d998d973e57ce495bae63813bd697bdeffbf6243d9436f44b37a1fd42b"
+    ],
+    "data/alpaca.jsonl": [
+      2911,
+      1790429983023515239,
+      "58f658c237a34019e0d45da78ed695222e61f3e98e02aa42bbd87989bfd26a39"
+    ],
+    "data/sharegpt.json": [
+      5420,
+      1790429983024048705,
+      "f235209eb64864a7782913669ba089f58bd784c4e078f356e76d89fc0c0b770e"
+    ],
+    "preset.yaml": [
+      42,
+      1790429983024119502,
+      "c5769588f1aaad56946fa55ebedf2c31f044f83fb96bf89b8be6ea3a42e14cb5"
+    ],
+    "train/mixed.jsonl": [
+      6101,
+      1790429992350099446,
+      "73a1e6d998d973e57ce495bae63813bd697bdeffbf6243d9436f44b37a1fd42b"
+    ]
+  },
+  "recipe": "recipe.yaml",
+  "steps": {
+    "alpaca.convert": {
+      "convmerge": "0.8.0",
+      "finished_at": "2026-09-26T13:39:52.341883+00:00",
+      "inputs": {
+        "data/alpaca.jsonl": "58f658c237a34019e0d45da78ed695222e61f3e98e02aa42bbd87989bfd26a39"
+      },
+      "kind": "convert",
+      "options": {
+        "adapter_kwargs": null,
+        "emit": {},
+        "format": "messages",
+        "from": "alpaca",
+        "on_invalid": "drop",
+        "preference": null,
+        "preset": null,
+        "workers": null
+      },
+      "output": "e5f93567add2c981c4cfdd04c4016315516202ceecdfd2e6f44834fda2165615",
+      "report": {
+        "seconds": 0.002,
+        "stats": {
+          "blank": 0,
+          "drop_lines": {
+            "no_user": [
+              42
+            ]
+          },
+          "drop_reasons": {
+            "no_user": 1
+          },
+          "dropped": 1,
+          "first_invalid_line": null,
+          "invalid_json": 0,
+          "kept_invalid": 0,
+          "lines_read": 42,
+          "lossy": {},
+          "no_example": 0,
+          "non_object": 0,
+          "reason_descriptions": {
+            "no_user": "there is no user message"
+          },
+          "skipped_lines": 0,
+          "written": 41
+        }
+      }
+    },
+    "chat.convert": {
+      "convmerge": "0.8.0",
+      "finished_at": "2026-09-26T13:39:52.346845+00:00",
+      "inputs": {
+        "build/chat/jsonl": "dir:a2dbc66cd7e84dcc8d6dad4ec366e00f7129199079a8fe2c3ae664dace2c2b99",
+        "preset.yaml": "c5769588f1aaad56946fa55ebedf2c31f044f83fb96bf89b8be6ea3a42e14cb5"
+      },
+      "kind": "convert",
+      "options": {
+        "adapter_kwargs": null,
+        "emit": {
+          "keep_meta": [
+            "id"
+          ]
+        },
+        "format": null,
+        "from": null,
+        "on_invalid": "drop",
+        "preference": null,
+        "preset": "preset.yaml",
+        "workers": null
+      },
+      "output": "6b393172c815a6b3ac7daf1489f76509177924d5f2b93d8a81c3d34e2eaacb65",
+      "report": {
+        "seconds": 0.002,
+        "stats": {
+          "blank": 0,
+          "drop_lines": {},
+          "drop_reasons": {},
+          "dropped": 0,
+          "first_invalid_line": null,
+          "invalid_json": 0,
+          "kept_invalid": 0,
+          "lines_read": 30,
+          "lossy": {},
+          "no_example": 0,
+          "non_object": 0,
+          "reason_descriptions": {},
+          "skipped_lines": 0,
+          "written": 30
+        }
+      }
+    },
+    "chat.normalize": {
+      "convmerge": "0.8.0",
+      "finished_at": "2026-09-26T13:39:52.343579+00:00",
+      "inputs": {
+        "data/sharegpt.json": "f235209eb64864a7782913669ba089f58bd784c4e078f356e76d89fc0c0b770e"
+      },
+      "kind": "normalize",
+      "options": {
+        "array_key": "conversation"
+      },
+      "output": "dir:a2dbc66cd7e84dcc8d6dad4ec366e00f7129199079a8fe2c3ae664dace2c2b99",
+      "report": {
+        "seconds": 0.001,
+        "stats": {
+          "files": 1,
+          "records": 30
+        }
+      }
+    },
+    "dedupe": {
+      "convmerge": "0.8.0",
+      "finished_at": "2026-09-26T13:39:52.350340+00:00",
+      "inputs": {
+        "build/mixed.jsonl": "73a1e6d998d973e57ce495bae63813bd697bdeffbf6243d9436f44b37a1fd42b"
+      },
+      "kind": "dedupe",
+      "options": {
+        "algorithm": "md5",
+        "keys": null
+      },
+      "output": "73a1e6d998d973e57ce495bae63813bd697bdeffbf6243d9436f44b37a1fd42b",
+      "report": {
+        "seconds": 0.001,
+        "stats": {
+          "duplicates": 0,
+          "first_invalid_line": null,
+          "invalid_json": 0,
+          "kept": 50,
+          "total": 50
+        }
+      }
+    },
+    "mix": {
+      "convmerge": "0.8.0",
+      "finished_at": "2026-09-26T13:39:52.348585+00:00",
+      "inputs": {
+        "build/alpaca/converted.jsonl": "e5f93567add2c981c4cfdd04c4016315516202ceecdfd2e6f44834fda2165615",
+        "build/chat/converted.jsonl": "6b393172c815a6b3ac7daf1489f76509177924d5f2b93d8a81c3d34e2eaacb65"
+      },
+      "kind": "mix",
+      "options": {
+        "oversample": false,
+        "sampler": "v2",
+        "seed": 11,
+        "total": 50,
+        "weights": {
+          "alpaca": 2.0,
+          "chat": 1.0
+        }
+      },
+      "output": "73a1e6d998d973e57ce495bae63813bd697bdeffbf6243d9436f44b37a1fd42b",
+      "report": {
+        "seconds": 0.001,
+        "stats": {
+          "sampler": "v2",
+          "seed": 11,
+          "sources": {
+            "alpaca": {
+              "available": 41,
+              "requested": 33,
+              "weight": 0.6666666666666666,
+              "written": 33
+            },
+            "chat": {
+              "available": 30,
+              "requested": 17,
+              "weight": 0.3333333333333333,
+              "written": 17
+            }
+          },
+          "total_written": 50
+        }
+      }
+    }
+  },
+  "version": 1
+}
