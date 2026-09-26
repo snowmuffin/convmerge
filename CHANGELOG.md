@@ -7,20 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Changed
+## [0.6.0] - 2026-09-26
 
-- `chat` / `auto` flat Q&A records: `problem` and `query` count as the
-  question, and `completion` / `solution` as the answer. Output keys are tried
-  in the order `output`, `response`, `completion`, `solution`, `answer`, so a
-  full `solution` is kept instead of a short final `answer` (e.g. LIMO,
-  NuminaMath), and `problem`/`solution` (MATH) and `query`/`response`
-  (MetaMathQA) records are no longer dropped. Found while validating 0.6.0rc1
-  on real datasets.
-
-## [0.6.0rc1] - 2026-09-26
-
-Release candidate: `pip install convmerge==0.6.0rc1`. Output changes are
-listed in [docs/migration-0.6.md](docs/migration-0.6.md).
+Output changes and how to get the 0.5 behavior back are listed in
+[docs/migration-0.6.md](docs/migration-0.6.md). Validated as 0.6.0rc1 on
+real datasets (Stanford Alpaca, KoAlpaca, LLaMA-Factory tool-calling and
+multimodal demos, FastChat, OpenAI Cookbook samples) before release.
 
 ### Added
 
@@ -60,6 +52,13 @@ listed in [docs/migration-0.6.md](docs/migration-0.6.md).
 - **Breaking:** `alpaca` output drops examples with tool calls or media
   instead of reducing them to text.
 - Adapters skip blank turns (such as an empty system prompt).
+- `chat` / `auto` flat Q&A records: `problem` and `query` count as the
+  question, and `completion` / `solution` as the answer. Output keys are tried
+  in the order `output`, `response`, `completion`, `solution`, `answer`, so a
+  full `solution` is kept instead of a short final `answer` (e.g. LIMO,
+  NuminaMath), and `problem`/`solution` (MATH) and `query`/`response`
+  (MetaMathQA) records are no longer dropped. Found while validating
+  0.6.0rc1 on real datasets.
 - Diagnostics go to stderr only (`load_jsonl` logs via the `convmerge`
   logger; `fetch` progress lines go to stderr).
 - `convert` is about 1.5x slower on plain chat data than 0.5.1 because every
