@@ -28,3 +28,18 @@ def ensure_not_lfs_pointer(path: str | Path) -> None:
             f"{source} is a Git LFS pointer, not the underlying dataset blob; "
             "fetch this source with mode: clone and lfs: true"
         )
+
+
+def parse_lfs_pointer(data: bytes) -> tuple[str, int]:
+    """Return ``(oid, size)`` from a pointer file's text (``oid sha256:...``)."""
+    oid: str | None = None
+    size: int | None = None
+    for line in data.decode("utf-8", errors="replace").splitlines():
+        key, _, value = line.strip().partition(" ")
+        if key == "oid" and value.startswith("sha256:"):
+            oid = value[len("sha256:") :]
+        elif key == "size" and value.isdigit():
+            size = int(value)
+    if not oid or size is None:
+        raise LfsPointerError("malformed Git LFS pointer (missing oid or size)")
+    return oid, size

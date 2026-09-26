@@ -615,6 +615,14 @@ def _add_fetch(sub: argparse._SubParsersAction) -> None:
         action="store_true",
         help="Re-download even when the output already exists",
     )
+    p.add_argument(
+        "--max-rows",
+        type=int,
+        default=None,
+        metavar="N",
+        help="Fetch only the first N rows: HF streams them, raw/tree line files stop "
+        "after N lines, LFS files are resolved without cloning (not for mode: clone)",
+    )
     # Shortcut-only flags (ignored in manifest mode)
     p.add_argument("--ext", nargs="+", default=None, help="GitHub URL mode: extension filter")
     p.add_argument("--mode", choices=("tree", "clone"), default=None)
@@ -656,6 +664,7 @@ def _cmd_fetch(args: argparse.Namespace) -> None:
         only=args.only,
         hf_token=args.hf_token,
         github_token=args.github_token,
+        max_rows=args.max_rows,
     )
     # Propagate failure when requested.
     if manifest.defaults.on_error == "fail" and result.failed:
@@ -681,6 +690,7 @@ def _cmd_fetch_shortcut(args: argparse.Namespace, source: str) -> None:
             config=args.config,
             split=args.split,
             token=args.hf_token,
+            max_rows=args.max_rows,
         )
         print(f"[ok] {dataset_id} -> {dst}", file=sys.stderr)
         return
@@ -700,8 +710,11 @@ def _cmd_fetch_shortcut(args: argparse.Namespace, source: str) -> None:
             if lowered.endswith(s):
                 suffix = s
                 break
-        dst = out_root / f"{name}{suffix}"
-        download_raw_file(source, dst, token=args.github_token)
+        # The URL's file name already ends with the suffix; don't add it twice.
+        stem = name[: -len(suffix)] if name.endswith(suffix) else name
+        dst = out_root / f"{stem or 'fetch'}{suffix}"
+        rows = None if suffix in (".json", ".json.gz") else args.max_rows
+        download_raw_file(source, dst, token=args.github_token, max_rows=rows)
         print(f"[ok] {redact_url(source)} -> {dst}", file=sys.stderr)
         return
 
@@ -715,6 +728,7 @@ def _cmd_fetch_shortcut(args: argparse.Namespace, source: str) -> None:
                 dst,
                 ext=tuple(args.ext or ()),
                 token=args.github_token,
+                max_rows=args.max_rows,
             )
         print(f"[ok] {redact_url(source)} -> {dst}", file=sys.stderr)
         return
