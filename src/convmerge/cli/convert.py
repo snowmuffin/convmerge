@@ -41,7 +41,8 @@ def _add_convert(sub: argparse._SubParsersAction) -> None:
         dest="output_format",
         default=None,
         metavar="FORMAT",
-        help="Output format: messages, alpaca (optional if --preset sets it)",
+        help="Output format: messages, alpaca, preference (DPO pairs); "
+        "optional if --preset sets it",
     )
     p.add_argument(
         "--adapter-kwargs",
@@ -57,8 +58,8 @@ def _add_convert(sub: argparse._SubParsersAction) -> None:
         "--preference",
         choices=("chosen", "rejected"),
         default=None,
-        help="Preference (DPO / reward) data: train on the chosen (or rejected) "
-        "answer instead of dropping the example",
+        help="Preference (DPO / reward) data as SFT: train on the chosen (or rejected) "
+        "answer. For DPO pairs use --format preference instead",
     )
     p.add_argument(
         "--workers",
@@ -192,6 +193,21 @@ def _print_drop_summary(stats: ConvertStats, *, kept: bool = False) -> None:
         print(f"warning: kept {stats.kept_invalid:,} invalid examples ({reasons})", file=sys.stderr)
     if stats.dropped:
         print(f"warning: dropped {stats.dropped:,} examples ({reasons})", file=sys.stderr)
+    hints = [_DROP_HINTS[r] for r in sorted(stats.drop_reasons) if r in _DROP_HINTS]
+    for hint in hints:
+        print(f"hint: {hint}", file=sys.stderr)
+
+
+_DROP_HINTS = {
+    "preference_record": (
+        "preference_record: these are chosen/rejected pairs; use --format preference "
+        "for DPO data, or --preference chosen to train on the chosen answers"
+    ),
+    "unrepresentable_not_preference": (
+        "unrepresentable_not_preference: --format preference writes only records "
+        "that have both a chosen and a rejected answer"
+    ),
+}
 
 
 def _print_lossy_summary(stats: ConvertStats) -> None:

@@ -206,9 +206,67 @@ def _alpaca_with_history(turns: list[ChatMessage]) -> dict[str, Any]:
     return {"instruction": last_user, "input": "", "output": last_asst, "history": pairs}
 
 
+def emit_preference(
+    example: TrainingExample, *, options: EmitOptions | None = None
+) -> dict[str, Any]:
+    """Preference pairs for DPO-style training (TRL conversational format).
+
+    ``{"prompt": [...], "chosen": [...], "rejected": [...]}``: the turns the
+    chosen and rejected conversations share are the prompt, and each side
+    keeps its own continuation, which must start with an assistant turn.
+    ``tools`` is added when present. Examples that are not pairs, or whose
+    two sides are identical or have no answer after the prompt, raise
+    :class:`UnrepresentableExample`.
+    """
+    opts = options or EmitOptions()
+    chosen, rejected = example.messages, example.rejected
+    if rejected is None:
+        raise UnrepresentableExample("unrepresentable_not_preference")
+    n = 0
+    while n < len(chosen) and n < len(rejected) and chosen[n] == rejected[n]:
+        n += 1
+    prompt, chosen_tail, rejected_tail = chosen[:n], chosen[n:], rejected[n:]
+    if not chosen_tail and not rejected_tail:
+        raise UnrepresentableExample("unrepresentable_identical_pair")
+    if (
+        not chosen_tail
+        or not rejected_tail
+        or chosen_tail[0].role != "assistant"
+        or rejected_tail[0].role != "assistant"
+        or not any(m.role == "user" for m in prompt)
+        or not _has_answer(rejected_tail)
+    ):
+        raise UnrepresentableExample("unrepresentable_incomplete_pair")
+    args = opts.tool_arguments
+    row: dict[str, Any] = {
+        "prompt": [_message_dict(m, args) for m in prompt],
+        "chosen": [_message_dict(m, args) for m in chosen_tail],
+        "rejected": [_message_dict(m, args) for m in rejected_tail],
+    }
+    if example.tools:
+        row["tools"] = example.tools
+    return _with_meta(row, example, options)
+
+
+# Asks the adapter to keep both answers of preference records (see
+# :func:`convmerge.adapters.preference.iter_pairs`).
+emit_preference.preference_pairs = True  # type: ignore[attr-defined]
+
+
+def _has_answer(turns: list[ChatMessage]) -> bool:
+    return any(m.role == "assistant" and (m.text.strip() or m.tool_calls) for m in turns)
+
+
+def wants_pairs(output_format: str) -> bool:
+    """Whether ``output_format`` consumes chosen/rejected pairs."""
+    fn = EMITTERS.get(output_format)
+    return bool(getattr(fn, "preference_pairs", False))
+
+
 EMITTERS: dict[str, EmitterFn] = {
     "messages": emit_messages,
     "alpaca": emit_alpaca,
+    "preference": emit_preference,
 }
 BUILTIN_FORMATS = frozenset(EMITTERS)
 
@@ -237,6 +295,8 @@ def get_emitter(
         return partial(emit_messages, options=options) if options else emit_messages
     if fn is emit_alpaca:
         return partial(emit_alpaca, options=options, notes=notes)
+    if fn is emit_preference:
+        return partial(emit_preference, options=options) if options else emit_preference
     # Plugin formats get the options only if they declare an ``options`` parameter.
     if options is not None and "options" in inspect.signature(fn).parameters:
         return partial(fn, options=options)  # type: ignore[call-arg]

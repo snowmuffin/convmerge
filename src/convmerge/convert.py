@@ -11,9 +11,15 @@ from typing import TYPE_CHECKING, Literal, TextIO
 from convmerge._deprecation import deprecated_names
 from convmerge.adapter_resolve import resolve_adapter
 from convmerge.config import AdapterOptions, ConvertConfig
-from convmerge.emitters import EmitOptions, EmitterFn, UnrepresentableExample, get_emitter
+from convmerge.emitters import (
+    EmitOptions,
+    EmitterFn,
+    UnrepresentableExample,
+    get_emitter,
+    wants_pairs,
+)
 from convmerge.io import ReadStats, iter_jsonl
-from convmerge.validate import validate_example
+from convmerge.validate import ISSUES, validate_example
 
 if TYPE_CHECKING:
     from convmerge.adapters import AdapterFn
@@ -112,7 +118,22 @@ class ConvertStats:
 REPORT_VERSION = 1
 
 
+_UNREPRESENTABLE: dict[str, str] = {
+    "unrepresentable_not_preference": (
+        "not a chosen/rejected pair (the preference format needs one)"
+    ),
+    "unrepresentable_identical_pair": "the chosen and rejected conversations are identical",
+    "unrepresentable_incomplete_pair": (
+        "the pair has no user prompt, or one side has no assistant answer after the prompt"
+    ),
+}
+
+
 def _describe_extra(reason: str) -> str:
+    if reason in ISSUES:
+        return ISSUES[reason]
+    if reason in _UNREPRESENTABLE:
+        return _UNREPRESENTABLE[reason]
     kind, _, media = reason.partition("_")
     if kind == "unresolved" and media:
         return f"a {media} placeholder has no matching reference in the record"
@@ -167,9 +188,9 @@ def convert_file(
 
     if on_invalid not in ("drop", "keep", "fail"):
         raise ValueError(f"on_invalid must be 'drop', 'keep', or 'fail', got {on_invalid!r}")
-    adapter = resolve_adapter(adapter_name, adapter_options)
     notes: list[str] = []
     emitter = get_emitter(output_format, options=emit_options, notes=notes)
+    adapter = resolve_adapter(adapter_name, adapter_options, pairs=wants_pairs(output_format))
 
     st = stats if stats is not None else ConvertStats()
     reporter = ProgressReporter(f"convert {input_path.name}", enabled=progress)
@@ -295,9 +316,10 @@ _WORKER: dict[str, object] = {}
 def _worker_init(spec: tuple) -> None:
     adapter_name, adapter_options, output_format, emit_options, on_invalid = spec
     notes: list[str] = []
+    emitter = get_emitter(output_format, options=emit_options, notes=notes)
     _WORKER.update(
-        adapter=resolve_adapter(adapter_name, adapter_options),
-        emitter=get_emitter(output_format, options=emit_options, notes=notes),
+        adapter=resolve_adapter(adapter_name, adapter_options, pairs=wants_pairs(output_format)),
+        emitter=emitter,
         notes=notes,
         on_invalid=on_invalid,
     )

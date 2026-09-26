@@ -24,7 +24,7 @@ class SharegptAdapterOptions(turn_mode: 'str | None' = None) -> None
 class ToolCall(name: 'str', arguments: 'str' = '{}', id: 'str | None' = None) -> None
     def arguments_object(self) -> 'Any'
     @classmethod from_any(cls, name: 'str', arguments: 'Any', id: 'str | None' = None) -> 'ToolCall'
-class TrainingExample(messages: 'list[ChatMessage]' = <factory>, meta: 'dict[str, object]' = <factory>, tools: 'list[dict[str, Any]] | None' = None, issues: 'list[str]' = <factory>) -> None
+class TrainingExample(messages: 'list[ChatMessage]' = <factory>, meta: 'dict[str, object]' = <factory>, tools: 'list[dict[str, Any]] | None' = None, issues: 'list[str]' = <factory>, rejected: 'list[ChatMessage] | None' = None) -> None
 class UnrepresentableExample(ValueError)(reason: 'str', message: 'str' = '')
 __version__: str
 def analyze_turn_distribution(path: 'str | Path') -> 'dict[str, Any]'
