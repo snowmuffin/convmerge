@@ -39,6 +39,8 @@ def main(argv: list[str] | None = None) -> None:
             _cmd_preset_init(args)
         else:
             _cmd_preset_validate(args)
+    elif args.command == "formats":
+        _cmd_formats(args)
     elif args.command == "validate":
         _cmd_validate(args)
     elif args.command == "inspect":
@@ -99,6 +101,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
     _add_convert(subparsers)
     _add_validate(subparsers)
+    _add_formats(subparsers)
     _add_inspect(subparsers)
     _add_normalize(subparsers)
     _add_dedupe(subparsers)
@@ -310,6 +313,24 @@ def _write_report(path: Path, stats: ConvertStats) -> None:
         json.dumps(stats.to_report(), ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
     )
     print(f"report: {path}", file=sys.stderr)
+
+
+def _add_formats(sub: argparse._SubParsersAction) -> None:
+    sub.add_parser(
+        "formats",
+        help="List source adapters (--from) and output formats (--format), including plugins",
+    )
+
+
+def _cmd_formats(args: argparse.Namespace) -> None:
+    from convmerge.adapters import BUILTIN_ADAPTERS, available_adapters
+    from convmerge.emitters import BUILTIN_FORMATS, available_formats
+
+    def fmt(names: list[str], builtin: frozenset[str]) -> str:
+        return ", ".join(n if n in builtin else f"{n} (plugin)" for n in names)
+
+    print(f"adapters (--from):  {fmt(available_adapters(), BUILTIN_ADAPTERS)}")
+    print(f"formats (--format): {fmt(available_formats(), BUILTIN_FORMATS)}")
 
 
 def _add_validate(sub: argparse._SubParsersAction) -> None:

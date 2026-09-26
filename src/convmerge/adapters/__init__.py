@@ -9,6 +9,7 @@ from convmerge.adapters.alpaca import iter_from_alpaca_line
 from convmerge.adapters.chat import iter_from_chat_line
 from convmerge.adapters.sharegpt import iter_from_sharegpt_line
 from convmerge.models import TrainingExample
+from convmerge.plugins import ADAPTER_GROUP, load_entry_points
 
 AdapterFn = Callable[[dict[str, Any]], Iterator[TrainingExample]]
 
@@ -21,7 +22,31 @@ ADAPTERS: dict[str, AdapterFn] = {
 }
 
 
+BUILTIN_ADAPTERS = frozenset(ADAPTERS)
+
+
+def register_adapter(name: str, fn: AdapterFn, *, replace: bool = False) -> None:
+    """Make ``fn`` available as ``--from name``.
+
+    ``fn`` takes one raw record (``dict``) and yields :class:`TrainingExample`
+    objects. Registering an existing name raises unless ``replace=True``.
+    For ``convert --workers``, register at import time of your module or use
+    the ``convmerge.adapters`` entry point (see :mod:`convmerge.plugins`).
+    """
+    if not replace and name in ADAPTERS:
+        raise ValueError(f"adapter {name!r} is already registered (pass replace=True)")
+    ADAPTERS[name] = fn
+
+
+def available_adapters() -> list[str]:
+    """Built-in, registered, and entry-point adapter names."""
+    load_entry_points(ADAPTER_GROUP, ADAPTERS)
+    return sorted(ADAPTERS)
+
+
 def get_adapter(name: str) -> AdapterFn:
+    if name not in ADAPTERS:
+        load_entry_points(ADAPTER_GROUP, ADAPTERS)
     if name not in ADAPTERS:
         known = ", ".join(sorted(ADAPTERS))
         raise ValueError(f"Unknown adapter {name!r}. Choose one of: {known}")
