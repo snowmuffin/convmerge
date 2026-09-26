@@ -149,3 +149,30 @@ def test_no_stale_expected_files() -> None:
     for p in (GOLDEN / "expected").iterdir():
         case = p.name.removesuffix(".stats.json").removesuffix(".jsonl")
         assert case in known, f"stale golden file: {p.name}"
+
+
+@pytest.mark.parametrize("case", sorted(CASES))
+def test_golden_parallel_matches(case: str, tmp_path: Path, monkeypatch) -> None:
+    """--workers gives byte-identical output and stats, even with tiny chunks."""
+    import convmerge.convert as convmod
+
+    if UPDATE:
+        pytest.skip("regenerating")
+    monkeypatch.setattr(convmod, "_CHUNK_LINES", 2)
+    fixture, adapter, fmt, options = CASES[case]
+    kwargs = dict(options or {})
+    emit = kwargs.pop("emit", None)
+    cfg = build_convert_config(
+        adapter=adapter,
+        output_format=fmt,
+        adapter_kwargs_json=json.dumps(kwargs) if kwargs else None,
+        emit_overrides=emit,
+    )
+    out = tmp_path / "out.jsonl"
+    stats = ConvertStats()
+    convert_with_config(GOLDEN / "inputs" / f"{fixture}.jsonl", out, cfg, stats=stats, workers=3)
+    assert out.read_text(encoding="utf-8") == (GOLDEN / "expected" / f"{case}.jsonl").read_text(
+        encoding="utf-8"
+    )
+    stats_text = json.dumps(dataclasses.asdict(stats), indent=2, sort_keys=True) + "\n"
+    assert stats_text == (GOLDEN / "expected" / f"{case}.stats.json").read_text(encoding="utf-8")

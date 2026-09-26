@@ -151,6 +151,14 @@ def _add_convert(sub: argparse._SubParsersAction) -> None:
     )
     p.add_argument("--encoding", default="utf-8", help="File encoding (default: utf-8)")
     p.add_argument(
+        "--workers",
+        type=int,
+        default=1,
+        metavar="N",
+        help="Convert with N processes (default 1). Output order and stats are "
+        "identical to a single-process run",
+    )
+    p.add_argument(
         "--on-invalid",
         choices=("drop", "keep", "fail"),
         default="drop",
@@ -229,6 +237,7 @@ def _cmd_convert(args: argparse.Namespace) -> None:
             stats=stats,
             on_invalid=args.on_invalid,
             emit_options=cfg.emit_options,
+            workers=max(1, args.workers),
         )
     except InvalidExampleError as e:
         print(f"error: {e} (use --on-invalid drop or keep to continue)", file=sys.stderr)
