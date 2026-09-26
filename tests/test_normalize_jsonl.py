@@ -159,3 +159,11 @@ def test_normalize_pretty_printed_json_array(tmp_path: Path) -> None:
 def test_detect_shape_array_with_leading_whitespace(tmp_path: Path) -> None:
     p = _write(tmp_path / "a.json", '  \n[\n  {"a": 1}\n]\n')
     assert detect_jsonl_shape(p) == "json_array"
+
+
+def test_is_lfs_pointer_only_inspects_head() -> None:
+    from convmerge.lfs import is_lfs_pointer
+
+    assert is_lfs_pointer(b"version https://git-lfs.github.com/spec/v1\noid sha256:x\n")
+    assert not is_lfs_pointer(b'{"a": 1}\n' * 1000)
+    assert not is_lfs_pointer(b"")

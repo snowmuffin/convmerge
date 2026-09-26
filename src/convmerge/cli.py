@@ -12,6 +12,9 @@ from convmerge.convert import convert_file
 
 FETCH_FILE_EXTENSIONS = (".parquet", ".json", ".jsonl")
 
+# Sidecars convmerge itself writes next to data files; never treat them as data.
+SIDECAR_SUFFIXES = (".fetch.json", ".mix.json")
+
 _INSTALL_EXTRAS_EPILOG = """
 optional dependencies (pip install "convmerge[EXTRA]"):
   (none)     convert, dedupe, turns on JSONL; normalize on .json/.jsonl only
@@ -280,6 +283,11 @@ def _cmd_normalize(args: argparse.Namespace) -> None:
         if not in_path.is_file():
             continue
         if in_path.suffix.lower() not in FETCH_FILE_EXTENSIONS:
+            continue
+        if in_path.name.lower().endswith(SIDECAR_SUFFIXES):
+            continue
+        if any(part.startswith(".") for part in in_path.relative_to(src).parts):
+            # Hidden entries such as a cloned repo's .git directory.
             continue
         rel = in_path.relative_to(src).with_suffix(".jsonl")
         out_path = dst / rel

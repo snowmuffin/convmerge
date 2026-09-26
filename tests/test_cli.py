@@ -38,6 +38,20 @@ def test_cli_normalize_on_json_array(tmp_path: Path) -> None:
     assert dst.read_text(encoding="utf-8").count("\n") == 2
 
 
+def test_cli_normalize_dir_skips_sidecars_and_hidden(tmp_path: Path) -> None:
+    raw = tmp_path / "raw"
+    (raw / "repo" / ".git").mkdir(parents=True)
+    (raw / "data.jsonl").write_text('{"a": 1}\n', encoding="utf-8")
+    (raw / "data.jsonl.fetch.json").write_text('{"version": 1}', encoding="utf-8")
+    (raw / "train.mix.json").write_text('{"version": 1}', encoding="utf-8")
+    (raw / "repo" / ".git" / "meta.json").write_text('{"x": 1}', encoding="utf-8")
+    (raw / "repo" / "rows.json").write_text('[{"b": 2}]', encoding="utf-8")
+    out = tmp_path / "out"
+    main(["normalize", "--input", str(raw), "--output", str(out)])
+    produced = sorted(p.relative_to(out).as_posix() for p in out.rglob("*") if p.is_file())
+    assert produced == ["data.jsonl", "repo/rows.jsonl"]
+
+
 def test_cli_dedupe(tmp_path: Path) -> None:
     src = tmp_path / "in.jsonl"
     src.write_text('{"x":1}\n{"x":1}\n{"x":2}\n', encoding="utf-8")
