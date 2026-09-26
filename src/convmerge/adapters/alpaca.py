@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 from typing import Any
 
-from convmerge.adapters._common import attach_media, with_system
+from convmerge.adapters._common import attach_media, source_meta, with_system
 from convmerge.models import ChatMessage, TrainingExample
 
 
@@ -39,7 +39,9 @@ def iter_from_alpaca_line(record: dict[str, Any]) -> Iterator[TrainingExample]:
 
     messages = with_system(messages, record)
     messages, issues = attach_media(messages, record)
-    yield TrainingExample(messages=messages, meta={"source": "alpaca"}, issues=issues)
+    yield TrainingExample(
+        messages=messages, meta=source_meta(record, {"source": "alpaca"}), issues=issues
+    )
 
 
 def _text(v: Any) -> str:

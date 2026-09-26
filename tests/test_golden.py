@@ -26,7 +26,8 @@ from convmerge.convert import ConvertStats, convert_with_config
 GOLDEN = Path(__file__).parent / "golden"
 UPDATE = os.environ.get("CONVMERGE_UPDATE_GOLDEN", "").strip().lower() in {"1", "true", "yes"}
 
-# case id -> (input fixture, adapter, output format, --adapter-kwargs or None)
+# case id -> (input fixture, adapter, output format, options or None). Options
+# hold --adapter-kwargs; an "emit" entry holds EmitOptions overrides.
 CASES: dict[str, tuple[str, str, str, dict | None]] = {
     "openai_chat.chat.messages": ("openai_chat", "chat", "messages", None),
     "openai_chat.chat.alpaca": ("openai_chat", "chat", "alpaca", None),
@@ -70,15 +71,42 @@ CASES: dict[str, tuple[str, str, str, dict | None]] = {
         {"chat": {"pairwise_mode": "both"}},
     ),
     "messy.chat.messages": ("messy", "chat", "messages", None),
+    "sharegpt_basic.sharegpt-full.alpaca-history": (
+        "sharegpt_basic",
+        "sharegpt",
+        "alpaca",
+        {"emit": {"alpaca_multiturn": "history"}},
+    ),
+    "openai_chat.chat.alpaca-drop": (
+        "openai_chat",
+        "chat",
+        "alpaca",
+        {"emit": {"alpaca_multiturn": "drop"}},
+    ),
+    "sharegpt_multimodal.sharegpt-full.messages-meta": (
+        "sharegpt_multimodal",
+        "sharegpt",
+        "messages",
+        {"emit": {"keep_meta": True}},
+    ),
+    "sharegpt_tools.sharegpt-full.messages-objectargs": (
+        "sharegpt_tools",
+        "sharegpt",
+        "messages",
+        {"emit": {"tool_arguments": "object"}},
+    ),
 }
 
 
 def _run(case: str, tmp_path: Path) -> tuple[str, dict]:
-    fixture, adapter, fmt, kwargs = CASES[case]
+    fixture, adapter, fmt, options = CASES[case]
+    kwargs = dict(options or {})
+    emit = kwargs.pop("emit", None)
     cfg = build_convert_config(
         adapter=adapter,
         output_format=fmt,
         adapter_kwargs_json=json.dumps(kwargs) if kwargs else None,
+        emit_overrides=emit,
     )
     out = tmp_path / "out.jsonl"
     stats = ConvertStats()

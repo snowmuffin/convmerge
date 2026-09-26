@@ -13,6 +13,7 @@
   "invalid_json": 1,
   "kept_invalid": 0,
   "lines_read": 8,
+  "lossy": {},
   "no_example": 2,
   "non_object": 2,
   "written": 1

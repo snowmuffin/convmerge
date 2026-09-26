@@ -26,7 +26,7 @@ import logging
 from collections.abc import Iterator
 from typing import Any
 
-from convmerge.adapters._common import build_example, coerce_messages
+from convmerge.adapters._common import build_example, coerce_messages, source_meta
 from convmerge.adapters.alpaca import iter_from_alpaca_line
 from convmerge.models import ChatMessage, TrainingExample
 
@@ -118,7 +118,7 @@ def iter_from_chat_line(
             )
         yield TrainingExample(
             messages=[ChatMessage(role="assistant", content=txt.strip())],
-            meta={"source": "chat:text"},
+            meta=source_meta(record, {"source": "chat:text"}),
         )
         return
 

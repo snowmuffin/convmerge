@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 from typing import Any
 
-from convmerge.adapters._common import build_example, coerce_messages
+from convmerge.adapters._common import build_example, coerce_messages, source_meta
 from convmerge.models import ChatMessage, TrainingExample
 
 # Common ShareGPT role labels
@@ -61,8 +61,9 @@ def iter_from_sharegpt_line(
         return
 
     if turn_mode == "pairs":
+        meta = source_meta(record, {"source": "sharegpt"})
         for messages in _pair_messages(convs):
-            yield TrainingExample(messages=messages, meta={"source": "sharegpt"})
+            yield TrainingExample(messages=messages, meta=dict(meta))
         return
 
     messages = coerce_messages(

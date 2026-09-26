@@ -12,6 +12,7 @@ from convmerge.adapters.chat import (
     DEFAULT_CONVERSATION_KEYS,
     DEFAULT_ROLE_KEYS,
 )
+from convmerge.emitters import EmitOptions
 
 
 @dataclass
@@ -55,6 +56,33 @@ class ConvertConfig:
     output_format: str
     encoding: str = "utf-8"
     adapter_options: AdapterOptions | None = None
+    emit_options: EmitOptions | None = None
+
+
+_EMIT_OPTION_KEYS = ("tool_arguments", "keep_meta", "meta_key", "alpaca_multiturn")
+
+
+def emit_options_from_mapping(data: dict[str, Any]) -> EmitOptions:
+    """Build :class:`EmitOptions` from a preset's ``output_options`` mapping."""
+    unknown = set(data) - set(_EMIT_OPTION_KEYS)
+    if unknown:
+        raise ValueError(
+            f"output_options: unknown option(s) {sorted(unknown)}; "
+            f"supported: {', '.join(_EMIT_OPTION_KEYS)}"
+        )
+    kw: dict[str, Any] = {}
+    for key in ("tool_arguments", "meta_key", "alpaca_multiturn"):
+        if key in data:
+            kw[key] = str(data[key])
+    if "keep_meta" in data:
+        km = data["keep_meta"]
+        if isinstance(km, bool):
+            kw["keep_meta"] = km
+        elif isinstance(km, list):
+            kw["keep_meta"] = tuple(str(k) for k in km)
+        else:
+            raise ValueError("output_options.keep_meta must be true/false or a list of keys")
+    return EmitOptions(**kw)
 
 
 def _as_tuple_str(v: Any, *, field_name: str) -> tuple[str, ...]:
@@ -144,19 +172,23 @@ def build_convert_config(
     encoding: str | None = None,
     adapter_options: AdapterOptions | None = None,
     adapter_kwargs_json: str | None = None,
+    emit_overrides: dict[str, Any] | None = None,
 ) -> ConvertConfig:
     """
     Merge preset file, explicit CLI/API arguments, and optional JSON adapter kwargs.
 
     Order for ``adapter_options.chat`` / ``adapter_options.sharegpt`` fields:
     preset, then ``--adapter-kwargs``, then explicit ``adapter_options``.
-    Explicit ``adapter`` / ``output_format`` / ``encoding`` override the preset.
+    Explicit ``adapter`` / ``output_format`` / ``encoding`` override the preset,
+    and ``emit_overrides`` (keys of :class:`EmitOptions`) override the
+    preset's ``output_options``.
     """
     from convmerge.preset import load_convert_preset
 
     cfg_adapter: str | None = None
     cfg_format: str | None = None
     cfg_encoding: str | None = None
+    cfg_emit: EmitOptions | None = None
     chat_layers: list[dict[str, Any]] = []
     sharegpt_layers: list[dict[str, Any]] = []
 
@@ -165,6 +197,7 @@ def build_convert_config(
         cfg_adapter = p.adapter
         cfg_format = p.output_format
         cfg_encoding = p.encoding
+        cfg_emit = p.emit_options
         if p.adapter_options and p.adapter_options.chat:
             chat_layers.append(_chat_options_to_override_dict(p.adapter_options.chat))
         if p.adapter_options and p.adapter_options.sharegpt:
@@ -220,9 +253,13 @@ def build_convert_config(
             ),
         )
 
+    if emit_overrides:
+        cfg_emit = replace(cfg_emit or EmitOptions(), **emit_overrides)
+
     return ConvertConfig(
         adapter=cfg_adapter,
         output_format=cfg_format,
         encoding=cfg_encoding or "utf-8",
         adapter_options=adapter_opts,
+        emit_options=cfg_emit,
     )

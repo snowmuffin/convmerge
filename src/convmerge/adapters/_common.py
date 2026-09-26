@@ -270,7 +270,7 @@ def build_example(
     msgs, issues = attach_media(msgs, record)
     return TrainingExample(
         messages=msgs,
-        meta=meta,
+        meta=source_meta(record, meta),
         tools=normalize_tools(record.get("tools")),
         issues=issues,
     )
@@ -341,3 +341,11 @@ def _first_content(item: dict[str, Any], content_keys: tuple[str, ...], *, strip
         elif parsed is not MISSING:
             return parsed
     return None if found_null else MISSING
+
+
+def source_meta(record: dict[str, Any], meta: dict[str, object]) -> dict[str, object]:
+    """Add the record's own ``id`` (string or integer) to adapter metadata."""
+    rid = record.get("id")
+    if isinstance(rid, (str, int)) and not isinstance(rid, bool):
+        return {**meta, "id": rid}
+    return meta
