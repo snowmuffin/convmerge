@@ -146,9 +146,16 @@ def test_valid_sft_view_of_a_preference_record_is_kept(tmp_path: Path) -> None:
     assert stats.dropped == 0 and rows[0]["messages"][1]["content"] == "good"
 
 
-def test_preference_option_conflicts_with_pairs() -> None:
+def test_preference_option_conflicts_with_pairs(tmp_path: Path, capsys) -> None:
     with pytest.raises(ValueError, match="folds pairs"):
         resolve_adapter("auto", AdapterOptions(preference="chosen"), pairs=True)
+    src = tmp_path / "in.jsonl"
+    src.write_text(json.dumps(SHAPES["hh_rlhf"]) + "\n")
+    with pytest.raises(SystemExit) as exc:
+        main(["convert", "-i", str(src), "-o", str(tmp_path / "o.jsonl"), "--from", "auto",
+              "--format", "preference", "--preference", "chosen"])  # fmt: skip
+    assert exc.value.code == 2
+    assert "use one or the other" in capsys.readouterr().err
 
 
 def test_parallel_matches_single_process(tmp_path: Path) -> None:

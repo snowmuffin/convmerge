@@ -177,18 +177,24 @@ convmerge convert -i ./jsonl/mixed.jsonl -o ./out.jsonl --preset convert_preset.
 ```
 
 Adapters: `alpaca`, `sharegpt`, `chat` (alias `auto`).  
-Emitters: `messages`, `alpaca`.
+Output formats: `messages`, `alpaca`, `preference` (DPO pairs).
 
 > **Tool calling and multimodal:** OpenAI `tool_calls` / `tools`, LLaMA-Factory
-> `function_call` / `observation` turns, and image / audio / video references
-> (`image_url` parts, `images` columns with `<image>` tokens) are preserved in
-> the `messages` output. Media is kept by reference only — convmerge never
+> `function_call` / `observation` turns, Hermes `<tool_call>` tags, Glaive and
+> xLAM layouts all come out as standard `tool_calls` / `tools`, and image /
+> audio / video references (`image_url` parts, `images` columns with `<image>`
+> tokens) are preserved in the `messages` output. Media is kept by reference only — convmerge never
 > downloads or decodes it. `--from sharegpt` keeps whole conversations since
 > 0.6.0 (`turn_mode: pairs` restores the old split). See
 > [docs/format.md](docs/format.md#sharegpt).
 
-Preference (DPO / reward) datasets: `--preference chosen` trains on the chosen
-answer (LLaMA-Factory ranking, HH-RLHF, UltraFeedback, TRL shapes).
+Preference (DPO / reward) datasets: `--format preference` writes
+`{prompt, chosen, rejected}` pairs for TRL's `DPOTrainer`; `--preference chosen`
+trains SFT on the chosen answer instead (UltraFeedback, HH-RLHF, Orca DPO pairs,
+LLaMA-Factory ranking, TRL, and Chatbot Arena shapes).
+
+Rendered `text` columns (ChatML, Llama 2/3, Gemma, `### Human:`, HH, the Alpaca
+prompt) are split back into turns by `--from auto`.
 
 Large files: `--workers N` converts with N processes (same output and
 stats as a single process; ~3.8x faster with 4 workers in our benchmark).

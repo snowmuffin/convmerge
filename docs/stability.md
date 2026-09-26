@@ -49,7 +49,7 @@ The wording of `--help` and of stderr messages is not covered.
 
 | File | Versioned by | Covered |
 |------|--------------|---------|
-| Built-in output formats (`messages`, `alpaca`) | — | Keys and their meaning, as in [format.md](format.md) |
+| Built-in output formats (`messages`, `alpaca`, `preference`) | — | Keys and their meaning, as in [format.md](format.md) |
 | Drop / issue reason codes (`no_user`, `unresolved_image`, …) | — | Codes are never renamed or reused |
 | `convert --report`, `validate` JSON | `"version": 1` | Keys and meaning |
 | Recipe (`recipe.yaml`) | `version: 1` | Schema ([recipes.md](recipes.md)) |
