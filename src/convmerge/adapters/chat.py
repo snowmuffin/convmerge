@@ -11,6 +11,11 @@ present. Handles the common messy shapes seen across SFT datasets:
 - Alpaca-style ``instruction`` / ``input`` / ``output`` (delegates to the
   existing alpaca adapter).
 
+Around the turns it also keeps OpenAI content parts (text + media by
+reference), ``tool_calls`` / ``tool_call_id`` / ``name``, LLaMA-Factory
+``function_call`` / ``observation`` turns, and the ``tools`` / ``system`` /
+``images`` (``videos``, ``audios``, LLaVA ``image``) columns.
+
 Users can override the key lists and role map to teach it about bespoke schemas
 without writing a new adapter from scratch.
 """
@@ -21,6 +26,7 @@ import logging
 from collections.abc import Iterator
 from typing import Any
 
+from convmerge.adapters._common import build_example, coerce_messages
 from convmerge.adapters.alpaca import iter_from_alpaca_line
 from convmerge.models import ChatMessage, TrainingExample
 
@@ -34,7 +40,11 @@ DEFAULT_ROLE_MAP: dict[str, str] = {
     "assistant": "assistant",
     "bing": "assistant",
     "bot": "assistant",
+    "model": "assistant",
     "system": "system",
+    "tool": "tool",
+    "function": "tool",
+    "observation": "tool",
 }
 
 # Keys searched for the chat-list container, in priority order.
@@ -84,11 +94,11 @@ def iter_from_chat_line(
     for key in conversation_keys:
         convs = record.get(key)
         if isinstance(convs, list) and convs:
-            msgs = _coerce_messages(
+            msgs = coerce_messages(
                 convs, role_keys=role_keys, content_keys=content_keys, role_map=role_map
             )
             if msgs:
-                yield TrainingExample(messages=msgs, meta={"source": "chat"})
+                yield build_example(msgs, record, meta={"source": "chat"})
             return
 
     # Resolve Alpaca cues up front so a stray ``text`` field can't silently
@@ -151,47 +161,11 @@ def _iter_pairwise(
     for label, convs in branches:
         if not isinstance(convs, list) or not convs:
             continue
-        msgs = _coerce_messages(
+        msgs = coerce_messages(
             convs, role_keys=role_keys, content_keys=content_keys, role_map=role_map
         )
         if msgs:
-            yield TrainingExample(
-                messages=msgs,
-                meta={"source": "chat:pairwise", "branch": label},
-            )
-
-
-def _coerce_messages(
-    convs: list[Any],
-    *,
-    role_keys: tuple[str, ...],
-    content_keys: tuple[str, ...],
-    role_map: dict[str, str],
-) -> list[ChatMessage]:
-    out: list[ChatMessage] = []
-    for item in convs:
-        if not isinstance(item, dict):
-            continue
-        role_raw: str | None = None
-        for rk in role_keys:
-            v = item.get(rk)
-            if isinstance(v, str) and v.strip():
-                role_raw = v.strip().lower()
-                break
-        if role_raw is None:
-            continue
-        role = role_map.get(role_raw, role_raw)
-
-        content: str | None = None
-        for ck in content_keys:
-            v = item.get(ck)
-            if isinstance(v, str):
-                content = v
-                break
-        if content is None:
-            continue
-        out.append(ChatMessage(role=role, content=content))
-    return out
+            yield build_example(msgs, record, meta={"source": "chat:pairwise", "branch": label})
 
 
 def _remap_for_alpaca(
@@ -206,10 +180,13 @@ def _remap_for_alpaca(
     if instr is None and out is None:
         return None
     inp = _first_string(record, input_keys) or ""
+    # Keep the other columns (system, history, media) for the alpaca adapter.
     return {
+        **record,
         "instruction": instr or "",
         "input": inp,
         "output": out or "",
+        "response": "",
     }
 
 

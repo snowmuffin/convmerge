@@ -105,3 +105,6 @@ class TrainingExample:
     messages: list[ChatMessage] = field(default_factory=list)
     meta: dict[str, object] = field(default_factory=dict)
     tools: list[dict[str, Any]] | None = None
+    issues: list[str] = field(default_factory=list)
+    """Problems an adapter noticed while mapping the record (e.g.
+    ``unresolved_image``); reported by validation, never emitted."""

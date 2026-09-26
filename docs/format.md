@@ -65,14 +65,22 @@ The `turn_mode` option controls how multi-turn conversations are emitted:
 
 | `turn_mode` | Output |
 |-------------|--------|
-| `full` | One example with the whole conversation — system prompt and every turn, in order. Turns with an empty value are dropped; the conversation needs at least one user and one assistant turn. |
-| `pairs` | One example per consecutive user→assistant pair. System prompts, unpaired turns, and earlier-turn context are dropped. |
-| *(unset)* | Same as `pairs` in 0.5.x, plus a `FutureWarning` for every record whose output would differ under `full`. **The default becomes `full` in 0.6.0.** |
+| `full` *(default since 0.6.0)* | One example with the whole conversation — system prompt and every turn, in order. Turns with an empty value are dropped. |
+| `pairs` | One example per consecutive user→assistant pair (the 0.5.x default). System prompts, unpaired turns, tool turns, and earlier-turn context are dropped. |
 
-Set it with `--adapter-kwargs '{"sharegpt": {"turn_mode": "full"}}'` or in a
+Set it with `--adapter-kwargs '{"sharegpt": {"turn_mode": "pairs"}}'` or in a
 preset under `adapter_options.sharegpt.turn_mode` (see
-[custom_presets.md](custom_presets.md)). Pin `pairs` explicitly if you rely on
-the pair-splitting behavior.
+[custom_presets.md](custom_presets.md)).
+
+In `full` mode the LLaMA-Factory ShareGPT extensions are understood:
+
+- `function_call` turns (a JSON `{"name", "arguments"}` object, or a list for
+  parallel calls) become assistant `tool_calls`; `observation` turns become
+  `tool` messages.
+- A `system` column becomes a system message (unless the conversation already
+  has one); a `tools` column (JSON string or list) becomes top-level `tools`.
+- `images` / `videos` / `audios` columns (and LLaVA's single `image`) bind in
+  order to `<image>` / `<video>` / `<audio>` tokens, producing content parts.
 
 <details>
 <summary>Sample input → output</summary>
@@ -113,7 +121,14 @@ Tries, in order:
    - `pairwise_mode="both"` emits both branches; `"a"` / `"b"` always pick one side.
 2. Chat-list containers named `messages`, `conversation`, or `conversations`.
    - Both `{role, content}` and ShareGPT-style `{from, value}` entries work.
-   - A default role map normalizes `human → user`, `gpt/bing/bot → assistant`.
+   - A default role map normalizes `human → user`, `gpt/bing/bot/model → assistant`,
+     and `function/observation → tool`.
+   - OpenAI-style content arrays are kept as content parts (text, and media by
+     reference: `image_url`, `{"type": "image"}` placeholders, audio, video);
+     text-only arrays collapse to a string. `tool_calls` (and the legacy
+     `function_call`), `tool_call_id`, and `name` are kept.
+   - Record-level `tools`, `system`, and media columns are handled as for the
+     `sharegpt` adapter above.
 3. Plain `text` → emitted as a single assistant message — **but only when the
    record does not carry strong Alpaca cues.** If both an instruction key
    (`instruction`/`question`/`prompt`) and an output key
@@ -121,7 +136,8 @@ Tries, in order:
    Alpaca branch (step 4) instead, so a stray `text` field cannot silently
    discard the instruction/output pair. When `text` is taken while only a
    partial Alpaca key is present, a `logging` warning is emitted.
-4. Fallback: alpaca-like keys (`instruction`/`question`/`prompt` + `output`/`response`/`answer`).
+4. Fallback: alpaca-like keys (`instruction`/`question`/`prompt` + `output`/`response`/`answer`),
+   with the `alpaca` adapter's `system` / `history` handling.
 
 You can override every part (`conversation_keys`, `role_keys`, `content_keys`,
 `role_map`, `instruction_keys`, `input_keys`, `output_keys`, `pairwise_mode`)

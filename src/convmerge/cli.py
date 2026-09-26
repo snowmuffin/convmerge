@@ -3,13 +3,9 @@
 from __future__ import annotations
 
 import argparse
-import contextlib
 import json
 import logging
 import sys
-import warnings
-from collections import Counter
-from collections.abc import Iterator
 from pathlib import Path
 
 from convmerge import __version__
@@ -184,21 +180,18 @@ def _cmd_convert(args: argparse.Namespace) -> None:
     from convmerge.progress import progress_enabled
 
     stats = ConvertStats()
-    with _count_future_warnings() as future:
-        n_in, n_out = convert_file(
-            args.input,
-            args.output,
-            adapter_name=cfg.adapter,
-            output_format=cfg.output_format,
-            encoding=cfg.encoding,
-            adapter_options=cfg.adapter_options,
-            progress=progress_enabled(args.progress),
-            stats=stats,
-            tool_arguments=args.tool_arguments,
-        )
+    n_in, n_out = convert_file(
+        args.input,
+        args.output,
+        adapter_name=cfg.adapter,
+        output_format=cfg.output_format,
+        encoding=cfg.encoding,
+        adapter_options=cfg.adapter_options,
+        progress=progress_enabled(args.progress),
+        stats=stats,
+        tool_arguments=args.tool_arguments,
+    )
     print(f"read {n_in} lines, wrote {n_out} examples", file=sys.stderr)
-    for message, count in future.items():
-        print(f"warning: {message} [{count:,} records affected]", file=sys.stderr)
     if stats.skipped:
         print(
             f"warning: skipped {stats.skipped:,} lines "
@@ -212,24 +205,6 @@ def _cmd_convert(args: argparse.Namespace) -> None:
             "run `convmerge normalize` first to repair the file",
             file=sys.stderr,
         )
-
-
-@contextlib.contextmanager
-def _count_future_warnings() -> Iterator[Counter[str]]:
-    """Collapse per-record FutureWarnings into one counted line per message."""
-    counts: Counter[str] = Counter()
-    with warnings.catch_warnings():
-        original = warnings.showwarning
-
-        def show(message, category, *args, **kwargs):
-            if issubclass(category, FutureWarning):
-                counts[str(message)] += 1
-            else:
-                original(message, category, *args, **kwargs)
-
-        warnings.simplefilter("always", FutureWarning)
-        warnings.showwarning = show
-        yield counts
 
 
 def _add_preset(sub: argparse._SubParsersAction) -> None:
