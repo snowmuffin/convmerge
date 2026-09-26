@@ -84,6 +84,31 @@ git diff tests/golden/expected
 A new input shape gets a fixture in `tests/golden/inputs/` and at least one
 entry in `CASES`.
 
+### Contract tests and deprecations
+
+`tests/contract/` pins the stable surface described in
+[docs/stability.md](docs/stability.md): snapshots of the public API
+signatures and CLI flags, files written by earlier releases, and exit codes.
+When a snapshot test fails, the change touched the public surface:
+
+- **Adding** (a new function, an optional keyword, a flag): regenerate and
+  mention it in `CHANGELOG.md`:
+
+  ```bash
+  CONVMERGE_UPDATE_SNAPSHOTS=1 pytest tests/contract
+  git diff tests/contract/snapshots
+  ```
+
+- **Removing or renaming**: keep the old name working and warn instead —
+  `convmerge._deprecation.deprecated_names()` builds a module `__getattr__`
+  for moved names, `warn_deprecated()` covers anything else — list it under
+  "Deprecated" in the changelog and in `docs/migration-1.0.md`, and test it
+  in `tests/test_deprecations.py`. The removal itself waits for the next
+  major version.
+
+pytest turns a `DeprecationWarning` raised from inside `convmerge` into an
+error, so the package itself never uses its deprecated API.
+
 ## Code conventions
 
 - **All code comments, docstrings, CLI help strings, and error messages are

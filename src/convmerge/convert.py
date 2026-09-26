@@ -8,6 +8,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal, TextIO
 
+from convmerge._deprecation import deprecated_names
 from convmerge.adapter_resolve import resolve_adapter
 from convmerge.config import AdapterOptions, ConvertConfig
 from convmerge.emitters import EmitOptions, EmitterFn, UnrepresentableExample, get_emitter
@@ -104,6 +105,11 @@ class ConvertStats:
             r: REASONS.get(r, _describe_extra(r)) for r in sorted(self.drop_reasons)
         }
         return report
+
+
+# Schema version of the JSON written by ``convert --report`` and ``validate``;
+# bumped only for incompatible changes (fields may be added without a bump).
+REPORT_VERSION = 1
 
 
 def _describe_extra(reason: str) -> str:
@@ -408,7 +414,7 @@ def convert_with_config(
     )
 
 
-def iter_converted_lines(
+def _iter_converted_lines(
     lines: Iterator[str],
     *,
     adapter_name: str,
@@ -427,3 +433,14 @@ def iter_converted_lines(
             continue
         for example in adapter(obj):
             yield json.dumps(emitter(example), ensure_ascii=False)
+
+
+__getattr__ = deprecated_names(
+    __name__,
+    {
+        "iter_converted_lines": (
+            "convmerge.convert:_iter_converted_lines",
+            "use convert_file() or an adapter plus emitter directly",
+        )
+    },
+)

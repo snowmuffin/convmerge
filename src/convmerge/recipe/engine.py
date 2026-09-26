@@ -25,6 +25,7 @@ from convmerge import __version__
 from convmerge.recipe.schema import Recipe, SourceSpec, convert_config_kwargs
 
 LOCK_VERSION = 1
+REPORT_VERSION = 1
 
 LogFn = Callable[[str], None]
 
@@ -403,7 +404,7 @@ def run(
     lock["recipe"] = _display(recipe.path, recipe.base_dir)
     digests = _Digests(lock["files"], recipe.base_dir)
     result = RunResult()
-    report: dict[str, Any] = {"convmerge": __version__, "steps": {}}
+    report: dict[str, Any] = {"version": REPORT_VERSION, "convmerge": __version__, "steps": {}}
 
     for step in steps:
         action, reason, inputs = _decide(step, recipe, lock, digests, _matches(step, force))

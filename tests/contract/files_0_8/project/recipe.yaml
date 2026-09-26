@@ -1,0 +1,15 @@
+version: 1
+output: train/mixed.jsonl
+sources:
+  alpaca:
+    path: data/alpaca.jsonl
+    normalize: false
+    convert: {from: alpaca, on_invalid: drop}
+  chat:
+    path: data/sharegpt.json
+    convert: {preset: preset.yaml, keep_meta: [id]}
+mix:
+  total: 50
+  seed: 11
+  weights: {alpaca: 2, chat: 1}
+dedupe: true

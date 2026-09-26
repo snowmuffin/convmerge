@@ -1,9 +1,10 @@
 """convmerge — merge heterogeneous sources into a single LLM training format.
 
-The names in ``__all__`` are the public API (documented in ``docs/api.md``):
-they keep working across minor versions, with changes announced in the
-changelog first. Anything else — modules or names starting with ``_`` — may
-change without notice. Names are imported lazily, so ``import convmerge``
+The names in ``__all__`` are the public API (documented in ``docs/api.md``),
+together with the ``convmerge.recipe`` and ``convmerge.fetch`` modules'
+``__all__``. They follow the stability policy in ``docs/stability.md``.
+Anything else — other modules, names starting with ``_`` — is internal and
+may change without notice. Names are imported lazily, so ``import convmerge``
 stays cheap.
 """
 
@@ -12,7 +13,7 @@ from __future__ import annotations
 import importlib
 from typing import TYPE_CHECKING, Any
 
-__version__ = "0.8.0"
+__version__ = "0.9.0"
 
 _EXPORTS: dict[str, str] = {
     # convert pipeline
@@ -43,11 +44,17 @@ _EXPORTS: dict[str, str] = {
     # other commands
     "mix_files": "convmerge.mix",
     "MixSource": "convmerge.mix",
+    "MixResult": "convmerge.mix",
     "deduplicate_jsonl": "convmerge.normalize.dedup",
     "DedupeStats": "convmerge.normalize.dedup",
     "normalize_to_jsonl": "convmerge.normalize.jsonl",
     "profile_schema": "convmerge.normalize.schema",
+    "split_by_turns": "convmerge.normalize.turns",
+    "analyze_turn_distribution": "convmerge.normalize.turns",
     "iter_jsonl": "convmerge.io",
+    "JsonlLine": "convmerge.io",
+    "JsonlDecodeError": "convmerge.io",
+    "ReadStats": "convmerge.io",
 }
 
 __all__ = [
@@ -61,11 +68,16 @@ __all__ = [
     "DedupeStats",
     "EmitOptions",
     "InvalidExampleError",
+    "JsonlDecodeError",
+    "JsonlLine",
+    "MixResult",
     "MixSource",
+    "ReadStats",
     "SharegptAdapterOptions",
     "ToolCall",
     "TrainingExample",
     "UnrepresentableExample",
+    "analyze_turn_distribution",
     "available_adapters",
     "available_formats",
     "build_convert_config",
@@ -78,6 +90,7 @@ __all__ = [
     "profile_schema",
     "register_adapter",
     "register_emitter",
+    "split_by_turns",
     "validate_example",
     "validate_file",
 ]
@@ -118,10 +131,11 @@ if TYPE_CHECKING:  # pragma: no cover - for type checkers and IDEs only
         available_formats,
         register_emitter,
     )
-    from convmerge.io import iter_jsonl
-    from convmerge.mix import MixSource, mix_files
+    from convmerge.io import JsonlDecodeError, JsonlLine, ReadStats, iter_jsonl
+    from convmerge.mix import MixResult, MixSource, mix_files
     from convmerge.models import ChatMessage, ContentPart, ToolCall, TrainingExample
     from convmerge.normalize.dedup import DedupeStats, deduplicate_jsonl
     from convmerge.normalize.jsonl import normalize_to_jsonl
     from convmerge.normalize.schema import profile_schema
+    from convmerge.normalize.turns import analyze_turn_distribution, split_by_turns
     from convmerge.validate import validate_example

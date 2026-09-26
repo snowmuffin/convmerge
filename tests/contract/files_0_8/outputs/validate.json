@@ -1,0 +1,15 @@
+{
+  "lines_read": 41,
+  "blank": 0,
+  "invalid_json": 0,
+  "non_object": 0,
+  "no_example": 0,
+  "first_invalid_line": null,
+  "drop_reasons": {},
+  "drop_lines": {},
+  "lossy": {},
+  "skipped_lines": 0,
+  "reason_descriptions": {},
+  "valid": 41,
+  "invalid": 0
+}

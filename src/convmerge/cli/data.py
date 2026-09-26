@@ -8,10 +8,6 @@ import sys
 from pathlib import Path
 
 from convmerge.cli._common import add_progress_flag as _add_progress_flag
-from convmerge.normalize.files import NORMALIZE_EXTENSIONS as FETCH_FILE_EXTENSIONS
-from convmerge.normalize.files import SIDECAR_SUFFIXES
-
-__all__ = ["FETCH_FILE_EXTENSIONS", "SIDECAR_SUFFIXES"]
 
 
 def _add_inspect(sub: argparse._SubParsersAction) -> None:
@@ -135,6 +131,9 @@ def _cmd_dedupe(args: argparse.Namespace) -> None:
     from convmerge.normalize.dedup import DedupeStats, deduplicate_jsonl
     from convmerge.progress import progress_enabled
 
+    if not Path(args.input).is_file():
+        print(f"error: input file not found: {args.input}", file=sys.stderr)
+        sys.exit(1)
     stats = DedupeStats()
     total, kept = deduplicate_jsonl(
         args.input,
@@ -175,6 +174,12 @@ def _add_turns(sub: argparse._SubParsersAction) -> None:
 def _cmd_turns(args: argparse.Namespace) -> None:
     from convmerge.normalize.turns import analyze_turn_distribution, split_by_turns
 
+    if bool(args.single_out) != bool(args.multi_out):
+        print("error: --single-out and --multi-out must be given together", file=sys.stderr)
+        sys.exit(2)
+    if not args.input.is_file():
+        print(f"error: input file not found: {args.input}", file=sys.stderr)
+        sys.exit(1)
     report = analyze_turn_distribution(args.input)
     print(json.dumps(report, ensure_ascii=False, indent=2))
 
@@ -186,9 +191,3 @@ def _cmd_turns(args: argparse.Namespace) -> None:
         )
         print(f"split: single={s:,} -> {args.single_out}", file=sys.stderr)
         print(f"split: multi ={m:,} -> {args.multi_out}", file=sys.stderr)
-    elif bool(args.single_out) != bool(args.multi_out):
-        print(
-            "error: --single-out and --multi-out must be given together",
-            file=sys.stderr,
-        )
-        sys.exit(2)

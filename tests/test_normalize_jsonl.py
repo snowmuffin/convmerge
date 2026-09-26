@@ -125,8 +125,9 @@ def test_normalize_jsonl_rejects_trailing_comma_with_file_and_line(tmp_path: Pat
 
 def test_load_jsonl_default_discards_file_on_bad_line(tmp_path: Path) -> None:
     p = _write(tmp_path / "a.jsonl", '{"a":1}\nnot json\n{"a":2}\n')
-    # Default behavior is preserved: one bad line discards the whole file.
-    assert load_jsonl(p) == []
+    # Default behavior is preserved (one bad line discards the whole file), but deprecated.
+    with pytest.warns(DeprecationWarning, match="load_jsonl"):
+        assert load_jsonl(p) == []
 
 
 def test_load_jsonl_skip_keeps_valid_rows(tmp_path: Path) -> None:
