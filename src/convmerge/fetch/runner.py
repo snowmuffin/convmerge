@@ -54,7 +54,8 @@ def run_manifest(
     filters the entries by name. ``hf_token`` / ``github_token`` take highest
     priority over the manifest ``auth`` block and process env. Progress lines
     go to ``log`` (default: stderr). ``max_rows`` samples every entry that
-    supports it (overriding per-entry values); clone entries are fetched whole.
+    supports it (overriding per-entry values); clone entries and raw ``.json``
+    arrays are fetched whole, with a note in the log.
     """
     log = log or _log_stderr
     base_root = Path(output_root) if output_root else Path(manifest.defaults.output_root)
@@ -67,14 +68,18 @@ def run_manifest(
     result = FetchResult()
 
     for entry in entries:
-        if max_rows is not None and entry.mode != "clone":
-            entry = replace(entry, max_rows=max_rows)
         dst = _entry_output_path(entry, base_root)
         try:
             kind = classify_entry(entry)
         except ValueError as e:
             _record_error(result, entry.name, str(e), on_error=manifest.defaults.on_error, log=log)
             continue
+        if max_rows is not None:
+            if _samplable(entry, kind):
+                entry = replace(entry, max_rows=max_rows)
+            else:
+                # A global override applies where it can; the rest are fetched whole.
+                log(f"[note] {entry.name}: cannot be sampled by rows; fetching it whole")
 
         if manifest.defaults.resume and _already_fetched(dst, kind, entry):
             log(f"[skip] {entry.name} (already present at {dst})")
@@ -109,6 +114,14 @@ def run_manifest(
 def _log_stderr(message: str) -> None:
     # Progress lines are diagnostics, not data: keep stdout clean for piping.
     print(message, file=sys.stderr)
+
+
+def _samplable(entry: DatasetEntry, kind: EntryKind) -> bool:
+    if kind == "url_github_clone":
+        return False
+    if kind == "url_raw":
+        return _raw_suffix(entry.url or "") not in (".json", ".json.gz")
+    return True
 
 
 def _select_entries(

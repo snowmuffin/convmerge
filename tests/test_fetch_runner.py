@@ -314,3 +314,25 @@ def test_hf_max_rows_streams_only_n_rows(monkeypatch, tmp_path: Path) -> None:
     row = json.loads(dst.read_text())
     assert row["a"] == 1 and isinstance(row["img"], str)
     assert [p.name for p in tmp_path.iterdir()] == ["o.jsonl"]
+
+
+def test_global_max_rows_skips_unsamplable_entries(monkeypatch, tmp_path: Path) -> None:
+    import convmerge.fetch.github as gh
+
+    seen: dict[str, int | None] = {}
+
+    def fake_raw(url, dst, *, token=None, max_rows=None):
+        seen[url.rsplit("/", 1)[-1]] = max_rows
+        Path(dst).write_text("{}\n", encoding="utf-8")
+        return Path(dst)
+
+    monkeypatch.setattr(gh, "download_raw_file", fake_raw)
+    entries = [
+        DatasetEntry(name="lines", url="https://raw.githubusercontent.com/o/r/m/a.jsonl"),
+        DatasetEntry(name="array", url="https://raw.githubusercontent.com/o/r/m/b.json"),
+    ]
+    logs: list[str] = []
+    result = runner.run_manifest(_make_manifest(entries, tmp_path), log=logs.append, max_rows=9)
+    assert result.failed == []
+    assert seen == {"a.jsonl": 9, "b.json": None}
+    assert any("array: cannot be sampled" in m for m in logs)
