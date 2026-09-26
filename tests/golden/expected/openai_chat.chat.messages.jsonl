@@ -1,0 +1,4 @@
+{"messages": [{"role": "system", "content": "You are a concise assistant."}, {"role": "user", "content": "What is 2+2?"}, {"role": "assistant", "content": "4"}, {"role": "user", "content": "And times 3?"}, {"role": "assistant", "content": "12"}]}
+{"messages": [{"role": "system", "content": "You can call tools."}, {"role": "user", "content": "Weather in Seoul?"}, {"role": "tool", "content": "{\"temp_c\": 21}"}, {"role": "assistant", "content": "It is 21°C in Seoul."}]}
+{"messages": [{"role": "user", "content": "Say hi"}]}
+{"messages": [{"role": "user", "content": "Hello"}, {"role": "assistant", "content": "Hello, Alice."}]}

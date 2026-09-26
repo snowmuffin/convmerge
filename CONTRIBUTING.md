@@ -68,6 +68,21 @@ ruff check --fix src tests
 ruff format src tests
 ```
 
+### Golden tests
+
+`tests/test_golden.py` converts realistic fixtures in `tests/golden/inputs/`
+and compares the output byte-for-byte with `tests/golden/expected/`. If your
+change is **meant** to alter `convert` output, regenerate the expected files
+and commit them with the change so reviewers can read the behavior diff:
+
+```bash
+CONVMERGE_UPDATE_GOLDEN=1 pytest tests/test_golden.py
+git diff tests/golden/expected
+```
+
+A new input shape gets a fixture in `tests/golden/inputs/` and at least one
+entry in `CASES`.
+
 ## Code conventions
 
 - **All code comments, docstrings, CLI help strings, and error messages are

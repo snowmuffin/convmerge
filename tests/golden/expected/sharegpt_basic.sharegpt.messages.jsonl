@@ -1,0 +1,5 @@
+{"messages": [{"role": "user", "content": "2+2?"}, {"role": "assistant", "content": "4"}]}
+{"messages": [{"role": "user", "content": "Capital of France?"}, {"role": "assistant", "content": "Paris."}]}
+{"messages": [{"role": "user", "content": "And its population?"}, {"role": "assistant", "content": "About 2.1 million."}]}
+{"messages": [{"role": "user", "content": "Are you there?"}, {"role": "assistant", "content": "Yes."}]}
+{"messages": [{"role": "user", "content": "Ping"}, {"role": "assistant", "content": "Pong"}]}

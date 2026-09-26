@@ -1,0 +1,2 @@
+{"messages": [{"role": "user", "content": [{"type": "text", "text": "What is in this image?"}, {"type": "image_url", "image_url": {"url": "https://example.com/cat.png"}}]}, {"role": "assistant", "content": "A cat on a sofa."}]}
+{"messages": [{"role": "user", "content": [{"type": "image"}, {"type": "text", "text": "Describe it."}]}, {"role": "assistant", "content": [{"type": "text", "text": "A red bus."}]}], "images": ["images/bus.jpg"]}

@@ -1,0 +1,2 @@
+{"messages": [{"role": "user", "content": "valid"}, {"role": "assistant", "content": "row"}]}
+{"messages": [{"role": "assistant", "content": "assistant only"}]}

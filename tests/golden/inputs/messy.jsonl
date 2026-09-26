@@ -1,0 +1,8 @@
+{"messages": [{"role": "user", "content": "valid"}, {"role": "assistant", "content": "row"}]}
+
+{not json
+[1, 2, 3]
+42
+{"id": 7, "meta": {"lang": "en"}}
+{"messages": []}
+{"messages": [{"role": "assistant", "content": "assistant only"}]}
