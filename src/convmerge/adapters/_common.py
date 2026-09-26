@@ -69,10 +69,10 @@ def _parse_part(item: Any, *, strip: bool) -> ContentPart | None:
         return None
     ptype = str(item.get("type") or "")
     if ptype in ("text", "input_text", "output_text") or (not ptype and "text" in item):
-        text = item.get("text")
-        if not isinstance(text, str):
+        part_text = item.get("text")
+        if not isinstance(part_text, str):
             return None
-        return ContentPart("text", text=text.strip() if strip else text)
+        return ContentPart("text", text=part_text.strip() if strip else part_text)
     media = _PART_MEDIA_TYPES.get(ptype)
     if media is None:
         return None
@@ -99,7 +99,8 @@ def parse_tool_calls(item: dict[str, Any]) -> list[ToolCall]:
         for tc in raw:
             if not isinstance(tc, dict):
                 continue
-            fn = tc.get("function") if isinstance(tc.get("function"), dict) else tc
+            function = tc.get("function")
+            fn: dict[str, Any] = function if isinstance(function, dict) else tc
             name = fn.get("name")
             if isinstance(name, str) and name:
                 tc_id = tc.get("id")

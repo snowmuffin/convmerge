@@ -239,7 +239,7 @@ def get_emitter(
         return partial(emit_alpaca, options=options, notes=notes)
     # Plugin formats get the options only if they declare an ``options`` parameter.
     if options is not None and "options" in inspect.signature(fn).parameters:
-        return partial(fn, options=options)
+        return partial(fn, options=options)  # type: ignore[call-arg]
     return fn
 
 
