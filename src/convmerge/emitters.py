@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import inspect
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, replace
 from functools import partial
 from typing import Any, Literal
 
 from convmerge.models import ChatMessage, ContentPart, ToolCall, TrainingExample
+from convmerge.plugins import EMITTER_GROUP, load_entry_points
 
 EmitterFn = Callable[[TrainingExample], dict[str, Any]]
 
@@ -208,6 +210,7 @@ EMITTERS: dict[str, EmitterFn] = {
     "messages": emit_messages,
     "alpaca": emit_alpaca,
 }
+BUILTIN_FORMATS = frozenset(EMITTERS)
 
 
 def get_emitter(
@@ -223,10 +226,37 @@ def get_emitter(
     ``lossy_multiturn_flattened``); the caller clears it between examples.
     """
     if name not in EMITTERS:
+        load_entry_points(EMITTER_GROUP, EMITTERS)
+    if name not in EMITTERS:
         known = ", ".join(sorted(EMITTERS))
         raise ValueError(f"Unknown output format {name!r}. Choose one of: {known}")
     if tool_arguments is not None:
         options = replace(options or EmitOptions(), tool_arguments=tool_arguments)
-    if name == "messages":
+    fn = EMITTERS[name]
+    if fn is emit_messages:
         return partial(emit_messages, options=options) if options else emit_messages
-    return partial(emit_alpaca, options=options, notes=notes)
+    if fn is emit_alpaca:
+        return partial(emit_alpaca, options=options, notes=notes)
+    # Plugin formats get the options only if they declare an ``options`` parameter.
+    if options is not None and "options" in inspect.signature(fn).parameters:
+        return partial(fn, options=options)
+    return fn
+
+
+def register_emitter(name: str, fn: EmitterFn, *, replace: bool = False) -> None:
+    """Make ``fn`` available as ``--format name``.
+
+    ``fn`` takes a :class:`TrainingExample` and returns the JSON object for one
+    output line; it may accept an ``options: EmitOptions`` keyword and may raise
+    :class:`UnrepresentableExample` to have an example dropped and counted.
+    Registering an existing name raises unless ``replace=True``.
+    """
+    if not replace and name in EMITTERS:
+        raise ValueError(f"output format {name!r} is already registered (pass replace=True)")
+    EMITTERS[name] = fn
+
+
+def available_formats() -> list[str]:
+    """Built-in, registered, and entry-point output format names."""
+    load_entry_points(EMITTER_GROUP, EMITTERS)
+    return sorted(EMITTERS)

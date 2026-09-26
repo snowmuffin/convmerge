@@ -9,8 +9,8 @@ from typing import Any
 from convmerge.config import (
     AdapterOptions,
     ConvertConfig,
-    check_preference,
     chat_adapter_options_from_mapping,
+    check_preference,
     emit_options_from_mapping,
     sharegpt_adapter_options_from_mapping,
 )
@@ -120,15 +120,17 @@ def load_convert_preset(path: Path) -> ConvertConfig:
 
 def validate_preset_file(path: Path) -> None:
     """Raise ValueError with a clear message if the preset is invalid."""
-    from convmerge.adapters import ADAPTERS
-    from convmerge.emitters import EMITTERS
+    from convmerge.adapters import available_adapters
+    from convmerge.emitters import available_formats
 
     cfg = load_convert_preset(path)
-    if cfg.adapter not in ADAPTERS:
-        known = ", ".join(sorted(ADAPTERS))
+    adapters = available_adapters()
+    formats = available_formats()
+    if cfg.adapter not in adapters:
+        known = ", ".join(adapters)
         raise ValueError(f"unknown adapter {cfg.adapter!r}. Choose one of: {known}")
-    if cfg.output_format not in EMITTERS:
-        known = ", ".join(sorted(EMITTERS))
+    if cfg.output_format not in formats:
+        known = ", ".join(formats)
         raise ValueError(f"unknown output_format {cfg.output_format!r}. Choose one of: {known}")
     if cfg.adapter_options and cfg.adapter_options.chat:
         pm = cfg.adapter_options.chat.pairwise_mode
