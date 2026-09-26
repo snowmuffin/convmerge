@@ -1,7 +1,8 @@
 # Design: declarative recipes (`convmerge run`)
 
-Status: **proposal** for 0.8 — not implemented. Comments welcome on the
-tracking issue before any code lands.
+Status: **implemented in 0.8** — user guide: [../recipes.md](../recipes.md).
+This page keeps the original rationale; the open questions are answered at
+the end.
 
 ## Problem
 
@@ -66,13 +67,13 @@ output: ./train/mixed.jsonl
 Each `sources.<name>` block maps one-to-one onto existing manifest entries and
 convert options; `mix` and `dedupe` onto their commands.
 
-## Open questions
+## Open questions — as resolved in 0.8
 
-- Per-source validation reports: merge into one run report, or keep one
-  `--report` file per source?
-- Should `run` accept an existing fetch manifest, so current users keep their
-  `manifest.yaml` and only add the convert/mix parts?
-- Concurrency: run independent sources in parallel, or leave that to
-  `convert --workers` inside each step?
-- Where lock files live, and whether `run --frozen` should refuse to run when
-  anything differs from the lock (for CI).
+- **Reports:** one `report.json` per run, with each source's convert report
+  under its step.
+- **Existing manifests:** a source can use `fetch: {manifest: ..., name: ...}`
+  and inherits that manifest's `auth` block.
+- **Concurrency:** sources run one after another; parallelism stays inside
+  `convert` (`workers`), which never affects output.
+- **Lock files:** next to the recipe by default (`lock:` to move it);
+  `run --frozen` exits 1 when any step is out of date.

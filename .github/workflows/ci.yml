@@ -38,5 +38,8 @@ jobs:
       - name: Ruff format
         run: python -m ruff format --check src tests
 
+      - name: Mypy
+        run: python -m mypy
+
       - name: Pytest
         run: python -m pytest
