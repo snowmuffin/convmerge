@@ -1,0 +1,6 @@
+{"messages": [{"role": "system", "content": "Be kind."}, {"role": "user", "content": "Tell me a joke."}, {"role": "assistant", "content": "No."}]}
+{"messages": [{"role": "user", "content": "Translate to French\ncat"}, {"role": "assistant", "content": "dog"}]}
+{"messages": [{"role": "user", "content": "What is 2+2?"}, {"role": "assistant", "content": "5."}]}
+{"messages": [{"role": "user", "content": "Name a color."}, {"role": "assistant", "content": "Seven."}]}
+{"messages": [{"role": "user", "content": "Capital of Korea?"}, {"role": "assistant", "content": "Busan."}]}
+{"messages": [{"role": "user", "content": "Say hi"}, {"role": "assistant", "content": "..."}]}

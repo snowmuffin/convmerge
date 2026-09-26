@@ -219,6 +219,23 @@ Plain `text`:
 
 </details>
 
+## Preference data (`--preference`)
+
+DPO / reward-model datasets keep the answer to train on apart from the
+prompt, so by default their records fail validation (`no_assistant`).
+`--preference chosen` (or `adapter_options.preference: chosen` in a preset,
+`{"preference": "chosen"}` in `--adapter-kwargs`) folds the chosen answer
+into the conversation first; `rejected` does the same with the other side.
+It works with any adapter and these shapes:
+
+| Shape | Example | Result |
+|-------|---------|--------|
+| LLaMA-Factory ranking | `conversations` + `chosen: {"from": "gpt", "value"}` | chosen appended as the last assistant turn |
+| LLaMA-Factory ranking (alpaca) | `instruction` + `chosen: "..."` | chosen used as `output` |
+| HH-RLHF | `chosen: "\n\nHuman: ...\n\nAssistant: ..."` | transcript parsed into turns |
+| UltraFeedback-binarized | `chosen: [user, assistant, ...]` | the list is the conversation |
+| TRL prompt + continuation | `prompt` (string or messages) + `chosen: [assistant ...]` | prompt followed by the continuation |
+
 ## Validation
 
 Every example `convert` produces is checked before it is written. Examples

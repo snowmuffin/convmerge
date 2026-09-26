@@ -151,6 +151,13 @@ def _add_convert(sub: argparse._SubParsersAction) -> None:
     )
     p.add_argument("--encoding", default="utf-8", help="File encoding (default: utf-8)")
     p.add_argument(
+        "--preference",
+        choices=("chosen", "rejected"),
+        default=None,
+        help="Preference (DPO / reward) data: train on the chosen (or rejected) "
+        "answer instead of dropping the example",
+    )
+    p.add_argument(
         "--workers",
         type=int,
         default=1,
@@ -214,6 +221,7 @@ def _cmd_convert(args: argparse.Namespace) -> None:
             encoding=args.encoding,
             adapter_kwargs_json=args.adapter_kwargs,
             emit_overrides=_emit_overrides(args),
+            preference=args.preference,
         )
     except (ValueError, OSError) as e:
         print(f"error: {e}", file=sys.stderr)

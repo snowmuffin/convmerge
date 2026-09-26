@@ -129,6 +129,9 @@ Emitters: `messages`, `alpaca`.
 > 0.6.0 (`turn_mode: pairs` restores the old split). See
 > [docs/format.md](docs/format.md#sharegpt).
 
+Preference (DPO / reward) datasets: `--preference chosen` trains on the chosen
+answer (LLaMA-Factory ranking, HH-RLHF, UltraFeedback, TRL shapes).
+
 Large files: `--workers N` converts with N processes (same output and
 stats as a single process; ~3.8x faster with 4 workers in our benchmark).
 

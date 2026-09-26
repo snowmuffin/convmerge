@@ -177,3 +177,30 @@ def test_media_without_placeholders_leads_first_user_turn() -> None:
         ContentPart("text", text="What is this?"),
     )
     assert ex.issues == []
+
+
+def test_apply_preference_edge_cases() -> None:
+    import pytest
+
+    from convmerge.adapters.preference import apply_preference
+    from convmerge.config import build_convert_config
+
+    plain = {"messages": [{"role": "user", "content": "q"}]}
+    assert apply_preference(plain, "chosen") is plain  # nothing to fold in
+    # A string chosen appended to a role/content list uses role/content keys.
+    folded = apply_preference({**plain, "chosen": "a", "rejected": "b"}, "chosen")
+    assert folded == {
+        "messages": [{"role": "user", "content": "q"}, {"role": "assistant", "content": "a"}]
+    }
+    # HH text without markers is treated as a plain answer.
+    assert (
+        apply_preference({"instruction": "q", "chosen": "just text"}, "chosen")["output"]
+        == "just text"
+    )
+    for bad in ("best", 1):
+        with pytest.raises(ValueError, match="preference"):
+            build_convert_config(adapter="chat", output_format="messages", preference=bad)
+    cfg = build_convert_config(
+        adapter="chat", output_format="messages", adapter_kwargs_json='{"preference": "rejected"}'
+    )
+    assert cfg.adapter_options.preference == "rejected"
