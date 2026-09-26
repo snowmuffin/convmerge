@@ -63,6 +63,32 @@ Examples with tool calls, a `tools` schema list, or media cannot be represented
 in this format and are always dropped (`unrepresentable_tool_calls` /
 `unrepresentable_media`).
 
+### `preference`
+
+DPO-style preference pairs in TRL's conversational format — what
+`trl.DPOTrainer` (and ORPO / CPO / KTO-from-pairs setups) read directly:
+
+```json
+{"prompt": [{"role": "user", "content": "Name a fruit."}],
+ "chosen": [{"role": "assistant", "content": "Apple."}],
+ "rejected": [{"role": "assistant", "content": "Carrot."}]}
+```
+
+The adapter reads the record twice — once with the chosen answer, once with
+the rejected one ([shapes below](#preference-data)) — and the turns both
+conversations share become `prompt` (system prompt and earlier turns
+included); each side keeps its own continuation. `tools` is written when the
+conversation has tool schemas, and `--keep-meta` / `--tool-arguments` apply
+as for `messages`. Dropped, with a reason:
+
+| Reason | When |
+|--------|------|
+| `unrepresentable_not_preference` | the record has no chosen/rejected pair |
+| `unrepresentable_identical_pair` | chosen and rejected are the same |
+| `unrepresentable_incomplete_pair` | no user turn in the prompt, or a side has no assistant answer |
+
+`convmerge validate` checks `messages` rows, not preference rows.
+
 ### Provenance (`--keep-meta`)
 
 `--keep-meta` adds the example's provenance under `meta` (`--meta-key` to
@@ -161,7 +187,8 @@ Tries, in order:
    - Default `pairwise_mode="winner"` emits only the winning branch; ties/unknown are skipped.
    - `pairwise_mode="both"` emits both branches; `"a"` / `"b"` always pick one side.
 2. Chat-list containers named `messages`, `conversation`, or `conversations`.
-   - Both `{role, content}` and ShareGPT-style `{from, value}` entries work.
+   - Both `{role, content}` and ShareGPT-style `{from, value}` entries work,
+     as do Capybara-style `{input, output}` turn pairs.
    - A default role map normalizes `human → user`, `gpt/bing/bot/model → assistant`,
      and `function/observation → tool`.
    - OpenAI-style content arrays are kept as content parts (text, and media by
@@ -170,13 +197,19 @@ Tries, in order:
      `function_call`), `tool_call_id`, and `name` are kept.
    - Record-level `tools`, `system`, and media columns are handled as for the
      `sharegpt` adapter above.
-3. Plain `text` → emitted as a single assistant message — **but only when the
+   - Hermes-style tool calling is decoded ([below](#tool-calling-encodings)).
+3. Tool-calling records in other layouts: Glaive `system` + `chat`
+   transcripts and xLAM `query` / `answers` / `tools`
+   ([below](#tool-calling-encodings)).
+4. A `text` column rendered with a known chat template is split back into
+   turns ([below](#template-rendered-text)). Any other `text` → emitted as a
+   single assistant message (and then dropped as `no_user`) — **but only when the
    record does not carry strong Alpaca cues.** If both an instruction key
-   and an output key (see step 4) are present, the record is routed to the
-   Alpaca branch (step 4) instead, so a stray `text` field cannot silently
+   and an output key (see step 5) are present, the record is routed to the
+   Alpaca branch (step 5) instead, so a stray `text` field cannot silently
    discard the instruction/output pair. When `text` is taken while only a
    partial Alpaca key is present, a `logging` warning is emitted.
-4. Fallback: flat question/answer keys — `instruction` / `question` / `prompt` /
+5. Fallback: flat question/answer keys — `instruction` / `question` / `prompt` /
    `problem` / `query`, optional `input` / `context`, and the first of `output` /
    `response` / `completion` / `solution` / `answer` (so a full `solution` wins over
    a short final `answer`) — with the `alpaca` adapter's `system` / `history` handling.
@@ -219,14 +252,55 @@ Plain `text`:
 
 </details>
 
-## Preference data (`--preference`)
+### Tool-calling encodings
 
-DPO / reward-model datasets keep the answer to train on apart from the
-prompt, so by default their records fail validation (`no_assistant`).
-`--preference chosen` (or `adapter_options.preference: chosen` in a preset,
-`{"preference": "chosen"}` in `--adapter-kwargs`) folds the chosen answer
-into the conversation first; `rejected` does the same with the other side.
-It works with any adapter and these shapes:
+Tool calls always come out as OpenAI `tool_calls` on assistant turns, results
+as `tool` turns (with the function `name` when known), and schemas as a
+top-level `tools` list — whatever the source used:
+
+| Source layout | Example dataset | How it is read |
+|---------------|-----------------|----------------|
+| OpenAI `tool_calls` / `tool_call_id` | — | as is |
+| LLaMA-Factory `function_call` / `observation` turns + `tools` column | `llamafactory/glaive_toolcall_en` | calls decoded from the turn value |
+| Hermes `<tool_call>` / `<tool_response>` tags | `NousResearch/hermes-function-calling-v1` | each `<tool_call>` block becomes a call (text around it is kept); each `<tool_response>` block becomes its own `tool` turn; schemas from the `tools` column or the system prompt's `<tools>` block |
+| Glaive `system` + `chat` strings | `glaiveai/glaive-function-calling-v2` | `USER:` / `ASSISTANT:` / `FUNCTION RESPONSE:` turns; `<functioncall>` becomes a call; the function JSON in the system prompt moves to `tools` |
+| xLAM `query` / `answers` / `tools` | `Salesforce/xlam-function-calling-60k` | user query + one assistant turn with the calls |
+
+Hermes tags are decoded only in conversations that have a `tools` column, a
+`tool` turn, or a `<tools>` block in the system prompt, so ordinary text that
+mentions `<tool_call>` is left alone; a block that is not valid JSON stays in
+the text. The system prompt itself is kept as written. Tool calls get no
+invented ids (results pair with calls by order).
+
+### Template-rendered `text`
+
+Some datasets store each conversation as one string already rendered with a
+chat template. These are split back into turns:
+
+| Template | Marker | Example dataset |
+|----------|--------|-----------------|
+| ChatML | `<\|im_start\|>role ... <\|im_end\|>` | `OpenAssistant/oasst_top1_2023-08-25` |
+| Llama 3 | `<\|start_header_id\|>role<\|end_header_id\|>` | |
+| Gemma | `<start_of_turn>user` / `model` | |
+| Llama 2 | `[INST] <<SYS>>...<</SYS>> ... [/INST]` | `mlabonne/guanaco-llama2-1k` |
+| Guanaco | `### Human: ... ### Assistant: ...` | `timdettmers/openassistant-guanaco` |
+| HH-RLHF | `Human: ...` / `Assistant: ...` separated by blank lines | |
+| Alpaca prompt | `### Instruction:` / `### Input:` / `### Response:` | |
+
+A trailing user turn without an answer is dropped (Guanaco often ends with
+one). Records that also have Alpaca `instruction` / `output` keys use those
+instead.
+
+## Preference data
+
+Preference datasets (DPO, reward models) keep two answers per prompt. Write
+them as pairs with `--format preference` ([above](#preference)), or train SFT
+on one side with `--preference chosen` (or `rejected`; also
+`adapter_options.preference` in a preset, `{"preference": "chosen"}` in
+`--adapter-kwargs`), which folds that answer into the conversation first.
+Without either, an SFT conversion that cannot use such a record drops it as
+`preference_record` and the CLI says which option to use. Both work with any
+adapter and these shapes:
 
 | Shape | Example | Result |
 |-------|---------|--------|
@@ -235,6 +309,8 @@ It works with any adapter and these shapes:
 | HH-RLHF | `chosen: "\n\nHuman: ...\n\nAssistant: ..."` | transcript parsed into turns |
 | UltraFeedback-binarized | `chosen: [user, assistant, ...]` | the list is the conversation |
 | TRL prompt + continuation | `prompt` (string or messages) + `chosen: [assistant ...]` | prompt followed by the continuation |
+| Orca DPO pairs | `system` + `question` + `chosen: "..."` | chosen used as the answer |
+| Chatbot Arena (`--format preference` only) | `conversation_a` / `conversation_b` + `winner` | the winner is chosen, the other side rejected; ties are skipped |
 
 ## Validation
 
@@ -252,7 +328,8 @@ that would train badly are **dropped by default** and counted by reason:
 | `tool_call_id_mismatch` | a `tool_call_id` matches no earlier tool call id |
 | `unresolved_image` / `_video` / `_audio` | a media placeholder has no matching reference in the record |
 | `unused_image` / `_video` / `_audio` | the record lists more media references than placeholders |
-| `unrepresentable_*` | the output format cannot hold the example losslessly (see `alpaca` below) |
+| `preference_record` | a chosen/rejected record in an SFT conversion (use `--format preference` or `--preference chosen`) |
+| `unrepresentable_*` | the output format cannot hold the example losslessly (see `alpaca` and `preference` above) |
 
 Adapters skip blank turns (such as an empty system prompt) instead of
 failing the whole example. Tool calls without ids (LLaMA-Factory) are paired

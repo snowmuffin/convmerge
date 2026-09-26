@@ -7,13 +7,16 @@
 [![PyPI downloads](https://img.shields.io/pypi/dm/convmerge.svg)](https://pypi.org/project/convmerge/)
 [![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-2.1-4baaaa.svg)](CODE_OF_CONDUCT.md)
 
-> **Convert Alpaca, ShareGPT, and mixed chat datasets into a unified `messages` JSONL for LLM supervised fine-tuning.**  
-> Fetch from HuggingFace or GitHub, normalize messy Parquet / JSON / JSONL, convert between Alpaca / ShareGPT / chat schemas, weighted-mix multiple domain sources, and deduplicate — one command each, or the whole pipeline from a reproducible recipe.
+> **Convert Alpaca, ShareGPT, tool-calling, preference, and mixed chat datasets into one training-ready JSONL.**  
+> Fetch from HuggingFace or GitHub, normalize messy Parquet / JSON / JSONL, convert [30+ popular dataset layouts](#tested-datasets) into `messages` (SFT) or `{prompt, chosen, rejected}` (DPO) rows, weighted-mix multiple domain sources, and deduplicate — one command each, or the whole pipeline from a reproducible recipe.
 
 `convmerge` is a **data-preparation CLI and library** for LLM supervised fine-tuning (SFT).
 It takes heterogeneous instruction-tuning datasets — **Alpaca**, **ShareGPT**, raw chat JSONL,
+template-rendered `text` columns, **tool-calling** data (OpenAI, Hermes, Glaive, xLAM,
+LLaMA-Factory), **preference** data (UltraFeedback, HH-RLHF, Orca DPO pairs, Arena),
 Parquet dumps — and produces a single clean JSONL file in the standard `messages` format
-(or back to `alpaca` shape) that any fine-tuning framework can consume directly.
+(or `alpaca` shape, or DPO preference pairs) that TRL, LLaMA-Factory, axolotl, and other
+fine-tuning frameworks consume directly.
 
 It is intentionally scoped to the **pre-training-loop** step: no model
 loading, no inference, no labeling, no training orchestration. See
@@ -56,6 +59,61 @@ cd convmerge
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev,all]"
 ```
+
+## Tested datasets
+
+Every dataset below is converted in the test suite from a record with its exact
+layout, and `python scripts/datasets.py check` runs the same conversions on real
+rows from the Hub. For example:
+
+```bash
+convmerge fetch hf://NousResearch/hermes-function-calling-v1 --config func_calling --max-rows 1000 -o raw
+convmerge convert -i raw/NousResearch_hermes-function-calling-v1.jsonl -o tools.jsonl --from auto --format messages
+
+convmerge fetch hf://HuggingFaceH4/ultrafeedback_binarized --split train_prefs -o raw
+convmerge convert -i raw/HuggingFaceH4_ultrafeedback_binarized.jsonl -o dpo.jsonl --from auto --format preference
+```
+
+<!-- datasets:start -->
+| Dataset | Kind | Layout | `convmerge convert` flags |
+|---------|------|--------|---------------------------|
+| [HuggingFaceH4/ultrachat_200k](https://huggingface.co/datasets/HuggingFaceH4/ultrachat_200k) | SFT | messages | `--from auto --format messages` |
+| [allenai/tulu-3-sft-mixture](https://huggingface.co/datasets/allenai/tulu-3-sft-mixture) | SFT | messages | `--from auto --format messages` |
+| [HuggingFaceTB/smoltalk](https://huggingface.co/datasets/HuggingFaceTB/smoltalk) | SFT | messages | `--from auto --format messages` |
+| [lmsys/lmsys-chat-1m](https://huggingface.co/datasets/lmsys/lmsys-chat-1m) (gated) | SFT | messages | `--from auto --format messages` |
+| [open-r1/OpenR1-Math-220k](https://huggingface.co/datasets/open-r1/OpenR1-Math-220k) | SFT | messages | `--from auto --format messages` |
+| [teknium/OpenHermes-2.5](https://huggingface.co/datasets/teknium/OpenHermes-2.5) | SFT | sharegpt | `--from auto --format messages` |
+| [Open-Orca/SlimOrca](https://huggingface.co/datasets/Open-Orca/SlimOrca) | SFT | sharegpt | `--from auto --format messages` |
+| [Magpie-Align/Magpie-Pro-300K-Filtered](https://huggingface.co/datasets/Magpie-Align/Magpie-Pro-300K-Filtered) | SFT | sharegpt | `--from auto --format messages` |
+| [LDJnr/Capybara](https://huggingface.co/datasets/LDJnr/Capybara) | SFT | input/output turns | `--from auto --format messages` |
+| [tatsu-lab/alpaca](https://huggingface.co/datasets/tatsu-lab/alpaca) | SFT | alpaca | `--from auto --format messages` |
+| [yahma/alpaca-cleaned](https://huggingface.co/datasets/yahma/alpaca-cleaned) | SFT | alpaca | `--from auto --format messages` |
+| [databricks/databricks-dolly-15k](https://huggingface.co/datasets/databricks/databricks-dolly-15k) | SFT | instruction/context/response | `--from auto --format messages` |
+| [garage-bAInd/Open-Platypus](https://huggingface.co/datasets/garage-bAInd/Open-Platypus) | SFT | alpaca | `--from auto --format messages` |
+| [meta-math/MetaMathQA](https://huggingface.co/datasets/meta-math/MetaMathQA) | SFT | query/response | `--from auto --format messages` |
+| [microsoft/orca-math-word-problems-200k](https://huggingface.co/datasets/microsoft/orca-math-word-problems-200k) | SFT | question/answer | `--from auto --format messages` |
+| [nvidia/HelpSteer2](https://huggingface.co/datasets/nvidia/HelpSteer2) | SFT | prompt/response | `--from auto --format messages` |
+| [beomi/KoAlpaca-v1.1a](https://huggingface.co/datasets/beomi/KoAlpaca-v1.1a) | SFT | alpaca | `--from auto --format messages` |
+| [kyujinpy/KOR-OpenOrca-Platypus-v3](https://huggingface.co/datasets/kyujinpy/KOR-OpenOrca-Platypus-v3) | SFT | alpaca | `--from auto --format messages` |
+| [timdettmers/openassistant-guanaco](https://huggingface.co/datasets/timdettmers/openassistant-guanaco) | SFT | text (### Human:) | `--from auto --format messages` |
+| [OpenAssistant/oasst_top1_2023-08-25](https://huggingface.co/datasets/OpenAssistant/oasst_top1_2023-08-25) | SFT | text (ChatML) | `--from auto --format messages` |
+| [mlabonne/guanaco-llama2-1k](https://huggingface.co/datasets/mlabonne/guanaco-llama2-1k) | SFT | text (Llama 2) | `--from auto --format messages` |
+| [liuhaotian/LLaVA-Instruct-150K](https://huggingface.co/datasets/liuhaotian/LLaVA-Instruct-150K) | SFT | sharegpt + image | `--from auto --format messages` |
+| [glaiveai/glaive-function-calling-v2](https://huggingface.co/datasets/glaiveai/glaive-function-calling-v2) | Tool calling | Glaive system + chat | `--from auto --format messages` |
+| [NousResearch/hermes-function-calling-v1](https://huggingface.co/datasets/NousResearch/hermes-function-calling-v1) | Tool calling | Hermes <tool_call> tags | `--from auto --format messages` |
+| [Salesforce/xlam-function-calling-60k](https://huggingface.co/datasets/Salesforce/xlam-function-calling-60k) (gated) | Tool calling | xLAM query/answers/tools | `--from auto --format messages` |
+| [llamafactory/glaive_toolcall_en](https://huggingface.co/datasets/llamafactory/glaive_toolcall_en) | Tool calling | LLaMA-Factory function_call | `--from auto --format messages` |
+| [HuggingFaceH4/ultrafeedback_binarized](https://huggingface.co/datasets/HuggingFaceH4/ultrafeedback_binarized) | Preference | prompt + chosen/rejected lists | `--from auto --format preference` |
+| [trl-lib/ultrafeedback_binarized](https://huggingface.co/datasets/trl-lib/ultrafeedback_binarized) | Preference | chosen/rejected lists | `--from auto --format preference` |
+| [Anthropic/hh-rlhf](https://huggingface.co/datasets/Anthropic/hh-rlhf) | Preference | Human:/Assistant: transcripts | `--from auto --format preference` |
+| [Intel/orca_dpo_pairs](https://huggingface.co/datasets/Intel/orca_dpo_pairs) | Preference | system/question + chosen/rejected strings | `--from auto --format preference` |
+| [argilla/distilabel-capybara-dpo-7k-binarized](https://huggingface.co/datasets/argilla/distilabel-capybara-dpo-7k-binarized) | Preference | chosen/rejected lists | `--from auto --format preference` |
+| [llamafactory/DPO-En-Zh-20k](https://huggingface.co/datasets/llamafactory/DPO-En-Zh-20k) | Preference | LLaMA-Factory ranking | `--from auto --format preference` |
+| [lmsys/chatbot_arena_conversations](https://huggingface.co/datasets/lmsys/chatbot_arena_conversations) (gated) | Preference | Arena conversation_a/b + winner | `--from auto --format preference` |
+<!-- datasets:end -->
+
+A preference dataset can also feed SFT: `--format messages --preference chosen`
+trains on the chosen answers.
 
 ## Commands
 
@@ -119,18 +177,24 @@ convmerge convert -i ./jsonl/mixed.jsonl -o ./out.jsonl --preset convert_preset.
 ```
 
 Adapters: `alpaca`, `sharegpt`, `chat` (alias `auto`).  
-Emitters: `messages`, `alpaca`.
+Output formats: `messages`, `alpaca`, `preference` (DPO pairs).
 
 > **Tool calling and multimodal:** OpenAI `tool_calls` / `tools`, LLaMA-Factory
-> `function_call` / `observation` turns, and image / audio / video references
-> (`image_url` parts, `images` columns with `<image>` tokens) are preserved in
-> the `messages` output. Media is kept by reference only — convmerge never
+> `function_call` / `observation` turns, Hermes `<tool_call>` tags, Glaive and
+> xLAM layouts all come out as standard `tool_calls` / `tools`, and image /
+> audio / video references (`image_url` parts, `images` columns with `<image>`
+> tokens) are preserved in the `messages` output. Media is kept by reference only — convmerge never
 > downloads or decodes it. `--from sharegpt` keeps whole conversations since
 > 0.6.0 (`turn_mode: pairs` restores the old split). See
 > [docs/format.md](docs/format.md#sharegpt).
 
-Preference (DPO / reward) datasets: `--preference chosen` trains on the chosen
-answer (LLaMA-Factory ranking, HH-RLHF, UltraFeedback, TRL shapes).
+Preference (DPO / reward) datasets: `--format preference` writes
+`{prompt, chosen, rejected}` pairs for TRL's `DPOTrainer`; `--preference chosen`
+trains SFT on the chosen answer instead (UltraFeedback, HH-RLHF, Orca DPO pairs,
+LLaMA-Factory ranking, TRL, and Chatbot Arena shapes).
+
+Rendered `text` columns (ChatML, Llama 2/3, Gemma, `### Human:`, HH, the Alpaca
+prompt) are split back into turns by `--from auto`.
 
 Large files: `--workers N` converts with N processes (same output and
 stats as a single process; ~3.8x faster with 4 workers in our benchmark).

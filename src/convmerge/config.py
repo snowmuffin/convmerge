@@ -279,6 +279,9 @@ def build_convert_config(
             ),
         )
 
+    if cfg_preference:
+        _check_preference_format(cfg_preference, cfg_format)
+
     if emit_overrides:
         cfg_emit = replace(cfg_emit or EmitOptions(), **emit_overrides)
 
@@ -289,3 +292,17 @@ def build_convert_config(
         adapter_options=adapter_opts,
         emit_options=cfg_emit,
     )
+
+
+def _check_preference_format(preference: str, output_format: str) -> None:
+    from convmerge.emitters import get_emitter, wants_pairs
+
+    try:
+        get_emitter(output_format)  # loads plugin formats so wants_pairs sees them
+    except ValueError:
+        return  # unknown format: reported where the format is resolved
+    if wants_pairs(output_format):
+        raise ValueError(
+            f"preference={preference!r} (--preference) turns pairs into SFT examples, but "
+            f"the {output_format!r} format writes chosen/rejected pairs: use one or the other"
+        )

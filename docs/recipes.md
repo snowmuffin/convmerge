@@ -82,7 +82,7 @@ and then:
 |-----|---------|---------|
 | `normalize` | `true` | Normalize before converting; `false` if the data is already clean JSONL; `{array_key: ...}` to rename the wrapper for array records. |
 | `convert.from` | — | Adapter (`alpaca`, `sharegpt`, `chat`/`auto`, or a plugin). Required unless a preset sets it. |
-| `convert.format` | `messages` | Output format. |
+| `convert.format` | `messages` | Output format: `messages`, `alpaca`, or `preference` (DPO pairs; mix and dedupe work on them as on any JSONL). |
 | `convert.preset` | — | A [preset](custom_presets.md) file; its contents are part of the step's inputs, so editing it re-runs the step. |
 | `convert.adapter_kwargs` | — | Same as `--adapter-kwargs`, as a mapping. |
 | `convert.preference` | — | `chosen` / `rejected` for preference data. |
