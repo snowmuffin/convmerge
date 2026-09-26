@@ -98,12 +98,23 @@ Tokens are resolved in this order, highest priority first:
 2. File at `auth.hf_token_file` / `auth.github_token_file`.
 3. Environment variable at `auth.hf_token_env` / `auth.github_token_env`.
 
-Tokens are never printed. Any URL logged by the runner is passed through
-`convmerge.fetch.auth.redact_url` to strip `user:token@host` userinfo.
+Tokens are never printed. Any URL or error logged by the runner is passed
+through `convmerge.fetch.auth.redact_url` to strip `user:token@host` userinfo.
 
-For `mode: clone` entries the token is injected into the clone URL as
-`https://user:TOKEN@github.com/...` only when the host is `github.com` or
-`huggingface.co`; other hosts receive the URL untouched.
+Where tokens are sent:
+
+- **Raw URL / Trees API:** the GitHub token is attached only for
+  `github.com`, `api.github.com`, and `raw.githubusercontent.com`, and is
+  never forwarded when the server redirects. Raw URLs on any other host are
+  fetched anonymously.
+- **`mode: clone`:** for `github.com` and `huggingface.co` the token is passed
+  to `git` (and `git lfs`) as an `Authorization` header scoped to that host
+  through git's environment config (`GIT_CONFIG_COUNT`, git ≥ 2.31). It is
+  not placed in the clone URL, so it never appears in the process list,
+  `.git/config`, or git error messages. Existing clones are pulled with the
+  same header, and a token that older convmerge versions (≤ 0.5.0) embedded in
+  the `origin` URL is removed on the next fetch. Other hosts are cloned
+  without a token.
 
 ## Resume behaviour
 
