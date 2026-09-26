@@ -1,0 +1,4 @@
+{"messages": [{"role": "user", "content": "Translate to French\nGood morning"}, {"role": "assistant", "content": "Bonjour"}]}
+{"messages": [{"role": "user", "content": "Name a primary color"}, {"role": "assistant", "content": "Red"}]}
+{"messages": [{"role": "user", "content": "Summarize\nLong text here."}, {"role": "assistant", "content": "Short."}]}
+{"messages": [{"role": "system", "content": "You are a translator."}, {"role": "user", "content": "Translate 'Good morning' to French"}, {"role": "assistant", "content": "Bonjour"}, {"role": "user", "content": "And in German?"}, {"role": "assistant", "content": "Guten Morgen"}]}

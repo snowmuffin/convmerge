@@ -2,51 +2,206 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
-from typing import Any
+from collections.abc import Callable, Sequence
+from dataclasses import dataclass, replace
+from functools import partial
+from typing import Any, Literal
 
-from convmerge.models import TrainingExample
+from convmerge.models import ChatMessage, ContentPart, ToolCall, TrainingExample
 
 EmitterFn = Callable[[TrainingExample], dict[str, Any]]
 
 
-def emit_messages(example: TrainingExample) -> dict[str, Any]:
-    """OpenAI-style chat messages (one JSON object per line)."""
-    return {
-        "messages": [{"role": m.role, "content": m.content} for m in example.messages],
+class UnrepresentableExample(ValueError):
+    """Raised by an emitter for an example its format cannot hold losslessly.
+
+    ``convert`` drops the example and counts ``reason`` (an
+    ``unrepresentable_*`` code) in its stats.
+    """
+
+    def __init__(self, reason: str, message: str = ""):
+        super().__init__(message or reason)
+        self.reason = reason
+
+
+ToolArguments = Literal["string", "object"]
+AlpacaMultiturn = Literal["flatten", "history", "drop"]
+
+
+@dataclass(frozen=True)
+class EmitOptions:
+    """Output-format options shared by the emitters.
+
+    - ``tool_arguments``: ``messages`` writes tool-call arguments as a JSON
+      string (``"string"``, OpenAI style) or as an object (``"object"``).
+    - ``keep_meta``: also write the example's provenance (``source``, source
+      ``id``, pairwise ``branch``) under ``meta_key``. ``True`` keeps every
+      key; a sequence keeps only those keys. Off by default.
+    - ``alpaca_multiturn``: how ``alpaca`` handles anything other than one
+      user→assistant pair. ``"flatten"`` (default) joins user turns into
+      ``instruction`` and keeps the last assistant turn (lossy; counted);
+      ``"history"`` writes earlier pairs to a LLaMA-Factory ``history``
+      list (lossless for alternating conversations); ``"drop"`` drops them.
+    """
+
+    tool_arguments: ToolArguments = "string"
+    keep_meta: bool | Sequence[str] = False
+    meta_key: str = "meta"
+    alpaca_multiturn: AlpacaMultiturn = "flatten"
+
+    def __post_init__(self) -> None:
+        if self.tool_arguments not in ("string", "object"):
+            raise ValueError(
+                f"tool_arguments must be 'string' or 'object', got {self.tool_arguments!r}"
+            )
+        if self.alpaca_multiturn not in ("flatten", "history", "drop"):
+            raise ValueError(
+                "alpaca_multiturn must be 'flatten', 'history', or 'drop', "
+                f"got {self.alpaca_multiturn!r}"
+            )
+        if not isinstance(self.keep_meta, bool):
+            object.__setattr__(self, "keep_meta", tuple(self.keep_meta))
+
+
+# Media part → OpenAI-style content part. ``image_url`` is the OpenAI schema;
+# ``audio_url`` / ``video_url`` follow the vLLM / Qwen-VL convention for media
+# given by reference.
+_MEDIA_KEYS = {"image": "image_url", "audio": "audio_url", "video": "video_url"}
+
+
+def emit_messages(
+    example: TrainingExample,
+    *,
+    tool_arguments: ToolArguments = "string",
+    options: EmitOptions | None = None,
+) -> dict[str, Any]:
+    """OpenAI-style chat messages (one JSON object per line).
+
+    Plain-text messages serialize exactly as ``{"role", "content"}``; optional
+    keys (``name``, ``tool_calls``, ``tool_call_id``) and a top-level
+    ``tools`` list appear only when present. ``tool_arguments="object"``
+    writes tool-call arguments as JSON objects instead of JSON strings (some
+    Hugging Face chat templates expect that).
+    """
+    if options is not None:
+        tool_arguments = options.tool_arguments
+    row: dict[str, Any] = {
+        "messages": [_message_dict(m, tool_arguments) for m in example.messages],
     }
+    if example.tools:
+        row["tools"] = example.tools
+    return _with_meta(row, example, options)
 
 
-def emit_alpaca(example: TrainingExample) -> dict[str, Any]:
+def _with_meta(
+    row: dict[str, Any], example: TrainingExample, options: EmitOptions | None
+) -> dict[str, Any]:
+    if options is None or options.keep_meta is False:
+        return row
+    meta = dict(example.meta)
+    if options.keep_meta is not True:
+        meta = {k: v for k, v in meta.items() if k in options.keep_meta}
+    if meta:
+        row[options.meta_key] = meta
+    return row
+
+
+def _message_dict(m: ChatMessage, tool_arguments: ToolArguments) -> dict[str, Any]:
+    out: dict[str, Any] = {"role": m.role}
+    if m.name is not None:
+        out["name"] = m.name
+    if m.content is None or isinstance(m.content, str):
+        out["content"] = m.content
+    else:
+        out["content"] = [_part_dict(p) for p in m.content]
+    if m.tool_calls:
+        out["tool_calls"] = [_tool_call_dict(tc, tool_arguments) for tc in m.tool_calls]
+    if m.tool_call_id is not None:
+        out["tool_call_id"] = m.tool_call_id
+    return out
+
+
+def _part_dict(p: ContentPart) -> dict[str, Any]:
+    if p.type == "text":
+        return {"type": "text", "text": p.text or ""}
+    key = _MEDIA_KEYS.get(p.type)
+    if key is None or p.url is None:
+        # Unknown part type or unresolved placeholder: keep the bare type.
+        return {"type": p.type}
+    return {"type": key, key: {"url": p.url}}
+
+
+def _tool_call_dict(tc: ToolCall, tool_arguments: ToolArguments) -> dict[str, Any]:
+    args: Any = tc.arguments if tool_arguments == "string" else tc.arguments_object()
+    out: dict[str, Any] = {}
+    if tc.id is not None:
+        out["id"] = tc.id
+    out["type"] = "function"
+    out["function"] = {"name": tc.name, "arguments": args}
+    return out
+
+
+def emit_alpaca(
+    example: TrainingExample,
+    *,
+    options: EmitOptions | None = None,
+    notes: list[str] | None = None,
+) -> dict[str, Any]:
     """
-    Alpaca instruction / input / output.
+    Alpaca instruction / input / output (plus ``system`` / ``history``).
 
-    Two-turn (user, assistant) maps cleanly. Longer conversations are flattened:
-    all user contents joined into ``instruction``, last assistant into ``output``.
+    One user→assistant pair maps cleanly; system turns go to a ``system``
+    field (LLaMA-Factory style). Longer conversations follow
+    ``options.alpaca_multiturn`` (see :class:`EmitOptions`); ``"flatten"``
+    appends ``"lossy_multiturn_flattened"`` to ``notes`` so ``convert`` can
+    count it. Tool calls and media cannot be written in this format: such
+    examples raise :class:`UnrepresentableExample`.
     """
+    opts = options or EmitOptions()
     msgs = example.messages
+    if example.tools or any(m.tool_calls or m.role == "tool" for m in msgs):
+        raise UnrepresentableExample("unrepresentable_tool_calls")
+    if any(m.media for m in msgs):
+        raise UnrepresentableExample("unrepresentable_media")
     if not msgs:
         return {"instruction": "", "input": "", "output": ""}
 
-    if len(msgs) == 2 and msgs[0].role == "user" and msgs[1].role == "assistant":
-        return {
-            "instruction": msgs[0].content,
-            "input": "",
-            "output": msgs[1].content,
-        }
+    system = "\n".join(m.text for m in msgs if m.role == "system" and m.text)
+    turns = [m for m in msgs if m.role != "system"]
+    if len(turns) == 2 and turns[0].role == "user" and turns[1].role == "assistant":
+        row: dict[str, Any] = {"instruction": turns[0].text, "input": "", "output": turns[1].text}
+    elif opts.alpaca_multiturn == "drop":
+        raise UnrepresentableExample("unrepresentable_multiturn")
+    elif opts.alpaca_multiturn == "history":
+        row = _alpaca_with_history(turns)
+    else:
+        row = _alpaca_flattened(turns)
+        if notes is not None:
+            notes.append("lossy_multiturn_flattened")
+    if system:
+        row["system"] = system
+    return _with_meta(row, example, options)
 
+
+def _alpaca_flattened(turns: list[ChatMessage]) -> dict[str, Any]:
     user_parts: list[str] = []
     last_asst = ""
-    for m in msgs:
+    for m in turns:
         if m.role == "user":
-            user_parts.append(m.content)
+            user_parts.append(m.text)
         elif m.role == "assistant":
-            last_asst = m.content
-    return {
-        "instruction": "\n".join(user_parts).strip(),
-        "input": "",
-        "output": last_asst,
-    }
+            last_asst = m.text
+    return {"instruction": "\n".join(user_parts).strip(), "input": "", "output": last_asst}
+
+
+def _alpaca_with_history(turns: list[ChatMessage]) -> dict[str, Any]:
+    roles = [m.role for m in turns]
+    if len(turns) < 2 or len(turns) % 2 or roles != ["user", "assistant"] * (len(turns) // 2):
+        # Only strictly alternating user/assistant conversations fit history.
+        raise UnrepresentableExample("unrepresentable_multiturn")
+    pairs = [[turns[i].text, turns[i + 1].text] for i in range(0, len(turns), 2)]
+    last_user, last_asst = pairs.pop()
+    return {"instruction": last_user, "input": "", "output": last_asst, "history": pairs}
 
 
 EMITTERS: dict[str, EmitterFn] = {
@@ -55,8 +210,23 @@ EMITTERS: dict[str, EmitterFn] = {
 }
 
 
-def get_emitter(name: str) -> EmitterFn:
+def get_emitter(
+    name: str,
+    *,
+    tool_arguments: ToolArguments | None = None,
+    options: EmitOptions | None = None,
+    notes: list[str] | None = None,
+) -> EmitterFn:
+    """Return the emitter for ``name`` bound to ``options``.
+
+    ``notes``, if given, collects lossy-but-kept conversions (e.g.
+    ``lossy_multiturn_flattened``); the caller clears it between examples.
+    """
     if name not in EMITTERS:
         known = ", ".join(sorted(EMITTERS))
         raise ValueError(f"Unknown output format {name!r}. Choose one of: {known}")
-    return EMITTERS[name]
+    if tool_arguments is not None:
+        options = replace(options or EmitOptions(), tool_arguments=tool_arguments)
+    if name == "messages":
+        return partial(emit_messages, options=options) if options else emit_messages
+    return partial(emit_alpaca, options=options, notes=notes)

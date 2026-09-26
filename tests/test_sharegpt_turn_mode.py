@@ -43,7 +43,7 @@ def test_full_keeps_whole_conversation() -> None:
     ]
 
 
-def test_full_drops_empty_turns_and_requires_both_sides() -> None:
+def test_full_drops_empty_turns() -> None:
     rec = {
         "conversations": [
             {"from": "system", "value": ""},
@@ -54,8 +54,11 @@ def test_full_drops_empty_turns_and_requires_both_sides() -> None:
     assert _roles_contents(iter_from_sharegpt_line(rec, turn_mode="full")) == [
         [("user", "q"), ("assistant", "a")]
     ]
+    # Incomplete conversations are still emitted; validation decides what to drop.
     only_user = {"conversations": [{"from": "human", "value": "q"}]}
-    assert list(iter_from_sharegpt_line(only_user, turn_mode="full")) == []
+    assert _roles_contents(iter_from_sharegpt_line(only_user, turn_mode="full")) == [
+        [("user", "q")]
+    ]
 
 
 def test_pairs_is_legacy_behavior_without_warning() -> None:
@@ -68,24 +71,21 @@ def test_pairs_is_legacy_behavior_without_warning() -> None:
     ]
 
 
-def test_default_warns_only_when_output_would_change() -> None:
-    with pytest.warns(FutureWarning, match="turn_mode"):
-        default = list(iter_from_sharegpt_line(MULTI))
-    assert _roles_contents(default) == _roles_contents(
-        iter_from_sharegpt_line(MULTI, turn_mode="pairs")
-    )
+def test_default_is_full_without_warning() -> None:
     with warnings.catch_warnings():
         warnings.simplefilter("error")
-        assert len(list(iter_from_sharegpt_line(SINGLE))) == 1
-        assert list(iter_from_sharegpt_line({"conversations": []})) == []
+        default = list(iter_from_sharegpt_line(MULTI))
+    assert _roles_contents(default) == _roles_contents(
+        iter_from_sharegpt_line(MULTI, turn_mode="full")
+    )
 
 
 def test_non_string_value_does_not_crash() -> None:
-    rec = {"conversations": [{"from": "human", "value": ["x"]}, {"from": "gpt", "value": "a"}]}
+    rec = {"conversations": [{"from": "human", "value": 5}, {"from": "gpt", "value": "a"}]}
     assert _roles_contents(iter_from_sharegpt_line(rec, turn_mode="pairs")) == [
         [("user", ""), ("assistant", "a")]
     ]
-    assert list(iter_from_sharegpt_line(rec, turn_mode="full")) == []
+    assert _roles_contents(iter_from_sharegpt_line(rec, turn_mode="full")) == [[("assistant", "a")]]
 
 
 def test_unknown_turn_mode_raises() -> None:
@@ -141,28 +141,7 @@ def test_build_convert_config_rejects_bad_sharegpt_options(kwargs: str) -> None:
         )
 
 
-def test_cli_collapses_warning_into_one_counted_line(tmp_path: Path, capsys) -> None:
-    src = _write(tmp_path / "in.jsonl", MULTI, SINGLE, MULTI)
-    main(
-        [
-            "convert",
-            "-i",
-            str(src),
-            "-o",
-            str(tmp_path / "o.jsonl"),
-            "--from",
-            "sharegpt",
-            "-f",
-            "messages",
-        ]
-    )
-    err = capsys.readouterr().err
-    assert err.count("turn_mode") >= 1
-    assert "[2 records affected]" in err
-    assert err.count("warning: sharegpt adapter") == 1
-
-
-def test_cli_explicit_turn_mode_silences_warning(tmp_path: Path, capsys) -> None:
+def test_cli_pairs_mode(tmp_path: Path, capsys) -> None:
     src = _write(tmp_path / "in.jsonl", MULTI)
     main(
         [
@@ -179,4 +158,4 @@ def test_cli_explicit_turn_mode_silences_warning(tmp_path: Path, capsys) -> None
             '{"sharegpt": {"turn_mode": "pairs"}}',
         ]
     )
-    assert "turn_mode" not in capsys.readouterr().err
+    assert "wrote 2 examples" in capsys.readouterr().err

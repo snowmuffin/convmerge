@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-import json
 from collections import Counter
 from pathlib import Path
 from typing import Any
+
+from convmerge.io import iter_jsonl
 
 
 def count_turns(sample: dict[str, Any]) -> int:
@@ -29,20 +30,16 @@ def analyze_turn_distribution(path: str | Path) -> dict[str, Any]:
     single = 0
     multi = 0
     dist: Counter[int] = Counter()
-    with p.open(encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if not line:
-                continue
-            sample = json.loads(line)
-            if not isinstance(sample, dict):
-                continue
-            turns = count_turns(sample)
-            dist[turns] += 1
-            if turns == 1:
-                single += 1
-            else:
-                multi += 1
+    for line in iter_jsonl(p, on_error="raise"):
+        sample = line.value
+        if not isinstance(sample, dict):
+            continue
+        turns = count_turns(sample)
+        dist[turns] += 1
+        if turns == 1:
+            single += 1
+        else:
+            multi += 1
     return {
         "total": single + multi,
         "single": single,
@@ -70,21 +67,17 @@ def split_by_turns(
     s_count = 0
     m_count = 0
     with (
-        src_p.open(encoding="utf-8") as rf,
         single_p.open("w", encoding="utf-8") as sf,
         multi_p.open("w", encoding="utf-8") as mf,
     ):
-        for line in rf:
-            raw = line.strip()
-            if not raw:
-                continue
-            sample = json.loads(raw)
+        for line in iter_jsonl(src_p, on_error="raise"):
+            sample = line.value
             if not isinstance(sample, dict):
                 continue
             if is_single_turn(sample):
-                sf.write(raw + "\n")
+                sf.write(line.raw + "\n")
                 s_count += 1
             else:
-                mf.write(raw + "\n")
+                mf.write(line.raw + "\n")
                 m_count += 1
     return s_count, m_count

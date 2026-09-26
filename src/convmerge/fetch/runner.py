@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import sys
 import tempfile
 import traceback
 from collections.abc import Callable
@@ -44,14 +45,16 @@ def run_manifest(
     only: list[str] | None = None,
     hf_token: str | None = None,
     github_token: str | None = None,
-    log: LogFn = print,
+    log: LogFn | None = None,
 ) -> FetchResult:
     """Execute every selected entry in ``manifest`` sequentially.
 
     ``output_root`` overrides the manifest default when provided. ``only``
     filters the entries by name. ``hf_token`` / ``github_token`` take highest
-    priority over the manifest ``auth`` block and process env.
+    priority over the manifest ``auth`` block and process env. Progress lines
+    go to ``log`` (default: stderr).
     """
+    log = log or _log_stderr
     base_root = Path(output_root) if output_root else Path(manifest.defaults.output_root)
     base_root.mkdir(parents=True, exist_ok=True)
 
@@ -96,6 +99,11 @@ def run_manifest(
         f"failed={len(result.failed)}"
     )
     return result
+
+
+def _log_stderr(message: str) -> None:
+    # Progress lines are diagnostics, not data: keep stdout clean for piping.
+    print(message, file=sys.stderr)
 
 
 def _select_entries(

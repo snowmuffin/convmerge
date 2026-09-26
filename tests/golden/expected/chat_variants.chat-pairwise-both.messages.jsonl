@@ -1,0 +1,8 @@
+{"messages": [{"role": "user", "content": "hi"}, {"role": "assistant", "content": "hello"}]}
+{"messages": [{"role": "user", "content": "Q"}, {"role": "assistant", "content": "A1"}]}
+{"messages": [{"role": "user", "content": "Q"}, {"role": "assistant", "content": "A2"}]}
+{"messages": [{"role": "user", "content": "Q"}, {"role": "assistant", "content": "A1"}]}
+{"messages": [{"role": "user", "content": "Q"}, {"role": "assistant", "content": "A2"}]}
+{"messages": [{"role": "user", "content": "Why is the sky blue?"}, {"role": "assistant", "content": "Rayleigh scattering."}]}
+{"messages": [{"role": "user", "content": "Write a haiku"}, {"role": "assistant", "content": "Autumn moonlight / a worm digs silently / into the chestnut"}]}
+{"messages": [{"role": "user", "content": "custom keys"}, {"role": "assistant", "content": "ok"}]}
