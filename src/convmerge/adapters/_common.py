@@ -15,6 +15,7 @@ import re
 from collections.abc import Iterable
 from typing import Any
 
+from convmerge.adapters.tool_formats import hermes_tools, rewrite_hermes, uses_hermes_tags
 from convmerge.models import ChatMessage, ContentPart, ToolCall, TrainingExample
 
 # Raw role labels whose *value* is a JSON function call (LLaMA-Factory style).
@@ -312,13 +313,20 @@ def build_example(
     msgs: list[ChatMessage], record: dict[str, Any], *, meta: dict[str, object]
 ) -> TrainingExample:
     """Wrap turns in a :class:`TrainingExample`, attaching the record-level
-    ``system`` / ``tools`` / media columns."""
+    ``system`` / ``tools`` / media columns and decoding Hermes-style
+    ``<tool_call>`` / ``<tool_response>`` tags (see
+    :mod:`convmerge.adapters.tool_formats`)."""
     msgs = with_system(msgs, record)
+    tools = record.get("tools")
+    if uses_hermes_tags(msgs, record):
+        msgs = rewrite_hermes(msgs)
+        if tools is None:
+            tools = hermes_tools(msgs)
     msgs, issues = attach_media(msgs, record)
     return TrainingExample(
         messages=msgs,
         meta=source_meta(record, meta),
-        tools=normalize_tools(record.get("tools")),
+        tools=normalize_tools(tools),
         issues=issues,
     )
 
