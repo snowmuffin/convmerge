@@ -19,6 +19,8 @@ you diff outputs between versions or call the Python API.
 | `--format alpaca` with tool calls or media | reduced to text | dropped (`unrepresentable_*`) | — |
 | Plain `text` records via `chat` | assistant-only example written | dropped (`no_user`) | `--on-invalid keep` |
 | Blank turns (e.g. empty system prompt) | kept as empty messages | skipped | — |
+| Flat Q&A with both `solution` and `answer` (LIMO, NuminaMath) | short `answer` used as target | full `solution` used | `adapter_options.chat.output_keys: [output, response, answer]` |
+| `problem`/`solution`, `query`/`response`, `prompt`/`completion` records | dropped or assistant missing | converted | — |
 | Diagnostics | some on stdout | stderr only | — |
 
 Every drop is counted by reason on stderr; `--report PATH` writes the counts
