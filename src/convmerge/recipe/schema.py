@@ -40,6 +40,7 @@ _CONVERT_KEYS = {
     "split_turns",
     "reasoning_turns",
     "map",
+    "meta",
 }
 _FETCH_ENTRY_KEYS = {"hf", "url", "config", "split", "ext", "mode", "lfs", "max_rows"}
 
@@ -85,6 +86,7 @@ class SourceSpec:
     array_key: str
     convert: ConvertSpec
     fetch_auth: AuthConfig | None = None
+    license: str | None = None
 
 
 @dataclass(frozen=True)
@@ -220,7 +222,7 @@ def parse_recipe(raw: Any, *, path: Path) -> Recipe:
 def _source(name: str, raw: Any, base: Path) -> SourceSpec:
     where = f"sources.{name}"
     spec = _mapping(raw, where)
-    _only(spec, {"fetch", "path", "normalize", "convert"}, where)
+    _only(spec, {"fetch", "path", "normalize", "convert", "license"}, where)
     if ("fetch" in spec) == ("path" in spec):
         raise RecipeError(f"{where}: set exactly one of 'fetch' or 'path'")
 
@@ -251,6 +253,7 @@ def _source(name: str, raw: Any, base: Path) -> SourceSpec:
         array_key=array_key,
         convert=_convert(spec["convert"], base, f"{where}.convert"),
         fetch_auth=fetch_auth,
+        license=_str(spec["license"], f"{where}.license") if "license" in spec else None,
     )
 
 
@@ -320,6 +323,13 @@ def _convert(raw: Any, base: Path, where: str) -> ConvertSpec:
     for key in ("tool_arguments", "meta_key", "alpaca_multiturn", "reasoning", "tool_content"):
         if key in spec:
             emit[key] = _str(spec[key], f"{where}.{key}")
+    if "meta" in spec:
+        from convmerge.config import meta_values_from_mapping
+
+        try:
+            emit["meta_values"] = meta_values_from_mapping(spec["meta"], where=f"{where}.meta")
+        except ValueError as e:
+            raise RecipeError(str(e)) from e
     transforms: dict[str, Any] = {}
     for key in ("system", "reasoning_turns"):
         if key in spec:
