@@ -43,7 +43,8 @@ exception messages (the exception *types* are covered).
 - Output streams: data goes to files or stdout; progress, warnings, and
   errors go to stderr only. `inspect`, `validate`, `turns`, `tokens`, `formats`, and
   `run --plan` print their result to stdout, as do `preset init`,
-  `run --init` without `-o`, and `llamafactory-info` without `--info`.
+  `run --init` without `-o`, `llamafactory-info` without `--info`, and
+  `axolotl-config` without `-o`.
 
 The wording of `--help` and of stderr messages is not covered.
 

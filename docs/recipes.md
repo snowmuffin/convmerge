@@ -58,7 +58,7 @@ All paths are relative to the recipe file.
 | `output` | *(required)* | Final JSONL file. |
 | `workdir` | `build` | Intermediates go to `<workdir>/<source>/{raw, jsonl, converted.jsonl}`. |
 | `lock` | `<recipe name>.lock.json` | Lock file, next to the recipe. Commit it to share exact builds. |
-| `report` | `<workdir>/report.json` | Per-step stats, drop reasons, and the output digest. |
+| `report` | `<workdir>/report.json` | Per-step stats, drop reasons, the output digest, and every source's license (`licenses`, `license_warnings`). |
 | `auth` | — | Token sources, same fields as a fetch manifest's `auth` block. |
 | `sources` | *(required)* | Name → source. Names become directory names (letters, digits, `_ - .`). |
 | `mix` | — | How to combine sources (see below). |
@@ -82,6 +82,7 @@ and then:
 
 | Key | Default | Meaning |
 |-----|---------|---------|
+| `license` | the dataset card's | The source's license, recorded in the report. Hugging Face sources without one get the `license` of their dataset card at fetch time. Non-commercial, research-only, `other`, and unknown licenses are warned about (`[license]` lines). |
 | `normalize` | `true` | Normalize before converting; `false` if the data is already clean JSONL; `{array_key: ...}` to rename the wrapper for array records. |
 | `convert.from` | — | Adapter (`alpaca`, `sharegpt`, `chat`/`auto`, or a plugin). Required unless a preset sets it. |
 | `convert.format` | `messages` | Output format: `messages`, `alpaca`, or `preference` (DPO pairs; mix and dedupe work on them as on any JSONL). |
@@ -91,6 +92,8 @@ and then:
 | `convert.on_invalid` | `drop` | `drop`, `keep`, or `fail`. |
 | `convert.workers` | `1` | Parallel convert. Output does not depend on it, so changing it never re-runs a step. |
 | `convert.tool_arguments`, `keep_meta`, `meta_key`, `alpaca_multiturn`, `reasoning`, `tool_content` | — | Same as the `convert` flags. |
+| `convert.meta` | — | Constant fields written under `meta` on every row (`--meta`), e.g. `{dataset: kullm}` to keep each row's origin after the mix. |
+| `convert.map` | — | A [field mapping](format.md#field-mapping---from-map) for layouts no adapter knows; implies `from: map`. |
 | `convert.system`, `merge_consecutive`, `split_turns`, `reasoning_turns` | — | The template fixes of `convert` (`--system`, `--merge-consecutive`, `--split-turns`, `--reasoning-turns`); see [format.md](format.md#fixes-for-strict-chat-templates). |
 
 A directory source with several data files is converted file by file (sorted

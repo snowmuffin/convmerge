@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import inspect
 import json
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from functools import partial
 from typing import Any, Literal
@@ -59,6 +59,9 @@ class EmitOptions:
       tools. ``"empty"`` (default) writes ``""``, which every common chat
       template accepts; ``"null"`` writes ``null`` (several templates,
       including Qwen3's and gpt-oss's, fail on it).
+    - ``meta_values``: constant fields written under ``meta_key`` on every
+      row (with or without ``keep_meta``), e.g. ``{"dataset": "kullm",
+      "license": "apache-2.0"}`` to keep each row's origin after a mix.
     """
 
     tool_arguments: ToolArguments = "string"
@@ -67,6 +70,7 @@ class EmitOptions:
     alpaca_multiturn: AlpacaMultiturn = "flatten"
     reasoning: ReasoningMode = "keep"
     tool_content: ToolContent = "empty"
+    meta_values: Mapping[str, str] | None = None
 
     def __post_init__(self) -> None:
         if self.tool_arguments not in ("string", "object"):
@@ -86,6 +90,11 @@ class EmitOptions:
             raise ValueError(f"tool_content must be 'empty' or 'null', got {self.tool_content!r}")
         if not isinstance(self.keep_meta, bool):
             object.__setattr__(self, "keep_meta", tuple(self.keep_meta))
+        if self.meta_values is not None:
+            values = dict(self.meta_values)
+            if not all(isinstance(k, str) and isinstance(v, str) for k, v in values.items()):
+                raise ValueError("meta_values must map strings to strings")
+            object.__setattr__(self, "meta_values", values)
 
 
 # Media part → OpenAI-style content part. ``image_url`` is the OpenAI schema;
@@ -118,11 +127,14 @@ def emit_messages(
 def _with_meta(
     row: dict[str, Any], example: TrainingExample, options: EmitOptions | None
 ) -> dict[str, Any]:
-    if options is None or options.keep_meta is False:
+    if options is None or (options.keep_meta is False and not options.meta_values):
         return row
-    meta = dict(example.meta)
-    if options.keep_meta is not True:
-        meta = {k: v for k, v in meta.items() if k in options.keep_meta}
+    meta: dict[str, Any] = {}
+    if options.keep_meta is True:
+        meta = dict(example.meta)
+    elif options.keep_meta:
+        meta = {k: v for k, v in example.meta.items() if k in options.keep_meta}
+    meta.update(options.meta_values or {})
     if meta:
         row[options.meta_key] = meta
     return row

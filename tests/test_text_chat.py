@@ -9,6 +9,7 @@ import pytest
 
 from convmerge import ConvertStats, convert_file
 from convmerge.adapters.text_chat import parse_text_chat
+from convmerge.models import ChatMessage
 
 
 def _roles(text: str) -> list[tuple[str, str]]:
@@ -119,3 +120,24 @@ def test_auto_adapter_reads_text_columns(tmp_path: Path) -> None:
 def test_system_column_joins_parsed_text(tmp_path: Path) -> None:
     rows, _ = _convert(tmp_path, [{"system": "S", "text": "### Human: Q### Assistant: A"}])
     assert rows[0]["messages"][0] == {"role": "system", "content": "S"}
+
+
+def test_usr_bot_sys_tags() -> None:
+    """heegyu/open-korean-instructions: <usr> / <bot> lines, <sys> as system or input."""
+    single = (
+        "<usr> 홀수 중 하나를 밝히세요.\n<sys> 트위터, 인스타그램, 텔레그램\n<bot> 텔레그램입니다."
+    )
+    assert parse_text_chat(single) == [
+        ChatMessage("user", "홀수 중 하나를 밝히세요.\n트위터, 인스타그램, 텔레그램"),
+        ChatMessage("assistant", "텔레그램입니다."),
+    ]
+    multi = "\n  <sys>문서 내용.\n<usr> 누가?\n<bot> 바그너.\n<usr> 언제?\n<bot> 1839년.\n<usr> 더?"
+    assert parse_text_chat(multi) == [
+        ChatMessage("system", "문서 내용."),
+        ChatMessage("user", "누가?"),
+        ChatMessage("assistant", "바그너."),
+        ChatMessage("user", "언제?"),
+        ChatMessage("assistant", "1839년."),
+    ]
+    inline = parse_text_chat("<usr> 코드\n<bot> a<usr>b 는 태그가 아님")
+    assert inline is not None and inline[-1].content == "a<usr>b 는 태그가 아님"

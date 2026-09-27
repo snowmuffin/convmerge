@@ -13,7 +13,7 @@ from __future__ import annotations
 import importlib
 from typing import TYPE_CHECKING, Any
 
-__version__ = "0.12.0"
+__version__ = "0.13.0"
 
 _EXPORTS: dict[str, str] = {
     # convert pipeline
@@ -30,6 +30,7 @@ _EXPORTS: dict[str, str] = {
     "EmitOptions": "convmerge.emitters",
     "UnrepresentableExample": "convmerge.emitters",
     "TransformOptions": "convmerge.transforms",
+    "MapSpec": "convmerge.adapters.mapped",
     # data model
     "TrainingExample": "convmerge.models",
     "ChatMessage": "convmerge.models",
@@ -75,6 +76,7 @@ __all__ = [
     "InvalidExampleError",
     "JsonlDecodeError",
     "JsonlLine",
+    "MapSpec",
     "MixResult",
     "MixSource",
     "ReadStats",
@@ -121,6 +123,7 @@ def __dir__() -> list[str]:
 
 if TYPE_CHECKING:  # pragma: no cover - for type checkers and IDEs only
     from convmerge.adapters import available_adapters, register_adapter
+    from convmerge.adapters.mapped import MapSpec
     from convmerge.config import (
         AdapterOptions,
         ChatAdapterOptions,

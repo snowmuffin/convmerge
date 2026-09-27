@@ -22,6 +22,17 @@ ADAPTERS: dict[str, AdapterFn] = {
 }
 
 
+def _map_needs_spec(record: dict[str, Any]) -> Iterator[TrainingExample]:
+    raise ValueError(
+        "the map adapter needs a field mapping: pass --adapter-kwargs "
+        "'{\"map\": {...}}', or use convmerge.adapters.mapped.iter_from_mapped_line"
+    )
+
+
+# ``map`` is bound to its field mapping by convmerge.adapter_resolve.resolve_adapter.
+ADAPTERS["map"] = _map_needs_spec
+
+
 BUILTIN_ADAPTERS = frozenset(ADAPTERS)
 
 

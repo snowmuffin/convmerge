@@ -39,6 +39,8 @@ _CONVERT_KEYS = {
     "merge_consecutive",
     "split_turns",
     "reasoning_turns",
+    "map",
+    "meta",
 }
 _FETCH_ENTRY_KEYS = {"hf", "url", "config", "split", "ext", "mode", "lfs", "max_rows"}
 
@@ -84,6 +86,7 @@ class SourceSpec:
     array_key: str
     convert: ConvertSpec
     fetch_auth: AuthConfig | None = None
+    license: str | None = None
 
 
 @dataclass(frozen=True)
@@ -219,7 +222,7 @@ def parse_recipe(raw: Any, *, path: Path) -> Recipe:
 def _source(name: str, raw: Any, base: Path) -> SourceSpec:
     where = f"sources.{name}"
     spec = _mapping(raw, where)
-    _only(spec, {"fetch", "path", "normalize", "convert"}, where)
+    _only(spec, {"fetch", "path", "normalize", "convert", "license"}, where)
     if ("fetch" in spec) == ("path" in spec):
         raise RecipeError(f"{where}: set exactly one of 'fetch' or 'path'")
 
@@ -250,6 +253,7 @@ def _source(name: str, raw: Any, base: Path) -> SourceSpec:
         array_key=array_key,
         convert=_convert(spec["convert"], base, f"{where}.convert"),
         fetch_auth=fetch_auth,
+        license=_str(spec["license"], f"{where}.license") if "license" in spec else None,
     )
 
 
@@ -300,6 +304,12 @@ def _convert(raw: Any, base: Path, where: str) -> ConvertSpec:
     kwargs = spec.get("adapter_kwargs")
     if kwargs is not None and not isinstance(kwargs, dict):
         raise RecipeError(f"{where}.adapter_kwargs: expected a mapping")
+    if "map" in spec:
+        # ``map:`` is shorthand for ``adapter_kwargs: {map: ...}`` (and implies from: map).
+        if not isinstance(spec["map"], dict):
+            raise RecipeError(f"{where}.map: expected a mapping of fields to paths")
+        kwargs = {**(kwargs or {}), "map": spec["map"]}
+        spec = {"from": "map", **spec}
     preference = spec.get("preference")
     if preference is not None and preference not in PREFERENCES:
         raise RecipeError(f"{where}.preference: expected one of {list(PREFERENCES)}")
@@ -313,6 +323,13 @@ def _convert(raw: Any, base: Path, where: str) -> ConvertSpec:
     for key in ("tool_arguments", "meta_key", "alpaca_multiturn", "reasoning", "tool_content"):
         if key in spec:
             emit[key] = _str(spec[key], f"{where}.{key}")
+    if "meta" in spec:
+        from convmerge.config import meta_values_from_mapping
+
+        try:
+            emit["meta_values"] = meta_values_from_mapping(spec["meta"], where=f"{where}.meta")
+        except ValueError as e:
+            raise RecipeError(str(e)) from e
     transforms: dict[str, Any] = {}
     for key in ("system", "reasoning_turns"):
         if key in spec:
