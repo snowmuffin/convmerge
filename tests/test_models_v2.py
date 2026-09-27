@@ -73,7 +73,7 @@ def test_emit_messages_openai_schema() -> None:
     assert user == {"role": "user", "name": "alice", "content": "Weather?"}
     assert call == {
         "role": "assistant",
-        "content": None,
+        "content": "",
         "tool_calls": [
             {
                 "id": "c1",

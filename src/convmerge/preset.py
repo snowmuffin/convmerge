@@ -13,6 +13,7 @@ from convmerge.config import (
     check_preference,
     emit_options_from_mapping,
     sharegpt_adapter_options_from_mapping,
+    transform_options_from_mapping,
 )
 
 PRESET_TEMPLATE_YAML = """# convmerge convert preset (v1)
@@ -43,6 +44,15 @@ adapter_options:
 #   keep_meta: false          # true, or a list of keys such as [source, id]
 #   meta_key: meta
 #   alpaca_multiturn: flatten # flatten | history | drop
+#   reasoning: keep           # keep | inline | reasoning_content | thinking | drop
+#   tool_content: empty       # empty ("" on tool-call turns) | null
+
+# Optional: fixes for strict chat templates (all off by default)
+# transforms:
+#   system: keep              # keep | fold (into the first user turn) | drop
+#   merge_consecutive: false  # join consecutive same-role turns
+#   split_turns: false        # one example per user turn
+#   reasoning_turns: all      # all | last (reasoning only after the last user turn)
 """
 
 
@@ -103,6 +113,12 @@ def load_convert_preset(path: Path) -> ConvertConfig:
         if not isinstance(oo, dict):
             raise ValueError("output_options must be a mapping")
         emit_options = emit_options_from_mapping(oo)
+    transform_options = None
+    tr = data.get("transforms")
+    if tr is not None:
+        if not isinstance(tr, dict):
+            raise ValueError("transforms must be a mapping")
+        transform_options = transform_options_from_mapping(tr)
     if not isinstance(adapter, str) or not adapter.strip():
         raise ValueError("preset requires non-empty string 'adapter'")
     if not isinstance(output_format, str) or not output_format.strip():
@@ -115,6 +131,7 @@ def load_convert_preset(path: Path) -> ConvertConfig:
         encoding=encoding.strip(),
         adapter_options=adapter_options,
         emit_options=emit_options,
+        transform_options=transform_options,
     )
 
 

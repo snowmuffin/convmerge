@@ -32,10 +32,20 @@ output_options:              # optional; CLI flags override each key
   keep_meta: false           # true, or a list such as [source, id]
   meta_key: meta
   alpaca_multiturn: flatten  # flatten | history | drop
+  reasoning: keep            # keep | inline | reasoning_content | thinking | drop
+  tool_content: empty        # empty ("") | null
+
+transforms:                  # optional; fixes for strict chat templates
+  system: keep               # keep | fold | drop
+  merge_consecutive: false
+  split_turns: false
+  reasoning_turns: all       # all | last
 ```
 
 CLI flags `--from`, `--format`, `--adapter-kwargs`, `--tool-arguments`, `--keep-meta`,
-`--meta-key`, and `--alpaca-multiturn` override the preset when provided.
+`--meta-key`, `--alpaca-multiturn`, `--reasoning`, `--tool-content`, `--system`,
+`--merge-consecutive`, `--split-turns`, and `--reasoning-turns` override the preset
+when provided.
 
 ## Commands
 

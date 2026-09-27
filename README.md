@@ -95,7 +95,6 @@ convmerge convert -i raw/HuggingFaceH4_ultrafeedback_binarized.jsonl -o dpo.json
 | [allenai/tulu-3-sft-mixture](https://huggingface.co/datasets/allenai/tulu-3-sft-mixture) | SFT | messages | `--from auto --format messages` |
 | [HuggingFaceTB/smoltalk](https://huggingface.co/datasets/HuggingFaceTB/smoltalk) | SFT | messages | `--from auto --format messages` |
 | [lmsys/lmsys-chat-1m](https://huggingface.co/datasets/lmsys/lmsys-chat-1m) (gated) | SFT | messages | `--from auto --format messages` |
-| [open-r1/OpenR1-Math-220k](https://huggingface.co/datasets/open-r1/OpenR1-Math-220k) | SFT | messages | `--from auto --format messages` |
 | [teknium/OpenHermes-2.5](https://huggingface.co/datasets/teknium/OpenHermes-2.5) | SFT | sharegpt | `--from auto --format messages` |
 | [Open-Orca/SlimOrca](https://huggingface.co/datasets/Open-Orca/SlimOrca) | SFT | sharegpt | `--from auto --format messages` |
 | [Magpie-Align/Magpie-Pro-300K-Filtered](https://huggingface.co/datasets/Magpie-Align/Magpie-Pro-300K-Filtered) | SFT | sharegpt | `--from auto --format messages` |
@@ -113,6 +112,12 @@ convmerge convert -i raw/HuggingFaceH4_ultrafeedback_binarized.jsonl -o dpo.json
 | [OpenAssistant/oasst_top1_2023-08-25](https://huggingface.co/datasets/OpenAssistant/oasst_top1_2023-08-25) | SFT | text (ChatML) | `--from auto --format messages` |
 | [mlabonne/guanaco-llama2-1k](https://huggingface.co/datasets/mlabonne/guanaco-llama2-1k) | SFT | text (Llama 2) | `--from auto --format messages` |
 | [liuhaotian/LLaVA-Instruct-150K](https://huggingface.co/datasets/liuhaotian/LLaVA-Instruct-150K) | SFT | sharegpt + image | `--from auto --format messages` |
+| [open-r1/OpenR1-Math-220k](https://huggingface.co/datasets/open-r1/OpenR1-Math-220k) | Reasoning | messages, inline `<think>` | `--from auto --format messages` |
+| [open-thoughts/OpenThoughts3-1.2M](https://huggingface.co/datasets/open-thoughts/OpenThoughts3-1.2M) | Reasoning | ShareGPT, inline `<think>` | `--from auto --format messages` |
+| [simplescaling/s1K-1.1](https://huggingface.co/datasets/simplescaling/s1K-1.1) | Reasoning | question / trace / attempt columns | `--from auto --format messages --adapter-kwargs '{"chat":{"output_keys":["deepseek_attempt"],"record_reasoning_keys":["deepseek_thinking_trajectory"]}}'` |
+| [nvidia/Llama-Nemotron-Post-Training-Dataset](https://huggingface.co/datasets/nvidia/Llama-Nemotron-Post-Training-Dataset) | Reasoning | `input` turns + `output` | `--from auto --format messages` |
+| [HuggingFaceH4/Multilingual-Thinking](https://huggingface.co/datasets/HuggingFaceH4/Multilingual-Thinking) | Reasoning | messages + `thinking` field (gpt-oss) | `--from auto --format messages --reasoning thinking` |
+| [a-m-team/AM-Thinking-v1-Distilled](https://huggingface.co/datasets/a-m-team/AM-Thinking-v1-Distilled) | Reasoning | ShareGPT, `<think>` + `<answer>` | `--from auto --format messages` |
 | [glaiveai/glaive-function-calling-v2](https://huggingface.co/datasets/glaiveai/glaive-function-calling-v2) | Tool calling | Glaive system + chat | `--from auto --format messages` |
 | [NousResearch/hermes-function-calling-v1](https://huggingface.co/datasets/NousResearch/hermes-function-calling-v1) | Tool calling | Hermes <tool_call> tags | `--from auto --format messages` |
 | [Salesforce/xlam-function-calling-60k](https://huggingface.co/datasets/Salesforce/xlam-function-calling-60k) (gated) | Tool calling | xLAM query/answers/tools | `--from auto --format messages` |
@@ -211,6 +216,18 @@ LLaMA-Factory ranking, TRL, and Chatbot Arena shapes).
 Rendered `text` columns (ChatML, Llama 2/3, Gemma, `### Human:`, HH, the Alpaca
 prompt) are split back into turns by `--from auto`.
 
+Reasoning data: traces stored inline (`<think>...</think>`) or in a
+`reasoning_content` / `thinking` field are kept; `--reasoning` moves them to
+the field your model's chat template reads (`reasoning_content` for Qwen3 /
+DeepSeek, `thinking` for gpt-oss), inline, or drops them. See
+[docs/guides/reasoning.md](docs/guides/reasoning.md).
+
+Strict chat templates: `--system fold` (no system role), `--merge-consecutive`
+("roles must alternate"), `--reasoning-turns last` / `--split-turns`
+(templates that render reasoning only after the last user turn). Tool-call
+turns get `"content": ""`, which every common template accepts. Symptom →
+fix table: [docs/guides/troubleshooting.md](docs/guides/troubleshooting.md).
+
 Large files: `--workers N` converts with N processes (same output and
 stats as a single process; ~3.8x faster with 4 workers in our benchmark).
 
@@ -268,8 +285,11 @@ reproducibility. Omit `--total` to merge all records from every source.
 convmerge dedupe -i ./train/mixed.jsonl -o ./train/mixed.dedup.jsonl
 
 # Render every row with the model's chat template: length percentiles, rows the
-# template rejects (with line numbers), double-encoded tool arguments. -o keeps
-# the rows that render and fit. Needs convmerge[tokens] (transformers, no PyTorch).
+# template rejects (with line numbers), double-encoded tool arguments, answers
+# that start beyond --max-tokens, answers not followed by a stop token, reasoning
+# the template drops, and {% generation %} support -- with the convert flag that
+# fixes each ("hints"). -o keeps the rows that render and fit.
+# Needs convmerge[tokens] (transformers, no PyTorch).
 convmerge tokens -i ./train/mixed.dedup.jsonl --tokenizer Qwen/Qwen2.5-7B-Instruct \
   --max-tokens 4096 -o ./train/fit.jsonl
 

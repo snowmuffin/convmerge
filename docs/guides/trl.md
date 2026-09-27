@@ -62,4 +62,15 @@ convmerge validate -i train/dpo.jsonl
 
 `tokens` exits 1 when any row fails the template, is too long, or has
 double-encoded tool arguments; the JSON report lists the length percentiles
-and each template error with line numbers.
+and each template error with line numbers. It also warns (with the `convert`
+flag that fixes it) about answers that start beyond `--max-tokens`, answers
+not followed by a stop token, templates without `{% generation %}` markers
+(needed by `assistant_only_loss`), and reasoning traces the template drops —
+see [troubleshooting.md](troubleshooting.md).
+
+## Reasoning models
+
+Qwen3 templates read `reasoning_content` (or inline `<think>`), gpt-oss
+templates read `thinking`; pick one with `--reasoning`, and use
+`--split-turns` so every turn of a multi-turn conversation trains its trace:
+[reasoning.md](reasoning.md).

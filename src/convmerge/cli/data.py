@@ -341,6 +341,8 @@ def _cmd_tokens(args: argparse.Namespace) -> None:
             "--tool-arguments object",
             file=sys.stderr,
         )
+    for hint in stats.hints():
+        print(f"hint: {hint}", file=sys.stderr)
     if args.output is not None:
         print(f"kept {stats.kept:,} -> {args.output}; rejected {stats.rejected:,}",
               file=sys.stderr)  # fmt: skip
