@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -273,6 +274,53 @@ def _cmd_llamafactory_info(args: argparse.Namespace) -> None:
     changed = update_dataset_info(args.info, args.name, entry)
     state = "updated" if changed else "unchanged"
     print(f"{args.info}: {args.name!r} {state} (use dataset: {args.name})", file=sys.stderr)
+
+
+def _add_axolotl_config(sub: argparse._SubParsersAction) -> None:
+    p = sub.add_parser(
+        "axolotl-config",
+        help="Print the axolotl datasets: config for a converted file",
+        description="Scan a file written by convert and print the axolotl datasets: entry "
+        "(and test_datasets:, rl: dpo for pairs) whose field names match it.",
+    )
+    p.add_argument("--input", "-i", type=Path, required=True, help="Training file")
+    p.add_argument("--val", type=Path, default=None, help="Validation file (test_datasets:)")
+    p.add_argument(
+        "--config-dir",
+        type=Path,
+        default=None,
+        help="Directory the axolotl config lives in; paths are written relative to it "
+        "(default: as given)",
+    )
+    p.add_argument("--output", "-o", type=Path, default=None, help="Write the snippet here")
+
+
+def _cmd_axolotl_config(args: argparse.Namespace) -> None:
+    from convmerge.axolotl import dataset_config, render_config
+
+    for f in (args.input, args.val):
+        if f is not None and not f.is_file():
+            print(f"error: input file not found: {f}", file=sys.stderr)
+            sys.exit(1)
+
+    def rel(f: Path) -> str:
+        if args.config_dir is None:
+            return f.as_posix()
+        return Path(os.path.relpath(f.resolve(), args.config_dir.resolve())).as_posix()
+
+    try:
+        train = dataset_config(args.input, file_path=rel(args.input))
+        val = dataset_config(args.val, file_path=rel(args.val)) if args.val else None
+    except ValueError as e:
+        print(f"error: {e}", file=sys.stderr)
+        sys.exit(1)
+    text = render_config(train, val, source=args.input.name)
+    if args.output is None:
+        print(text, end="")
+        return
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    args.output.write_text(text, encoding="utf-8")
+    print(f"wrote {args.output}", file=sys.stderr)
 
 
 def _add_tokens(sub: argparse._SubParsersAction) -> None:

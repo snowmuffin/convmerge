@@ -7,8 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-09-27
+
+Any layout without code, every major trainer, and a record of what each
+dataset's license allows — with Korean data as a first-class case.
+
 ### Added
 
+- `--from map` (`MapSpec`): declarative field mapping with dotted paths
+  (`a.b`, `a[0]`, `a[-1]`, `a[]` to walk lists, quoted keys) for layouts no
+  adapter knows, such as AI Hub exports. Flat mode (`user` / `assistant` or
+  `chosen` / `rejected`, `system`, `reasoning`, `tools`) or turns mode
+  (`turns`, `role`, `content`, `name`, `role_map`). Via `--adapter-kwargs`,
+  preset `adapter_options.map`, or recipe `convert.map`. Records with a
+  missing path are dropped as `map_path_missing`.
+- `convmerge axolotl-config`: the axolotl `datasets:` (and `test_datasets:`,
+  `rl: dpo`) block matching a converted file — `chat_template` for
+  `messages` / `sharegpt` (role mappings, `field_system`, `thinking` traces),
+  `chat_template.default` for pairs, `alpaca`. Verified with axolotl 0.19:
+  SFT with tool calls and reasoning, ShareGPT SFT, and DPO.
+- Licenses: recipe sources take `license:`; Hugging Face sources without one
+  get their dataset card's license. `build/report.json` lists each source's
+  license and rows (`licenses`) and warns about non-commercial,
+  research-only, custom, and unknown licenses (`license_warnings`).
+- `--meta KEY=VALUE` (`EmitOptions.meta_values`, recipe `convert.meta`,
+  preset `output_options.meta`): constant fields under `meta` on every row.
+- Korean: the `<usr>` / `<bot>` / `<sys>` text template
+  (heegyu/open-korean-instructions); six Korean datasets in the catalog
+  (KULLM v2, koVast, open-korean-instructions, sharegpt-korean,
+  ko_Ultrafeedback_binarized, orca-math-korean-dpo-pairs); a `Lang` column in
+  the README table; [docs/guides/korean.md](docs/guides/korean.md) in Korean.
 - `Datasets` workflow: converts real rows of every catalog dataset from the
   Hub on catalog / adapter pull requests, weekly, and on demand, with a
   per-dataset summary table. `scripts/datasets.py check` gains `--summary`
@@ -17,6 +45,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The axolotl guide covers `axolotl-config`, `sharegpt`, and DPO, and is now
+  verified.
 - mypy checks against each CI job's own Python instead of a pinned 3.10, so
   stubs that newer dependencies ship only for newer Pythons (numpy 2.5) no
   longer break the check.

@@ -24,6 +24,9 @@ adapter_options:
     # role_keys: [role, from]
     # content_keys: [content, value, text]
     # role_map: { human: user, gpt: assistant }
+  map:                       # used when adapter: map (dotted paths, see format.md)
+    user: question.text
+    assistant: answer.text
   sharegpt:                  # used when adapter: sharegpt
     turn_mode: full          # full (default) | pairs (0.5.x behavior)
 
@@ -34,6 +37,8 @@ output_options:              # optional; CLI flags override each key
   alpaca_multiturn: flatten  # flatten | history | drop
   reasoning: keep            # keep | inline | reasoning_content | thinking | drop
   tool_content: empty        # empty ("") | null
+  meta:                      # constant fields under meta on every row
+    dataset: my_dataset
 
 transforms:                  # optional; fixes for strict chat templates
   system: keep               # keep | fold | drop
