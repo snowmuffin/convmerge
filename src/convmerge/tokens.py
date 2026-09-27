@@ -91,13 +91,22 @@ def load_tokenizer(
     name_or_path: str, *, revision: str | None = None, token: str | None = None
 ) -> Any:
     """``transformers.AutoTokenizer.from_pretrained`` with a clear install hint."""
+    _require_template_support()
+    from transformers import AutoTokenizer
+
+    return AutoTokenizer.from_pretrained(name_or_path, revision=revision, token=token)
+
+
+def _require_template_support() -> None:
+    # transformers renders chat templates with jinja2 but does not depend on it.
     try:
-        from transformers import AutoTokenizer
+        import jinja2  # noqa: F401
+        import transformers  # noqa: F401
     except ImportError as e:
         raise ImportError(
-            "convmerge tokens needs transformers: pip install 'convmerge[tokens]' (or [all])"
+            f"convmerge tokens needs transformers and jinja2 ({e.name} is missing): "
+            "pip install 'convmerge[tokens]' (or [all])"
         ) from e
-    return AutoTokenizer.from_pretrained(name_or_path, revision=revision, token=token)
 
 
 def check_tokens(
@@ -119,6 +128,7 @@ def check_tokens(
     rows that render and are at most ``max_tokens`` long are written there
     and the others to ``rejects`` (if given).
     """
+    _require_template_support()
     tok = load_tokenizer(tokenizer) if isinstance(tokenizer, str) else tokenizer
     template = chat_template if chat_template is not None else getattr(tok, "chat_template", None)
     if not template:
@@ -187,6 +197,8 @@ def _render(
                         text = tok.apply_chat_template(
                             dicts, tools=ex.tools, chat_template=template, tokenize=False
                         )
+                    except ImportError:
+                        raise  # a missing dependency, not a problem with this row
                     except Exception as e:  # noqa: BLE001 - templates raise anything
                         error = f"{type(e).__name__}: {e}"[:_REASON_CHARS]
                         break

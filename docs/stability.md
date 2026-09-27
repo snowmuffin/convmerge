@@ -32,16 +32,18 @@ exception messages (the exception *types* are covered).
   - `0` success;
   - `1` the work failed: a missing input data file, invalid examples found by
     `validate` (or an invalid preset found by `preset validate`),
-    `convert --on-invalid fail` hitting an invalid example, a failed fetch
+    `convert --on-invalid fail` hitting an invalid example, `tokens` (without
+    `-o`) finding rows that fail the chat template, exceed `--max-tokens`, or
+    have double-encoded tool arguments, a failed fetch
     entry with `on_error: fail`, a failed recipe step, `run --frozen` with
     steps out of date, or any unexpected error;
   - `2` the invocation is invalid: bad flags or flag combinations, an
     unsupported fetch URL, or a missing or invalid preset, manifest, mix
     config, or recipe.
 - Output streams: data goes to files or stdout; progress, warnings, and
-  errors go to stderr only. `inspect`, `validate`, `turns`, `formats`, and
-  `run --plan` print their result to stdout, as do `preset init` and
-  `run --init` without `-o`.
+  errors go to stderr only. `inspect`, `validate`, `turns`, `tokens`, `formats`, and
+  `run --plan` print their result to stdout, as do `preset init`,
+  `run --init` without `-o`, and `llamafactory-info` without `--info`.
 
 The wording of `--help` and of stderr messages is not covered.
 
@@ -49,9 +51,9 @@ The wording of `--help` and of stderr messages is not covered.
 
 | File | Versioned by | Covered |
 |------|--------------|---------|
-| Built-in output formats (`messages`, `alpaca`, `preference`) | — | Keys and their meaning, as in [format.md](format.md) |
+| Built-in output formats (`messages`, `alpaca`, `preference`, `sharegpt`, `sharegpt-preference`) | — | Keys and their meaning, as in [format.md](format.md) |
 | Drop / issue reason codes (`no_user`, `unresolved_image`, …) | — | Codes are never renamed or reused |
-| `convert --report`, `validate` JSON | `"version": 1` | Keys and meaning |
+| `convert --report`, `validate`, `tokens` JSON | `"version": 1` | Keys and meaning |
 | Recipe (`recipe.yaml`) | `version: 1` | Schema ([recipes.md](recipes.md)) |
 | `recipe.lock.json`, `build/report.json` | `"version": 1` | Readable by every 1.x release |
 | Fetch manifest | `version: 1` | Schema ([fetch.md](fetch.md)) |

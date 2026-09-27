@@ -43,7 +43,7 @@ optional dependencies (pip install "convmerge[EXTRA]"):
   [fetch-all]  above + HuggingFace (datasets); same packages as fetch-hf
   [parquet]    .parquet input for normalize
   [preset]     YAML presets (convert --preset, preset validate)
-  [tokens]     token lengths and chat-template checks (transformers, no PyTorch)
+  [tokens]     token lengths and chat-template checks (transformers + jinja2, no PyTorch)
   [all]        fetch-all + parquet + preset + tokens (full CLI feature set)
 """.strip()
 
