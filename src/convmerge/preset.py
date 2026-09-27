@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+from convmerge.adapters.mapped import MapSpec
 from convmerge.config import (
     AdapterOptions,
     ConvertConfig,
@@ -34,6 +35,10 @@ adapter_options:
     #   human: user
     #   gpt: assistant
   # preference: chosen        # DPO / reward data: train on the chosen answer
+  # Optional: field mapping for adapter: map (dotted paths into each record)
+  # map:
+  #   user: question.text
+  #   assistant: answer.text
   # Optional: sharegpt adapter (adapter: sharegpt)
   # sharegpt:
   #   turn_mode: full         # full (default, whole conversation) | pairs (0.5.x behavior)
@@ -101,11 +106,14 @@ def load_convert_preset(path: Path) -> ConvertConfig:
         pref = ao.get("preference")
         if pref is not None:
             pref = check_preference(pref)
-        if ch is not None or sg is not None or pref is not None:
+        mp = ao.get("map")
+        spec = MapSpec.from_mapping(mp) if mp is not None else None
+        if ch is not None or sg is not None or pref is not None or spec is not None:
             adapter_options = AdapterOptions(
                 chat=chat_adapter_options_from_mapping(ch) if ch is not None else None,
                 sharegpt=sharegpt_adapter_options_from_mapping(sg) if sg is not None else None,
                 preference=pref,
+                map=spec,
             )
     emit_options = None
     oo = data.get("output_options")

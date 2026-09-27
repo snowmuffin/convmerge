@@ -39,6 +39,7 @@ _CONVERT_KEYS = {
     "merge_consecutive",
     "split_turns",
     "reasoning_turns",
+    "map",
 }
 _FETCH_ENTRY_KEYS = {"hf", "url", "config", "split", "ext", "mode", "lfs", "max_rows"}
 
@@ -300,6 +301,12 @@ def _convert(raw: Any, base: Path, where: str) -> ConvertSpec:
     kwargs = spec.get("adapter_kwargs")
     if kwargs is not None and not isinstance(kwargs, dict):
         raise RecipeError(f"{where}.adapter_kwargs: expected a mapping")
+    if "map" in spec:
+        # ``map:`` is shorthand for ``adapter_kwargs: {map: ...}`` (and implies from: map).
+        if not isinstance(spec["map"], dict):
+            raise RecipeError(f"{where}.map: expected a mapping of fields to paths")
+        kwargs = {**(kwargs or {}), "map": spec["map"]}
+        spec = {"from": "map", **spec}
     preference = spec.get("preference")
     if preference is not None and preference not in PREFERENCES:
         raise RecipeError(f"{where}.preference: expected one of {list(PREFERENCES)}")
