@@ -11,6 +11,9 @@ tokenized. That gives:
   alternate, a system turn the template does not allow, tool calls it
   cannot render), grouped by the template's error message — problems that
   otherwise surface only after training has started;
+- rows whose tool-call arguments are stored as JSON strings but that the
+  template encodes a second time (it expects objects — convert with
+  ``--tool-arguments object``);
 - optionally, a filtered copy: rows that render and fit go to ``output``,
   the rest to ``rejects``, both byte-for-byte as read.
 
@@ -21,6 +24,7 @@ no PyTorch).
 
 from __future__ import annotations
 
+import json
 from array import array
 from collections.abc import Iterator
 from dataclasses import dataclass, field
@@ -44,6 +48,9 @@ class TokenStats:
     template_errors: dict[str, int] = field(default_factory=dict)
     error_lines: dict[str, list[int]] = field(default_factory=dict)
     over_limit: int = 0
+    double_encoded_arguments: int = 0
+    """Rows whose tool-call arguments are stored as JSON strings and that the
+    chat template encodes again (it expects objects: ``--tool-arguments object``)."""
     kept: int = 0
     rejected: int = 0
     invalid_json: int = 0
@@ -64,6 +71,7 @@ class TokenStats:
             "error_lines": dict(sorted(self.error_lines.items())),
             "max_tokens": self.max_tokens,
             "over_limit": self.over_limit,
+            "double_encoded_arguments": self.double_encoded_arguments,
             "kept": self.kept,
             "rejected": self.rejected,
         }
@@ -146,15 +154,18 @@ def _render(
     path: str | Path, tok: Any, template: str, encoding: str, st: TokenStats
 ) -> Iterator[tuple[int, str, list[str] | None]]:
     from convmerge.adapter_resolve import resolve_adapter
-    from convmerge.emitters import EmitOptions, _message_dict, split_pair
+    from convmerge.emitters import ToolArguments, _message_dict, split_pair
 
     adapter = resolve_adapter("auto", None, pairs=True)
     read = ReadStats()
-    options = EmitOptions(tool_arguments="object")  # what HF chat templates expect
     try:
         for line in iter_jsonl(path, encoding=encoding, stats=read):
             st.rows += 1
             examples = list(adapter(line.value)) if isinstance(line.value, dict) else []
+            # Render tool-call arguments the way the file stores them, as a trainer would.
+            as_strings = _stores_string_arguments(line.value)
+            args: ToolArguments = "string" if as_strings else "object"
+            double_encoded = False
             if not examples:
                 st.unreadable += 1
                 yield line.number, line.raw, None
@@ -171,18 +182,22 @@ def _render(
                 else:
                     sides = [ex.messages]
                 for msgs in sides:
-                    dicts = [_message_dict(m, options.tool_arguments) for m in msgs]
+                    dicts = [_message_dict(m, args) for m in msgs]
                     try:
-                        texts.append(
-                            tok.apply_chat_template(
-                                dicts, tools=ex.tools, chat_template=template, tokenize=False
-                            )
+                        text = tok.apply_chat_template(
+                            dicts, tools=ex.tools, chat_template=template, tokenize=False
                         )
                     except Exception as e:  # noqa: BLE001 - templates raise anything
                         error = f"{type(e).__name__}: {e}"[:_REASON_CHARS]
                         break
+                    texts.append(text)
+                    if as_strings and not double_encoded:
+                        double_encoded = any(
+                            json.dumps(tc.arguments) in text for m in msgs for tc in m.tool_calls
+                        )
                 if error:
                     break
+            st.double_encoded_arguments += double_encoded
             if error:
                 st.template_errors[error] = st.template_errors.get(error, 0) + 1
                 lines = st.error_lines.setdefault(error, [])
@@ -194,6 +209,23 @@ def _render(
     finally:
         st.invalid_json = read.invalid_json
         st.first_invalid_line = read.first_invalid_line
+
+
+def _stores_string_arguments(value: Any) -> bool:
+    """Whether an OpenAI-style row keeps tool-call arguments as JSON strings."""
+    if not isinstance(value, dict):
+        return False
+    for key in ("messages", "prompt", "chosen", "rejected"):
+        turns = value.get(key)
+        if not isinstance(turns, list):
+            continue
+        for turn in turns:
+            calls = turn.get("tool_calls") if isinstance(turn, dict) else None
+            for call in calls if isinstance(calls, list) else ():
+                fn = call.get("function") if isinstance(call, dict) else None
+                if isinstance(fn, dict) and "arguments" in fn:
+                    return isinstance(fn["arguments"], str)
+    return False
 
 
 def _measure(

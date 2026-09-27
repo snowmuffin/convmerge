@@ -183,3 +183,22 @@ def test_recipe_tokens_stage(tmp_path: Path, tokenizer_dir: Path) -> None:
                      path=tmp_path / "r.yaml")  # fmt: skip
     with pytest.raises(RecipeError, match="tokens.tokenizer: required"):
         parse_recipe({**raw, "tokens": {"max_tokens": 5}}, path=tmp_path / "r.yaml")
+
+
+def test_double_encoded_tool_arguments_are_reported(tmp_path: Path, tokenizer_dir: Path) -> None:
+    tojson = (
+        "{% for m in messages %}{{ m.role }} {{ m.content or '' }}{% for c in m.tool_calls or [] %}"
+        " {{ c.function.arguments | tojson }}{% endfor %} {% endfor %}"
+    )
+    raw_args = tojson.replace(" | tojson", "")
+    call = {"type": "function", "function": {"name": "f", "arguments": '{"x": 1}'}}
+    row = {"messages": [{"role": "user", "content": "go"},
+                        {"role": "assistant", "content": None, "tool_calls": [call]}]}  # fmt: skip
+    as_object = json.loads(json.dumps(row))
+    as_object["messages"][1]["tool_calls"][0]["function"]["arguments"] = {"x": 1}
+    src = _write(tmp_path / "s.jsonl", [row])
+    obj = _write(tmp_path / "o.jsonl", [as_object])
+    tok = str(tokenizer_dir)
+    assert check_tokens(src, tokenizer=tok, chat_template=tojson).double_encoded_arguments == 1
+    assert check_tokens(obj, tokenizer=tok, chat_template=tojson).double_encoded_arguments == 0
+    assert check_tokens(src, tokenizer=tok, chat_template=raw_args).double_encoded_arguments == 0
