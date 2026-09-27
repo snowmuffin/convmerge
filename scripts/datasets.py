@@ -70,15 +70,16 @@ def convert_config(entry: dict[str, Any]) -> Any:
 
 def render_table(catalog: list[dict[str, Any]]) -> str:
     lines = [
-        "| Dataset | Kind | Layout | `convmerge convert` flags |",
-        "|---------|------|--------|---------------------------|",
+        "| Dataset | Kind | Lang | Layout | `convmerge convert` flags |",
+        "|---------|------|------|--------|---------------------------|",
     ]
     for kind, label in KINDS.items():
         for e in (e for e in catalog if e["kind"] == kind):
             name = f"[{e['id']}](https://huggingface.co/datasets/{e['id']})"
             if e.get("gated"):
                 name += " (gated)"
-            lines.append(f"| {name} | {label} | {e['shape']} | `{flags(e)}` |")
+            lang = e.get("lang", "en")
+            lines.append(f"| {name} | {label} | {lang} | {e['shape']} | `{flags(e)}` |")
     return "\n".join(lines)
 
 

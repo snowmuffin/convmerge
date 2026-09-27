@@ -12,6 +12,9 @@ recognizes the common templates and splits the string back into turns:
 - ``### Human: ... ### Assistant: ...`` (Guanaco)
 - ``Human: ... Assistant: ...`` turns separated by blank lines (HH-RLHF)
 - The Alpaca prompt: ``### Instruction:`` / ``### Input:`` / ``### Response:``
+- ``<usr>`` / ``<bot>`` / ``<sys>`` lines (heegyu/open-korean-instructions):
+  a leading ``<sys>`` is the system prompt (or a document to talk about); one
+  right after a user turn is that turn's input and is joined to it
 
 A trailing user turn with no answer is dropped (it carries nothing to learn
 from). Text in none of these shapes returns ``None``.
@@ -50,6 +53,7 @@ _SYS = re.compile(r"<<SYS>>(.*?)<</SYS>>", re.S)
 _GUANACO = re.compile(r"###\s*(Human|Assistant)\s*:[ \t]*")
 _HH = re.compile(r"(?:^|\n\n)(Human|Assistant):[ \t]*")
 _ALPACA = re.compile(r"###\s*(Instruction|Input|Response)\s*:[ \t]*\n?")
+_USR_BOT = re.compile(r"(?:^|\n)[ \t]*<(usr|bot|sys)>[ \t]?")
 
 
 def parse_text_chat(text: str) -> list[ChatMessage] | None:
@@ -60,6 +64,8 @@ def parse_text_chat(text: str) -> list[ChatMessage] | None:
         turns = _tagged(_LLAMA3, text)
     elif "<start_of_turn>" in text:
         turns = _tagged(_GEMMA, text)
+    elif "<usr>" in text and "<bot>" in text:
+        turns = _usr_bot(text)
     elif "[INST]" in text and "[/INST]" in text:
         turns = _llama2(text)
     elif _GUANACO.search(text):
@@ -82,6 +88,21 @@ def _tagged(pattern: re.Pattern[str], text: str) -> list[ChatMessage]:
         content = body.strip()
         if mapped and content:
             turns.append(ChatMessage(mapped, content))
+    return turns
+
+
+def _usr_bot(text: str) -> list[ChatMessage]:
+    parts = _USR_BOT.split(text.strip())
+    turns: list[ChatMessage] = []
+    for i in range(1, len(parts) - 1, 2):
+        tag, content = parts[i], parts[i + 1].strip()
+        if not content:
+            continue
+        if tag == "sys" and turns and turns[-1].role == "user":
+            turns[-1] = ChatMessage("user", f"{turns[-1].text}\n{content}")
+        else:
+            role = {"usr": "user", "bot": "assistant", "sys": "system"}[tag]
+            turns.append(ChatMessage(role, content))
     return turns
 
 

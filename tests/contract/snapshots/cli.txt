@@ -15,6 +15,7 @@
   --tool-arguments choices=string|object
   --keep-meta nargs=?
   --meta-key
+  --meta
   --alpaca-multiturn choices=flatten|history|drop
   --reasoning choices=keep|inline|reasoning_content|thinking|drop
   --tool-content choices=empty|null
@@ -70,6 +71,11 @@
   --name required
   --info
   --file-name
+[convmerge axolotl-config]
+  --input, -i required
+  --val
+  --config-dir
+  --output, -o
 [convmerge fetch]
   source
   --output, -o

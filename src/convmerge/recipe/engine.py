@@ -126,7 +126,14 @@ def _fetch_step(
             datasets=(dataclasses.replace(entry, output=str(stage / "data")),),
         )
         run_manifest(manifest, hf_token=hf_token, github_token=github_token, log=lambda _m: None)
-        return {"files": sorted(p.relative_to(stage).as_posix() for p in _files(stage))}
+        stats: dict[str, Any] = {
+            "files": sorted(p.relative_to(stage).as_posix() for p in _files(stage))
+        }
+        if entry.hf:
+            from convmerge.licenses import detect_hf_license
+
+            stats["license"] = detect_hf_license(entry.hf, token=hf_token)
+        return stats
 
     options = {
         k: (list(v) if isinstance(v, tuple) else v)
@@ -520,9 +527,28 @@ def run(
         "sha256": digests.of(recipe.output),
         "records": _count_lines(recipe.output),
     }
+    report["licenses"], warnings = _licenses(recipe, report["steps"])
+    report["license_warnings"] = warnings
+    for line in warnings:
+        log(f"[license] {line}")
     _save_json(recipe.report_path, report, sort_keys=False)  # keep step order
     result.report = report
     return result
+
+
+def _licenses(recipe: Recipe, steps: dict[str, Any]) -> tuple[dict[str, dict[str, Any]], list[str]]:
+    from convmerge.licenses import license_summary
+
+    info: dict[str, dict[str, Any]] = {}
+    for name, src in recipe.sources.items():
+        fetched = steps.get(f"{name}.fetch", {}).get("stats", {})
+        converted = steps.get(f"{name}.convert", {}).get("stats", {})
+        info[name] = {
+            "declared": src.license,
+            "detected": fetched.get("license"),
+            "rows": converted.get("written"),
+        }
+    return license_summary(info)
 
 
 def _execute(step: Step) -> dict[str, Any]:

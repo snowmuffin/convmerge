@@ -6,6 +6,7 @@ from functools import partial
 
 from convmerge.adapters import get_adapter
 from convmerge.adapters.chat import iter_from_chat_line
+from convmerge.adapters.mapped import iter_from_mapped_line
 from convmerge.adapters.preference import apply_preference, is_preference_record, iter_pairs
 from convmerge.adapters.sharegpt import iter_from_sharegpt_line
 from convmerge.config import AdapterOptions
@@ -24,8 +25,15 @@ def resolve_adapter(name: str, opts: AdapterOptions | None, *, pairs: bool = Fal
     Without either, a preference record the adapter cannot turn into a valid
     example is tagged ``preference_record`` so the drop report says what to do.
     """
-    adapter = _resolve(name, opts)
     preference = opts.preference if opts is not None else None
+    if name == "map":
+        if opts is None or opts.map is None:
+            raise ValueError("the map adapter needs AdapterOptions(map=MapSpec...)")
+        # The mapping says where chosen / rejected are; no preference rewriting.
+        return partial(
+            iter_from_mapped_line, spec=opts.map, preference=None if pairs else preference
+        )
+    adapter = _resolve(name, opts)
     if pairs:
         if preference:
             raise ValueError(

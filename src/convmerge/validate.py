@@ -27,6 +27,7 @@ REASONS: dict[str, str] = {
 # Adapter-reported issues with a fixed meaning (media issues are described
 # per media type by ``convert``).
 ISSUES: dict[str, str] = {
+    "map_path_missing": "a path of the --from map field mapping is missing from the record",
     "preference_record": (
         "a chosen/rejected preference record: write DPO pairs with --format preference, "
         "or train on one side with --preference chosen"

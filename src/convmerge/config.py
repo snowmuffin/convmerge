@@ -16,6 +16,7 @@ from convmerge.adapters.chat import (
     DEFAULT_OUTPUT_KEYS,
     DEFAULT_ROLE_KEYS,
 )
+from convmerge.adapters.mapped import MapSpec
 from convmerge.emitters import EmitOptions
 from convmerge.transforms import TransformOptions
 
@@ -56,6 +57,8 @@ class AdapterOptions:
     preference: str | None = None
     """``"chosen"`` / ``"rejected"``: fold that answer of a preference record
     into the conversation before adapting (see :mod:`convmerge.adapters.preference`)."""
+    map: MapSpec | None = None
+    """Field mapping for ``--from map`` (see :mod:`convmerge.adapters.mapped`)."""
 
 
 @dataclass
@@ -77,6 +80,7 @@ _EMIT_OPTION_KEYS = (
     "alpaca_multiturn",
     "reasoning",
     "tool_content",
+    "meta",
 )
 _TRANSFORM_OPTION_KEYS = ("system", "merge_consecutive", "split_turns", "reasoning_turns")
 
@@ -101,6 +105,8 @@ def emit_options_from_mapping(data: dict[str, Any]) -> EmitOptions:
     for key in ("tool_arguments", "meta_key", "alpaca_multiturn", "reasoning", "tool_content"):
         if key in data:
             kw[key] = str(data[key])
+    if "meta" in data:
+        kw["meta_values"] = meta_values_from_mapping(data["meta"], where="output_options.meta")
     if "keep_meta" in data:
         km = data["keep_meta"]
         if isinstance(km, bool):
@@ -110,6 +116,18 @@ def emit_options_from_mapping(data: dict[str, Any]) -> EmitOptions:
         else:
             raise ValueError("output_options.keep_meta must be true/false or a list of keys")
     return EmitOptions(**kw)
+
+
+def meta_values_from_mapping(data: Any, *, where: str = "meta") -> dict[str, str]:
+    """Constant ``meta`` fields: a mapping of names to scalar values (kept as text)."""
+    if not isinstance(data, dict):
+        raise ValueError(f"{where}: expected a mapping of names to values")
+    out: dict[str, str] = {}
+    for k, v in data.items():
+        if isinstance(v, (dict, list)) or v is None:
+            raise ValueError(f"{where}.{k}: expected a string or number")
+        out[str(k)] = str(v)
+    return out
 
 
 def transform_options_from_mapping(
@@ -250,6 +268,7 @@ def build_convert_config(
     chat_layers: list[dict[str, Any]] = []
     sharegpt_layers: list[dict[str, Any]] = []
     cfg_preference: str | None = None
+    cfg_map: MapSpec | None = None
 
     if preset_path is not None:
         p = load_convert_preset(preset_path)
@@ -264,6 +283,8 @@ def build_convert_config(
             sharegpt_layers.append(_sharegpt_options_to_override_dict(p.adapter_options.sharegpt))
         if p.adapter_options and p.adapter_options.preference:
             cfg_preference = p.adapter_options.preference
+        if p.adapter_options and p.adapter_options.map:
+            cfg_map = p.adapter_options.map
 
     if adapter_kwargs_json:
         try:
@@ -284,6 +305,8 @@ def build_convert_config(
             sharegpt_layers.append(sg)
         if raw.get("preference") is not None:
             cfg_preference = check_preference(raw["preference"])
+        if raw.get("map") is not None:
+            cfg_map = MapSpec.from_mapping(raw["map"])
 
     if adapter_options and adapter_options.preference:
         cfg_preference = check_preference(adapter_options.preference)
@@ -293,6 +316,8 @@ def build_convert_config(
         chat_layers.append(_chat_options_to_override_dict(adapter_options.chat))
     if adapter_options and adapter_options.sharegpt:
         sharegpt_layers.append(_sharegpt_options_to_override_dict(adapter_options.sharegpt))
+    if adapter_options and adapter_options.map:
+        cfg_map = adapter_options.map
 
     if adapter is not None:
         cfg_adapter = adapter
@@ -306,10 +331,17 @@ def build_convert_config(
             "adapter and output format are required (via --preset or --from / --format)."
         )
 
+    if cfg_adapter == "map" and cfg_map is None:
+        raise ValueError(
+            "--from map needs a field mapping: --adapter-kwargs "
+            '\'{"map": {"user": "question", "assistant": "answer"}}\' (or map: in a recipe)'
+        )
+
     adapter_opts: AdapterOptions | None = None
-    if chat_layers or sharegpt_layers or cfg_preference:
+    if chat_layers or sharegpt_layers or cfg_preference or cfg_map:
         adapter_opts = AdapterOptions(
             preference=cfg_preference,
+            map=cfg_map,
             chat=(
                 chat_adapter_options_from_mapping(_merge_chat_dicts(*chat_layers))
                 if chat_layers

@@ -337,7 +337,8 @@
    "instruction": "양파는 어떤 식물 부위인가요?",
    "output": "양파는 잎이 변형된 비늘줄기입니다.",
    "url": "https://kin.naver.com/qna/detail.naver?d1id=11"
-  }
+  },
+  "lang": "ko"
  },
  {
   "id": "kyujinpy/KOR-OpenOrca-Platypus-v3",
@@ -351,7 +352,8 @@
    "input": "",
    "instruction": "2+3은?",
    "output": "5입니다."
-  }
+  },
+  "lang": "ko"
  },
  {
   "id": "timdettmers/openassistant-guanaco",
@@ -406,6 +408,85 @@
     {
      "from": "gpt",
      "value": "White and red."
+    }
+   ]
+  }
+ },
+ {
+  "id": "nlpai-lab/kullm-v2",
+  "kind": "sft",
+  "shape": "Alpaca + id",
+  "lang": "ko",
+  "config": null,
+  "split": "train",
+  "format": "messages",
+  "record": {
+   "id": "alpaca_{idx}",
+   "instruction": "3원색이란 무엇인가요?",
+   "input": "",
+   "output": "빨강, 파랑, 노랑입니다."
+  }
+ },
+ {
+  "id": "maywell/koVast",
+  "kind": "sft",
+  "shape": "ShareGPT (multi-turn)",
+  "lang": "ko",
+  "config": null,
+  "split": "train",
+  "format": "messages",
+  "record": {
+   "conversations": [
+    {
+     "from": "human",
+     "value": "서울의 명소를 알려줘."
+    },
+    {
+     "from": "gpt",
+     "value": "경복궁과 남산타워가 있어요."
+    },
+    {
+     "from": "human",
+     "value": "하나만 고르면?"
+    },
+    {
+     "from": "gpt",
+     "value": "경복궁을 추천해요."
+    }
+   ]
+  }
+ },
+ {
+  "id": "heegyu/open-korean-instructions",
+  "kind": "sft",
+  "shape": "`text` with `<usr>` / `<bot>` / `<sys>`",
+  "lang": "ko",
+  "config": null,
+  "split": "train",
+  "format": "messages",
+  "record": {
+   "source": "koalpaca-v1.0",
+   "text": "<usr> 홀수 중 하나를 고르세요.\n<sys> 1, 2, 4\n<bot> 1입니다."
+  }
+ },
+ {
+  "id": "FreedomIntelligence/sharegpt-korean",
+  "kind": "sft",
+  "shape": "ShareGPT (JSON array)",
+  "lang": "ko",
+  "config": null,
+  "split": "train",
+  "format": "messages",
+  "record": {
+   "id": "36158",
+   "conversations": [
+    {
+     "from": "human",
+     "value": "시장 조사 질문을 만들어 줘."
+    },
+    {
+     "from": "gpt",
+     "value": "1. 가장 큰 고민은 무엇인가요?"
     }
    ]
   }
@@ -523,7 +604,8 @@
      "thinking": "L'utilisateur salue."
     }
    ]
-  }
+  },
+  "lang": "multi"
  },
  {
   "id": "a-m-team/AM-Thinking-v1-Distilled",
@@ -818,7 +900,8 @@
     "from": "gpt",
     "value": "Hello"
    }
-  }
+  },
+  "lang": "en, zh"
  },
  {
   "id": "lmsys/chatbot_arena_conversations",
@@ -855,6 +938,35 @@
    ],
    "turn": 1,
    "language": "English"
+  }
+ },
+ {
+  "id": "maywell/ko_Ultrafeedback_binarized",
+  "kind": "preference",
+  "shape": "prompt / chosen / rejected strings",
+  "lang": "ko",
+  "config": null,
+  "split": "train",
+  "format": "preference",
+  "record": {
+   "prompt": "하늘은 왜 파란가요?",
+   "chosen": "빛의 레일리 산란 때문입니다.",
+   "rejected": "잘 모르겠어요."
+  }
+ },
+ {
+  "id": "kuotient/orca-math-korean-dpo-pairs",
+  "kind": "preference",
+  "shape": "system / question / chosen / rejected",
+  "lang": "ko",
+  "config": null,
+  "split": "train",
+  "format": "preference",
+  "record": {
+   "system": "수학 문제를 단계별로 푸세요.",
+   "question": "사과 3개에 2개를 더하면?",
+   "chosen": "3 + 2 = 5, 답은 5개입니다.",
+   "rejected": "6개입니다."
   }
  }
 ]
