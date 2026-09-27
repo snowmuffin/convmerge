@@ -92,6 +92,17 @@ class DedupeSpec:
 
 
 @dataclass(frozen=True)
+class TokensSpec:
+    tokenizer: str
+    """A Hub model name, or a local directory (then a path relative to the recipe)."""
+    max_tokens: int | None = None
+    revision: str | None = None
+    chat_template: Path | None = None
+    local: Path | None = None
+    """The tokenizer directory when ``tokenizer`` names one on disk."""
+
+
+@dataclass(frozen=True)
 class SplitSpec:
     val_output: Path
     val: float | None = None
@@ -113,6 +124,7 @@ class Recipe:
     dedupe: DedupeSpec | None
     auth: AuthConfig
     split: SplitSpec | None = None
+    tokens: TokensSpec | None = None
 
 
 def load_recipe(path: str | Path) -> Recipe:
@@ -151,6 +163,7 @@ def parse_recipe(raw: Any, *, path: Path) -> Recipe:
             "sources",
             "mix",
             "dedupe",
+            "tokens",
             "split",
         },  # fmt: skip
         "",
@@ -189,6 +202,7 @@ def parse_recipe(raw: Any, *, path: Path) -> Recipe:
         dedupe=_dedupe(top.get("dedupe")),
         auth=auth,
         split=_split(top.get("split"), base, output),
+        tokens=_tokens(top.get("tokens"), base),
     )
 
 
@@ -394,6 +408,33 @@ def _dedupe(raw: Any) -> DedupeSpec | None:
     if algorithm not in ("md5", "sha256"):
         raise RecipeError("dedupe.algorithm: expected md5 or sha256")
     return DedupeSpec(keys=tuple(keys) if keys else None, algorithm=algorithm)
+
+
+def _tokens(raw: Any, base: Path) -> TokensSpec | None:
+    if raw is None or raw is False:
+        return None
+    spec = _mapping(raw, "tokens")
+    _only(spec, {"tokenizer", "max_tokens", "revision", "chat_template"}, "tokens")
+    if "tokenizer" not in spec:
+        raise RecipeError("tokens.tokenizer: required (a Hub model name or a local directory)")
+    tokenizer = _str(spec["tokenizer"], "tokens.tokenizer")
+    max_tokens = spec.get("max_tokens")
+    if max_tokens is not None and (
+        isinstance(max_tokens, bool) or not isinstance(max_tokens, int) or max_tokens < 1
+    ):
+        raise RecipeError("tokens.max_tokens: expected a positive integer")
+    revision = spec.get("revision")
+    if revision is not None:
+        revision = _str(revision, "tokens.revision")
+    template = spec.get("chat_template")
+    local = base / tokenizer
+    return TokensSpec(
+        tokenizer=tokenizer,
+        max_tokens=max_tokens,
+        revision=revision,
+        chat_template=base / _str(template, "tokens.chat_template") if template else None,
+        local=local if local.is_dir() else None,
+    )
 
 
 def _split(raw: Any, base: Path, output: Path) -> SplitSpec | None:
