@@ -54,6 +54,8 @@ print(stats.written, stats.drop_reasons)
 | `normalize_to_jsonl(src, dst, *, array_key="conversation")` | Messy JSON / JSONL → clean JSONL. |
 | `profile_schema(path_or_records, *, max_rows, max_examples)` | The structure report behind `convmerge inspect`. |
 | `analyze_turn_distribution(path)`, `split_by_turns(src, *, single_out, multi_out)` | The report and split behind `convmerge turns`. |
+| `split_jsonl(src, train_out, val_out, *, val, val_rows, seed, keys, stats)` with `SplitStats` | Content-hashed train/validation split (`convmerge split`); returns `(train, val)` counts. |
+| `check_tokens(path, *, tokenizer, max_tokens, output, rejects, chat_template, stats)` with `TokenStats` | Token lengths and chat-template check (`convmerge tokens`, needs `convmerge[tokens]`); `tokenizer` is a name/path or a loaded `transformers` tokenizer; `stats.to_report()` gives the JSON report. |
 | `iter_jsonl(path, *, encoding, on_error, stats, on_invalid)` | The shared JSONL reader (BOM, blank, and invalid lines handled consistently). Yields `JsonlLine(number, raw, value)`; fills a `ReadStats`; `on_error="raise"` raises `JsonlDecodeError` (a `ValueError` with `path`, `line_number`). |
 
 ## Recipes

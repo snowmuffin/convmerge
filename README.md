@@ -29,7 +29,7 @@ loading, no inference, no labeling, no training orchestration. See
 
 ```bash
 pip install convmerge                    # core: convert, dedupe, turns; normalize for .json/.jsonl
-pip install "convmerge[all]"             # full CLI: fetch (HF+GitHub), parquet, YAML presets
+pip install "convmerge[all]"             # full CLI: fetch (HF+GitHub), parquet, YAML presets, tokens
 ```
 
 Granular extras:
@@ -40,15 +40,17 @@ pip install "convmerge[fetch-all]"       # fetch + HuggingFace (``datasets``)
 pip install "convmerge[fetch-hf]"        # same dependencies as ``fetch-all`` (backward-compatible name)
 pip install "convmerge[parquet]"         # Parquet input for ``normalize``
 pip install "convmerge[preset]"          # YAML convert presets (`--preset`, `preset validate`)
+pip install "convmerge[tokens]"          # `tokens`: lengths + chat-template checks (transformers, no PyTorch)
 ```
 
 | Command / feature | Extra |
 |-------------------|--------|
-| `convert`, `dedupe`, `turns` | *(core)* |
+| `convert`, `dedupe`, `turns`, `split`, `llamafactory-info` | *(core)* |
 | `normalize` on `.parquet` | `[parquet]` |
 | `fetch` with YAML manifest or GitHub | `[fetch]` |
 | `fetch` with HuggingFace manifest entries | `[fetch-all]` or `[fetch-hf]` |
 | `convert --preset`, `preset` | `[preset]` |
+| `tokens` | `[tokens]` |
 | Everything above | `[all]` |
 
 Or from a clone:
@@ -59,6 +61,18 @@ cd convmerge
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev,all]"
 ```
+
+## From datasets to a training run
+
+| Trainer | Guide | Formats |
+|---------|-------|---------|
+| TRL (`SFTTrainer`, `DPOTrainer`) | [docs/guides/trl.md](docs/guides/trl.md) | `messages`, `preference` |
+| LLaMA-Factory | [docs/guides/llamafactory.md](docs/guides/llamafactory.md) | `sharegpt`, `sharegpt-preference` + `llamafactory-info` |
+| axolotl | [docs/guides/axolotl.md](docs/guides/axolotl.md) | `messages` |
+
+Each guide is one recipe — fetch, convert, mix, dedupe, a `tokens` filter for
+the target model's chat template and length, and a train/validation `split` —
+plus the trainer config. The TRL and LLaMA-Factory guides were run end to end.
 
 ## Tested datasets
 
@@ -177,7 +191,8 @@ convmerge convert -i ./jsonl/mixed.jsonl -o ./out.jsonl --preset convert_preset.
 ```
 
 Adapters: `alpaca`, `sharegpt`, `chat` (alias `auto`).  
-Output formats: `messages`, `alpaca`, `preference` (DPO pairs).
+Output formats: `messages`, `alpaca`, `preference` (DPO pairs), `sharegpt` and
+`sharegpt-preference` (LLaMA-Factory / Unsloth).
 
 > **Tool calling and multimodal:** OpenAI `tool_calls` / `tools`, LLaMA-Factory
 > `function_call` / `observation` turns, Hermes `<tool_call>` tags, Glaive and
@@ -247,13 +262,26 @@ merging multi-GB sources (`--sampler v1` reproduces mixes made before 0.7). A si
 the output recording the exact seed, weights, and per-source counts for full
 reproducibility. Omit `--total` to merge all records from every source.
 
-### 5. `dedupe` / `turns` — final cleanup + train/eval split hook
+### 5. `dedupe` / `tokens` / `split` — ready for training
 
 ```bash
 convmerge dedupe -i ./train/mixed.jsonl -o ./train/mixed.dedup.jsonl
-convmerge turns  -i ./train/mixed.dedup.jsonl \
-  --single-out ./train/single.jsonl \
-  --multi-out  ./train/multi.jsonl
+
+# Render every row with the model's chat template: length percentiles, rows the
+# template rejects (with line numbers), double-encoded tool arguments. -o keeps
+# the rows that render and fit. Needs convmerge[tokens] (transformers, no PyTorch).
+convmerge tokens -i ./train/mixed.dedup.jsonl --tokenizer Qwen/Qwen2.5-7B-Instruct \
+  --max-tokens 4096 -o ./train/fit.jsonl
+
+# Train/validation split by content hash: reproducible, order-independent,
+# duplicates never straddle the two sides. --val-rows N for an exact count.
+convmerge split -i ./train/fit.jsonl -o ./train/train.jsonl --val 0.02   # + train.val.jsonl
+
+# LLaMA-Factory: add the dataset_info.json entry for a --format sharegpt file.
+convmerge llamafactory-info -i ./data/sft.jsonl --name my_sft --info ./data/dataset_info.json
+
+# Single-turn vs multi-turn report (and split)
+convmerge turns -i ./train/train.jsonl --single-out single.jsonl --multi-out multi.jsonl
 ```
 
 See [docs/format.md](docs/format.md) for adapter / emitter schemas,
@@ -276,11 +304,13 @@ sources:
     convert: { from: sharegpt }
 mix: { total: 100000, seed: 42, weights: { alpaca: 0.7, tools: 0.3 } }
 dedupe: true
+tokens: { tokenizer: Qwen/Qwen2.5-7B-Instruct, max_tokens: 4096 }   # optional
+split: { val: 0.02 }                                                 # optional
 ```
 
 ```bash
 convmerge run recipe.yaml --plan     # what would run, and why
-convmerge run recipe.yaml            # fetch → normalize → convert → mix → dedupe
+convmerge run recipe.yaml            # fetch → normalize → convert → mix → dedupe → tokens → split
 convmerge run recipe.yaml --frozen   # CI: fail unless the lock file is current
 ```
 

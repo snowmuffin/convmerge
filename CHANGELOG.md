@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-09-27
+
+From converted data to a training run: filter for the target model, split
+off validation, and write what each trainer reads — checked by actually
+training with TRL and LLaMA-Factory on convmerge output.
+
+### Added
+
+- `convmerge tokens` (`check_tokens`, new `[tokens]` extra with
+  `transformers`, no PyTorch): renders every row with the model's chat
+  template, reports the token-length distribution, rows over
+  `--max-tokens`, rows the template rejects (grouped by the template's error,
+  with line numbers), and rows whose tool-call arguments the template would
+  encode twice; `-o` keeps the rows that render and fit.
+- `convmerge split` (`split_jsonl`): train/validation split by seeded content
+  hash — reproducible, independent of row order, duplicates on one side;
+  `--val` (fraction, streaming) or `--val-rows` (exact); `--keys` to group.
+- Recipe stages `tokens` and `split` after `mix` / `dedupe` (split writes
+  `<output>.val.jsonl` by default); both are tracked by the lock file.
+- `--format sharegpt` and `--format sharegpt-preference`: LLaMA-Factory /
+  Unsloth ShareGPT rows (system, tools, media, function_call / observation
+  turns) and LLaMA-Factory ranking pairs.
+- `convmerge llamafactory-info`: the `dataset_info.json` entry for a
+  converted file, printed or merged into an existing file.
+- `convmerge validate` checks preference rows as pairs.
+- Trainer guides (`docs/guides/`: TRL, LLaMA-Factory, axolotl) with the
+  recipes and configs in `examples/`. The TRL (SFT, DPO) and LLaMA-Factory
+  (SFT with tool calls, DPO) paths were run end to end on convmerge output.
+- `tokens` JSON output carries `"version": 1` like the other reports.
+
+### Changed
+
+- `[all]` now includes `transformers` (for `tokens`).
+
 ## [0.10.0] - 2026-09-26
 
 Reads the datasets people actually train on. A catalog of 33 popular SFT,
