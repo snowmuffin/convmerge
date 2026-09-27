@@ -278,6 +278,10 @@ _DROP_HINTS = {
         "unrepresentable_not_preference: --format preference writes only records "
         "that have both a chosen and a rejected answer"
     ),
+    "map_path_missing": (
+        "map_path_missing: a --from map path matched nothing in these records; check the "
+        "paths against a sample row (a.b for keys, a[0] for an item, a[] for every item)"
+    ),
     "unrepresentable_role_order": (
         "unrepresentable_role_order: --merge-consecutive joins repeated user or "
         "assistant turns; --system fold moves a system turn into the first user turn"
