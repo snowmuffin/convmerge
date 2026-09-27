@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `Datasets` workflow: converts real rows of every catalog dataset from the
+  Hub on catalog / adapter pull requests, weekly, and on demand, with a
+  per-dataset summary table. `scripts/datasets.py check` gains `--summary`
+  and `--min-ok`, skips gated datasets without `HF_TOKEN`, and fails a
+  reasoning dataset whose converted rows carry no reasoning trace.
+
+### Changed
+
+- mypy checks against each CI job's own Python instead of a pinned 3.10, so
+  stubs that newer dependencies ship only for newer Pythons (numpy 2.5) no
+  longer break the check.
+
 ## [0.12.0] - 2026-09-27
 
 What the chat template actually sees: reasoning traces in the field each

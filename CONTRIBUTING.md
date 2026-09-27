@@ -99,6 +99,13 @@ python scripts/datasets.py table --write                   # 3. refresh the READ
 python scripts/datasets.py check --only org/name           # 4. try real rows (needs network)
 ```
 
+The `Datasets` workflow runs step 4 for every entry on pull requests that
+change the catalog, `scripts/datasets.py`, or the adapters, every Monday, and
+on demand (Actions → Datasets → Run workflow, optionally with a list of ids).
+Its job summary is a table of converted rows, drop reasons, and reasoning
+traces per dataset. Gated datasets are checked only when the repository has
+an `HF_TOKEN` secret.
+
 ### Contract tests and deprecations
 
 `tests/contract/` pins the stable surface described in
