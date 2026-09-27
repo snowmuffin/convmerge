@@ -23,7 +23,12 @@ ROOT = Path(__file__).resolve().parents[1]
 CATALOG = ROOT / "tests" / "datasets" / "catalog.json"
 README = ROOT / "README.md"
 START, END = "<!-- datasets:start -->", "<!-- datasets:end -->"
-KINDS = {"sft": "SFT", "tools": "Tool calling", "preference": "Preference"}
+KINDS = {
+    "sft": "SFT",
+    "reasoning": "Reasoning",
+    "tools": "Tool calling",
+    "preference": "Preference",
+}
 
 
 def load_catalog() -> list[dict[str, Any]]:
@@ -34,7 +39,25 @@ def flags(entry: dict[str, Any]) -> str:
     out = f"--from auto --format {entry['format']}"
     if entry.get("preference"):
         out += f" --preference {entry['preference']}"
+    for key, value in entry.get("emit", {}).items():
+        out += f" --{key.replace('_', '-')} {value}"
+    if entry.get("adapter_kwargs"):
+        out += f" --adapter-kwargs '{json.dumps(entry['adapter_kwargs'], separators=(',', ':'))}'"
     return out
+
+
+def convert_config(entry: dict[str, Any]) -> Any:
+    """The ``ConvertConfig`` the catalog entry's flags describe."""
+    from convmerge import build_convert_config
+
+    kwargs = entry.get("adapter_kwargs")
+    return build_convert_config(
+        adapter="auto",
+        output_format=entry["format"],
+        preference=entry.get("preference"),
+        emit_overrides=entry.get("emit") or None,
+        adapter_kwargs_json=json.dumps(kwargs) if kwargs else None,
+    )
 
 
 def render_table(catalog: list[dict[str, Any]]) -> str:
@@ -65,7 +88,7 @@ def write_readme(table: str) -> bool:
 def check(rows: int, only: list[str] | None) -> int:
     from datasets import load_dataset
 
-    from convmerge import ConvertStats, build_convert_config, convert_with_config
+    from convmerge import ConvertStats, convert_with_config
 
     failures = 0
     for e in load_catalog():
@@ -82,9 +105,7 @@ def check(rows: int, only: list[str] | None) -> int:
                 with src.open("w", encoding="utf-8") as f:
                     for row in ds.take(rows):
                         f.write(json.dumps(row, ensure_ascii=False, default=str) + "\n")
-                cfg = build_convert_config(
-                    adapter="auto", output_format=e["format"], preference=e.get("preference")
-                )
+                cfg = convert_config(e)
                 stats = ConvertStats()
                 convert_with_config(src, dst, cfg, stats=stats)
         except Exception as exc:  # noqa: BLE001 - report it and go on with the next dataset
