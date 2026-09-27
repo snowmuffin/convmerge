@@ -230,6 +230,50 @@ def _non_negative_int(value: str) -> int:
     return n
 
 
+def _add_llamafactory_info(sub: argparse._SubParsersAction) -> None:
+    p = sub.add_parser(
+        "llamafactory-info",
+        help="Write the LLaMA-Factory dataset_info.json entry for a converted file",
+    )
+    p.add_argument("--input", "-i", type=Path, required=True)
+    p.add_argument("--name", required=True, help="Dataset name to register (dataset: NAME)")
+    p.add_argument(
+        "--info",
+        type=Path,
+        default=None,
+        help="dataset_info.json to add the entry to (created if missing); "
+        "without it the entry is printed",
+    )
+    p.add_argument(
+        "--file-name",
+        default=None,
+        help="file_name to record (default: the input path relative to --info's "
+        "directory, or its name)",
+    )
+
+
+def _cmd_llamafactory_info(args: argparse.Namespace) -> None:
+    from convmerge.llamafactory import dataset_info_entry, relative_file_name, update_dataset_info
+
+    if not args.input.is_file():
+        print(f"error: input file not found: {args.input}", file=sys.stderr)
+        sys.exit(1)
+    file_name = args.file_name
+    if file_name is None and args.info is not None:
+        file_name = relative_file_name(args.input, args.info)
+    try:
+        entry = dataset_info_entry(args.input, file_name=file_name)
+    except ValueError as e:
+        print(f"error: {e}", file=sys.stderr)
+        sys.exit(1)
+    if args.info is None:
+        print(json.dumps({args.name: entry}, ensure_ascii=False, indent=2))
+        return
+    changed = update_dataset_info(args.info, args.name, entry)
+    state = "updated" if changed else "unchanged"
+    print(f"{args.info}: {args.name!r} {state} (use dataset: {args.name})", file=sys.stderr)
+
+
 def _add_turns(sub: argparse._SubParsersAction) -> None:
     p = sub.add_parser(
         "turns",

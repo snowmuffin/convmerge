@@ -57,6 +57,7 @@ _COMMANDS: dict[str, tuple[Callable, Callable]] = {
     "dedupe": (_data._add_dedupe, _data._cmd_dedupe),
     "turns": (_data._add_turns, _data._cmd_turns),
     "split": (_data._add_split, _data._cmd_split),
+    "llamafactory-info": (_data._add_llamafactory_info, _data._cmd_llamafactory_info),
     "fetch": (_fetch._add_fetch, _fetch._cmd_fetch),
     "preset": (_convert._add_preset, _convert._cmd_preset),
     "mix": (_mix._add_mix, _mix._cmd_mix),

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import inspect
+import json
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, replace
 from functools import partial
@@ -219,6 +220,25 @@ def emit_preference(
     :class:`UnrepresentableExample`.
     """
     opts = options or EmitOptions()
+    prompt, chosen_tail, rejected_tail = split_pair(example)
+    args = opts.tool_arguments
+    row: dict[str, Any] = {
+        "prompt": [_message_dict(m, args) for m in prompt],
+        "chosen": [_message_dict(m, args) for m in chosen_tail],
+        "rejected": [_message_dict(m, args) for m in rejected_tail],
+    }
+    if example.tools:
+        row["tools"] = example.tools
+    return _with_meta(row, example, options)
+
+
+def split_pair(
+    example: TrainingExample,
+) -> tuple[list[ChatMessage], list[ChatMessage], list[ChatMessage]]:
+    """(prompt, chosen continuation, rejected continuation) of a preference example.
+
+    Raises :class:`UnrepresentableExample` when the example is not a usable pair.
+    """
     chosen, rejected = example.messages, example.rejected
     if rejected is None:
         raise UnrepresentableExample("unrepresentable_not_preference")
@@ -237,15 +257,7 @@ def emit_preference(
         or not _has_answer(rejected_tail)
     ):
         raise UnrepresentableExample("unrepresentable_incomplete_pair")
-    args = opts.tool_arguments
-    row: dict[str, Any] = {
-        "prompt": [_message_dict(m, args) for m in prompt],
-        "chosen": [_message_dict(m, args) for m in chosen_tail],
-        "rejected": [_message_dict(m, args) for m in rejected_tail],
-    }
-    if example.tools:
-        row["tools"] = example.tools
-    return _with_meta(row, example, options)
+    return prompt, chosen_tail, rejected_tail
 
 
 # Asks the adapter to keep both answers of preference records (see
@@ -263,10 +275,158 @@ def wants_pairs(output_format: str) -> bool:
     return bool(getattr(fn, "preference_pairs", False))
 
 
+# --- LLaMA-Factory ShareGPT ---------------------------------------------------
+
+_MEDIA_TOKENS = {"image": "<image>", "video": "<video>", "audio": "<audio>"}
+_MEDIA_COLUMNS = {"image": "images", "video": "videos", "audio": "audios"}
+
+
+def emit_sharegpt(
+    example: TrainingExample,
+    *,
+    options: EmitOptions | None = None,
+    notes: list[str] | None = None,
+) -> dict[str, Any]:
+    """LLaMA-Factory / Unsloth ShareGPT rows.
+
+    ``{"conversations": [{"from": "human" | "gpt" | "function_call" |
+    "observation", "value": ...}], "system": ..., "tools": "<JSON>",
+    "images": [...]}``. LLaMA-Factory needs turns that alternate user-side
+    (``human`` / ``observation``) and model-side (``gpt`` / ``function_call``),
+    starting with ``human`` and ending with a model turn, and the system
+    prompt in its own column. Tool calls become one ``function_call`` turn
+    (a list for parallel calls); consecutive tool results one ``observation``.
+    Media parts become ``<image>``-style tokens plus ``images`` / ``videos`` /
+    ``audios`` columns. Text next to a tool call cannot be kept (counted as
+    ``lossy_tool_call_text``); other conversations that do not fit raise
+    :class:`UnrepresentableExample`.
+    """
+    system, turns = _system_and_turns(example.messages)
+    media: dict[str, list[str]] = {}
+    conversations = _sharegpt_turns(turns, media, notes)
+    if not conversations or conversations[-1]["from"] not in ("gpt", "function_call"):
+        raise UnrepresentableExample("unrepresentable_role_order")
+    row: dict[str, Any] = {"conversations": conversations}
+    _sharegpt_extras(row, system, example.tools, media)
+    return _with_meta(row, example, options)
+
+
+def emit_sharegpt_preference(
+    example: TrainingExample, *, options: EmitOptions | None = None
+) -> dict[str, Any]:
+    """LLaMA-Factory ranking rows (DPO / ORPO / reward modeling).
+
+    ``{"conversations": <prompt turns>, "chosen": {"from": "gpt", "value"},
+    "rejected": {"from": "gpt", "value"}, "system", "tools"}``. Each side
+    must be a single assistant answer (LLaMA-Factory's ranking format has no
+    room for multi-turn or tool-call continuations).
+    """
+    prompt, chosen_tail, rejected_tail = split_pair(example)
+    if not (_single_answer(chosen_tail) and _single_answer(rejected_tail)):
+        raise UnrepresentableExample("unrepresentable_pair_continuation")
+    system, turns = _system_and_turns(prompt)
+    media: dict[str, list[str]] = {}
+    conversations = _sharegpt_turns(turns, media, None)
+    if not conversations or conversations[-1]["from"] not in ("human", "observation"):
+        raise UnrepresentableExample("unrepresentable_role_order")
+    row: dict[str, Any] = {
+        "conversations": conversations,
+        "chosen": {"from": "gpt", "value": chosen_tail[0].text},
+        "rejected": {"from": "gpt", "value": rejected_tail[0].text},
+    }
+    _sharegpt_extras(row, system, example.tools, media)
+    return _with_meta(row, example, options)
+
+
+emit_sharegpt_preference.preference_pairs = True  # type: ignore[attr-defined]
+
+
+def _single_answer(tail: list[ChatMessage]) -> bool:
+    return len(tail) == 1 and not tail[0].tool_calls and not tail[0].media and bool(tail[0].text)
+
+
+def _system_and_turns(msgs: list[ChatMessage]) -> tuple[str, list[ChatMessage]]:
+    """Leading system messages joined, and the rest (a later system turn does not fit)."""
+    i = 0
+    while i < len(msgs) and msgs[i].role == "system":
+        i += 1
+    if any(m.role == "system" for m in msgs[i:]):
+        raise UnrepresentableExample("unrepresentable_role_order")
+    system = "\n".join(m.text for m in msgs[:i] if m.text)
+    return system, msgs[i:]
+
+
+def _sharegpt_turns(
+    turns: list[ChatMessage], media: dict[str, list[str]], notes: list[str] | None
+) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    i = 0
+    while i < len(turns):
+        m = turns[i]
+        if m.role == "user":
+            entry = {"from": "human", "value": _with_media_tokens(m, media)}
+        elif m.role == "assistant" and m.tool_calls:
+            if m.text.strip() and notes is not None:
+                notes.append("lossy_tool_call_text")
+            calls = [{"name": tc.name, "arguments": tc.arguments_object()} for tc in m.tool_calls]
+            value = calls[0] if len(calls) == 1 else calls
+            entry = {"from": "function_call", "value": json.dumps(value, ensure_ascii=False)}
+        elif m.role == "assistant":
+            entry = {"from": "gpt", "value": _with_media_tokens(m, media)}
+        elif m.role == "tool":
+            results = []
+            while i < len(turns) and turns[i].role == "tool":
+                results.append(turns[i].text)
+                i += 1
+            out.append({"from": "observation", "value": "\n".join(results)})
+            continue
+        else:
+            raise UnrepresentableExample("unrepresentable_role_order")
+        out.append(entry)
+        i += 1
+    user_side = ("human", "observation")
+    for pos, entry in enumerate(out):
+        if (entry["from"] in user_side) != (pos % 2 == 0):
+            raise UnrepresentableExample("unrepresentable_role_order")
+    return out
+
+
+def _with_media_tokens(m: ChatMessage, media: dict[str, list[str]]) -> str:
+    if m.content is None or isinstance(m.content, str):
+        return m.text
+    parts: list[str] = []
+    for p in m.content:
+        if p.type == "text":
+            parts.append(p.text or "")
+        elif p.type in _MEDIA_TOKENS and p.url is not None:
+            parts.append(_MEDIA_TOKENS[p.type])
+            media.setdefault(_MEDIA_COLUMNS[p.type], []).append(p.url)
+        else:
+            raise UnrepresentableExample("unrepresentable_media")
+    return "\n".join(x for x in parts if x)
+
+
+def _sharegpt_extras(
+    row: dict[str, Any],
+    system: str,
+    tools: list[dict[str, Any]] | None,
+    media: dict[str, list[str]],
+) -> None:
+    if system:
+        row["system"] = system
+    if tools:
+        # LLaMA-Factory takes the tools column as a JSON string of function specs.
+        specs = [t["function"] if isinstance(t.get("function"), dict) else t for t in tools]
+        row["tools"] = json.dumps(specs, ensure_ascii=False)
+    row.update(media)
+
+
 EMITTERS: dict[str, EmitterFn] = {
     "messages": emit_messages,
     "alpaca": emit_alpaca,
     "preference": emit_preference,
+    "sharegpt": emit_sharegpt,
+    "sharegpt-preference": emit_sharegpt_preference,
 }
 BUILTIN_FORMATS = frozenset(EMITTERS)
 
@@ -297,6 +457,10 @@ def get_emitter(
         return partial(emit_alpaca, options=options, notes=notes)
     if fn is emit_preference:
         return partial(emit_preference, options=options) if options else emit_preference
+    if fn is emit_sharegpt:
+        return partial(emit_sharegpt, options=options, notes=notes)
+    if fn is emit_sharegpt_preference:
+        return partial(emit_sharegpt_preference, options=options) if options else fn
     # Plugin formats get the options only if they declare an ``options`` parameter.
     if options is not None and "options" in inspect.signature(fn).parameters:
         return partial(fn, options=options)  # type: ignore[call-arg]
