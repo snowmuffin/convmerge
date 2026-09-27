@@ -92,7 +92,9 @@ quote-style = "double"
 select = ["E", "F", "I", "UP"]
 
 [tool.mypy]
-python_version = "3.10"
+# No python_version: each CI job checks against its own interpreter (3.10 to
+# 3.12). Pinning 3.10 made mypy reject the Python 3.12 syntax in stubs that
+# newer dependencies install only on newer Pythons (numpy 2.5), failing CI.
 files = ["src"]
 check_untyped_defs = true
 warn_unused_ignores = true
@@ -104,12 +106,8 @@ module = ["datasets", "datasets.*", "pyarrow", "pyarrow.*"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
-# convmerge treats tokenizers as Any; following transformers or huggingface_hub
-# pulls in numpy's stubs, which use syntax newer than our python_version.
-module = [
-    "transformers", "transformers.*", "tokenizers", "tokenizers.*",
-    "huggingface_hub", "huggingface_hub.*",
-]
+# convmerge treats tokenizers as Any.
+module = ["transformers", "transformers.*", "tokenizers", "tokenizers.*"]
 ignore_missing_imports = true
 follow_imports = "skip"
 

@@ -10,6 +10,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import sys
 from pathlib import Path
 
 import pytest
@@ -24,6 +25,7 @@ UPDATE = os.environ.get("CONVMERGE_UPDATE_GOLDEN") == "1"
 _spec = importlib.util.spec_from_file_location("catalog_script", ROOT / "scripts" / "datasets.py")
 assert _spec is not None and _spec.loader is not None
 script = importlib.util.module_from_spec(_spec)
+sys.modules[_spec.name] = script  # the script defines dataclasses
 _spec.loader.exec_module(script)
 CATALOG = script.load_catalog()
 
@@ -98,3 +100,38 @@ def test_readme_table_matches_catalog() -> None:
     assert f"{script.START}\n{table}\n{script.END}" in readme, (
         "README dataset table is stale: run `python scripts/datasets.py table --write`"
     )
+
+
+def _catalog_rows(entry: dict, rows: int) -> list[dict]:
+    """A stand-in for the Hub: the catalog record, repeated."""
+    return [entry["record"]] * min(rows, 3)
+
+
+def test_live_check_logic(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.delenv("HF_TOKEN", raising=False)
+    summary = tmp_path / "summary.md"
+    assert script.check(5, None, summary=summary, loader=_catalog_rows) == 0
+    text = summary.read_text(encoding="utf-8")
+    assert "| ✅ | tatsu-lab/alpaca | 3/3 |" in text
+    assert "| ⏭️ | lmsys/lmsys-chat-1m |" in text and "gated: set HF_TOKEN" in text
+    assert "| ✅ | simplescaling/s1K-1.1 | 3/3 | 3 |" in text
+
+    reasoning = next(e for e in CATALOG if e["id"] == "simplescaling/s1K-1.1")
+    no_trace = {**reasoning, "adapter_kwargs": None}  # the trace column is not mapped
+    r = script.check_entry(no_trace, 5, loader=_catalog_rows)
+    assert (r.status, r.written) == ("fail", 3) and "reasoning trace" in r.note
+
+    alpaca = next(e for e in CATALOG if e["id"] == "tatsu-lab/alpaca")
+
+    def half_bad(entry: dict, rows: int) -> list[dict]:
+        return [entry["record"], {"unrelated": 1}]
+
+    assert script.check_entry(alpaca, 5, loader=half_bad).status == "fail"
+    assert script.check_entry(alpaca, 5, loader=half_bad, min_ok=0.5).status == "warn"
+
+    def broken(entry: dict, rows: int) -> list[dict]:
+        raise ConnectionError("hub down | retry")
+
+    r = script.check_entry(alpaca, 5, loader=broken)
+    assert r.status == "fail" and "ConnectionError" in r.note
+    assert "hub down \\| retry" in script.render_summary([r], 5)

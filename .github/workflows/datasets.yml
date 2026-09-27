@@ -1,0 +1,61 @@
+name: Datasets
+
+# Converts real rows of every dataset in tests/datasets/catalog.json, streamed
+# from the Hugging Face Hub, the way the README table says. Catches dataset
+# schema changes and catalog records that do not match the real data.
+# Gated datasets are checked only when the HF_TOKEN secret is set.
+
+on:
+  workflow_dispatch:
+    inputs:
+      rows:
+        description: Rows per dataset
+        default: "50"
+      only:
+        description: Dataset ids to check, space-separated (empty = all)
+        default: ""
+  schedule:
+    - cron: "17 3 * * 1"  # Mondays, 03:17 UTC
+  pull_request:
+    branches: [main]
+    paths:
+      - tests/datasets/**
+      - scripts/datasets.py
+      - src/convmerge/adapters/**
+      - .github/workflows/datasets.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: datasets-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install
+        run: |
+          python -m pip install -U pip
+          python -m pip install -e ".[fetch-all]"
+
+      - name: Check catalog datasets
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          ROWS: ${{ inputs.rows || '50' }}
+          ONLY: ${{ inputs.only }}
+        run: |
+          # shellcheck disable=SC2086  # ONLY is a space-separated list of ids
+          python scripts/datasets.py check --rows "$ROWS" ${ONLY:+--only $ONLY} \
+            --summary "$GITHUB_STEP_SUMMARY"
