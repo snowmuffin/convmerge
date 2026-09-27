@@ -12,15 +12,19 @@ present. Handles the common messy shapes seen across SFT datasets:
   Gemma, Guanaco, HH-RLHF, the Alpaca prompt) is split back into turns;
   any other ``text`` is yielded as a single assistant message.
 - Alpaca-style ``instruction`` / ``input`` / ``output`` (delegates to the
-  existing alpaca adapter).
+  existing alpaca adapter), and ``input`` turns + an ``output`` answer
+  (Llama-Nemotron post-training data).
 - Tool-calling encodings other than OpenAI's: Hermes tags, Glaive
   ``system`` + ``chat`` transcripts, and xLAM ``query`` / ``answers`` (see
   :mod:`convmerge.adapters.tool_formats`).
 
 Around the turns it also keeps OpenAI content parts (text + media by
 reference), ``tool_calls`` / ``tool_call_id`` / ``name``, LLaMA-Factory
-``function_call`` / ``observation`` turns, and the ``tools`` / ``system`` /
-``images`` (``videos``, ``audios``, LLaVA ``image``) columns.
+``function_call`` / ``observation`` turns, the ``tools`` / ``system`` /
+``images`` (``videos``, ``audios``, LLaVA ``image``) columns, and reasoning
+traces kept apart from the answer (turn keys ``reasoning_content`` /
+``thinking`` / ``reasoning``; for flat records the columns named in
+``record_reasoning_keys``).
 
 Users can override the key lists and role map to teach it about bespoke schemas
 without writing a new adapter from scratch.
@@ -32,7 +36,13 @@ import logging
 from collections.abc import Iterator
 from typing import Any
 
-from convmerge.adapters._common import build_example, coerce_messages, source_meta
+from convmerge.adapters._common import (
+    DEFAULT_REASONING_KEYS,
+    build_example,
+    coerce_messages,
+    first_text,
+    source_meta,
+)
 from convmerge.adapters.alpaca import iter_from_alpaca_line
 from convmerge.adapters.text_chat import parse_text_chat
 from convmerge.adapters.tool_formats import glaive_messages, is_glaive, is_xlam, xlam_messages
@@ -89,8 +99,15 @@ def iter_from_chat_line(
     instruction_keys: tuple[str, ...] = DEFAULT_INSTRUCTION_KEYS,
     output_keys: tuple[str, ...] = DEFAULT_OUTPUT_KEYS,
     input_keys: tuple[str, ...] = DEFAULT_INPUT_KEYS,
+    reasoning_keys: tuple[str, ...] = DEFAULT_REASONING_KEYS,
+    record_reasoning_keys: tuple[str, ...] = (),
 ) -> Iterator[TrainingExample]:
     """Yield zero or more :class:`TrainingExample` from a single raw record.
+
+    ``reasoning_keys`` name the turn keys holding an assistant's reasoning
+    trace; ``record_reasoning_keys`` the columns holding it in flat
+    question/answer records (off by default: a top-level ``reasoning`` column
+    is often an on/off flag, as in Llama-Nemotron).
 
     ``pairwise_mode`` controls how ``conversation_a`` / ``conversation_b`` rows
     are handled:
@@ -109,6 +126,7 @@ def iter_from_chat_line(
             content_keys=content_keys,
             role_map=role_map,
             pairwise_mode=pairwise_mode,
+            reasoning_keys=reasoning_keys,
         )
         return
 
@@ -116,10 +134,30 @@ def iter_from_chat_line(
         convs = record.get(key)
         if isinstance(convs, list) and convs:
             msgs = coerce_messages(
-                convs, role_keys=role_keys, content_keys=content_keys, role_map=role_map
+                convs,
+                role_keys=role_keys,
+                content_keys=content_keys,
+                role_map=role_map,
+                reasoning_keys=reasoning_keys,
             ) or _input_output_turns(convs)
             if msgs:
                 yield build_example(msgs, record, meta={"source": "chat"})
+            return
+
+    prompt_turns, answer = record.get("input"), record.get("output")
+    if isinstance(prompt_turns, list) and prompt_turns and isinstance(answer, str):
+        # Llama-Nemotron: the prompt turns in ``input``, the answer in ``output``.
+        msgs = coerce_messages(
+            prompt_turns,
+            role_keys=role_keys,
+            content_keys=content_keys,
+            role_map=role_map,
+            reasoning_keys=reasoning_keys,
+        )
+        if msgs and answer.strip():
+            reasoning = first_text(record, record_reasoning_keys)
+            msgs.append(ChatMessage("assistant", answer, reasoning=reasoning))
+            yield build_example(msgs, record, meta={"source": "chat"})
             return
 
     if is_glaive(record):
@@ -159,7 +197,8 @@ def iter_from_chat_line(
     # Fall back to the alpaca adapter, but let callers override the key priority.
     remapped = _remap_for_alpaca(record, instruction_keys, input_keys, output_keys)
     if remapped is not None:
-        yield from iter_from_alpaca_line(remapped)
+        reasoning = first_text(record, record_reasoning_keys)
+        yield from iter_from_alpaca_line(remapped, reasoning=reasoning)
 
 
 def _iter_pairwise(
@@ -169,6 +208,7 @@ def _iter_pairwise(
     content_keys: tuple[str, ...],
     role_map: dict[str, str],
     pairwise_mode: str,
+    reasoning_keys: tuple[str, ...] = DEFAULT_REASONING_KEYS,
 ) -> Iterator[TrainingExample]:
     a = record.get("conversation_a")
     b = record.get("conversation_b")
@@ -196,7 +236,11 @@ def _iter_pairwise(
         if not isinstance(convs, list) or not convs:
             continue
         msgs = coerce_messages(
-            convs, role_keys=role_keys, content_keys=content_keys, role_map=role_map
+            convs,
+            role_keys=role_keys,
+            content_keys=content_keys,
+            role_map=role_map,
+            reasoning_keys=reasoning_keys,
         )
         if msgs:
             yield build_example(msgs, record, meta={"source": "chat:pairwise", "branch": label})

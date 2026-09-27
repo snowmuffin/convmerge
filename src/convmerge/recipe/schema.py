@@ -33,6 +33,12 @@ _CONVERT_KEYS = {
     "keep_meta",
     "meta_key",
     "alpaca_multiturn",
+    "reasoning",
+    "tool_content",
+    "system",
+    "merge_consecutive",
+    "split_turns",
+    "reasoning_turns",
 }
 _FETCH_ENTRY_KEYS = {"hf", "url", "config", "split", "ext", "mode", "lfs", "max_rows"}
 
@@ -51,10 +57,11 @@ class ConvertSpec:
     on_invalid: OnInvalid = "drop"
     workers: int = 1
     emit: dict[str, Any] = field(default_factory=dict)
+    transforms: dict[str, Any] = field(default_factory=dict)
 
     def options(self, base: Path) -> dict[str, Any]:
         """JSON-able options for step keys (preset as a path relative to ``base``)."""
-        return {
+        options = {
             "from": self.adapter,
             "format": self.output_format,
             "preset": _rel(self.preset, base) if self.preset else None,
@@ -63,6 +70,9 @@ class ConvertSpec:
             "on_invalid": self.on_invalid,
             "emit": {k: list(v) if isinstance(v, tuple) else v for k, v in self.emit.items()},
         }
+        if self.transforms:  # only when set, so earlier lock files stay valid
+            options["transforms"] = dict(self.transforms)
+        return options
 
 
 @dataclass(frozen=True)
@@ -300,9 +310,18 @@ def _convert(raw: Any, base: Path, where: str) -> ConvertSpec:
     if isinstance(workers, bool) or not isinstance(workers, int) or workers < 1:
         raise RecipeError(f"{where}.workers: expected a positive integer")
     emit: dict[str, Any] = {}
-    for key in ("tool_arguments", "meta_key", "alpaca_multiturn"):
+    for key in ("tool_arguments", "meta_key", "alpaca_multiturn", "reasoning", "tool_content"):
         if key in spec:
             emit[key] = _str(spec[key], f"{where}.{key}")
+    transforms: dict[str, Any] = {}
+    for key in ("system", "reasoning_turns"):
+        if key in spec:
+            transforms[key] = _str(spec[key], f"{where}.{key}")
+    for key in ("merge_consecutive", "split_turns"):
+        if key in spec:
+            if not isinstance(spec[key], bool):
+                raise RecipeError(f"{where}.{key}: expected true or false")
+            transforms[key] = spec[key]
     if "keep_meta" in spec:
         km = spec["keep_meta"]
         if isinstance(km, bool):
@@ -321,6 +340,7 @@ def _convert(raw: Any, base: Path, where: str) -> ConvertSpec:
         on_invalid=on_invalid,
         workers=workers,
         emit=emit,
+        transforms=transforms,
     )
     # Resolve once now so bad names, presets, or options fail before any work.
     try:
@@ -339,6 +359,7 @@ def convert_config_kwargs(spec: ConvertSpec) -> dict[str, Any]:
         "adapter_kwargs_json": json.dumps(spec.adapter_kwargs) if spec.adapter_kwargs else None,
         "emit_overrides": spec.emit or None,
         "preference": spec.preference,
+        "transform_overrides": spec.transforms or None,
     }
 
 

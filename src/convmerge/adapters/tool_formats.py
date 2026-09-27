@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import json
 import re
+from dataclasses import replace
 from typing import Any
 
 from convmerge.models import ChatMessage, ToolCall
@@ -92,7 +93,7 @@ def _hermes_calls(m: ChatMessage) -> ChatMessage:
     rest = _TOOL_CALL.sub(take, text).strip()
     if not calls:
         return m
-    return ChatMessage("assistant", rest or None, tool_calls=(*m.tool_calls, *calls), name=m.name)
+    return replace(m, content=rest or None, tool_calls=(*m.tool_calls, *calls))
 
 
 def _hermes_responses(m: ChatMessage) -> list[ChatMessage]:

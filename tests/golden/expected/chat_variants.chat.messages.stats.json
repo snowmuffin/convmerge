@@ -16,5 +16,7 @@
   "lossy": {},
   "no_example": 1,
   "non_object": 0,
+  "reasoning": 0,
+  "transforms": {},
   "written": 5
 }

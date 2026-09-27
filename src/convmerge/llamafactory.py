@@ -33,6 +33,7 @@ _OPENAI_TAGS = {
     "system_tag": "system",
 }
 _OPTIONAL = ("system", "tools", "images", "videos", "audios")
+_REASONING_FIELDS = ("reasoning_content", "thinking")
 
 
 def dataset_info_entry(path: str | Path, *, file_name: str | None = None) -> dict[str, Any]:
@@ -44,15 +45,18 @@ def dataset_info_entry(path: str | Path, *, file_name: str | None = None) -> dic
     """
     keys: set[str] = set()
     first: dict[str, Any] | None = None
-    has_tool_calls = False
+    has_tool_calls = has_reasoning_field = False
     for line in iter_jsonl(path):
         if not isinstance(line.value, dict):
             continue
         first = first or line.value
         keys.update(line.value)
-        if not has_tool_calls and "messages" in line.value:
-            has_tool_calls = any(
-                isinstance(m, dict) and m.get("tool_calls") for m in line.value["messages"] or []
+        turns = line.value.get("messages") or []
+        if "messages" in line.value and isinstance(turns, list):
+            turns = [m for m in turns if isinstance(m, dict)]
+            has_tool_calls = has_tool_calls or any(m.get("tool_calls") for m in turns)
+            has_reasoning_field = has_reasoning_field or any(
+                k in m for m in turns for k in _REASONING_FIELDS
             )
     if first is None:
         raise ValueError(f"{path}: no JSON object rows")
@@ -77,6 +81,11 @@ def dataset_info_entry(path: str | Path, *, file_name: str | None = None) -> dic
             raise ValueError(
                 f"{path}: LLaMA-Factory cannot read OpenAI tool_calls; convert with "
                 "--format sharegpt instead"
+            )
+        if has_reasoning_field:
+            raise ValueError(
+                f"{path}: LLaMA-Factory reads reasoning only inline as <think>...</think>; "
+                "convert with --reasoning inline (or --format sharegpt)"
             )
         entry["formatting"] = "sharegpt"
         entry["columns"] = {"messages": "messages"}
