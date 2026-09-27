@@ -92,6 +92,15 @@ class DedupeSpec:
 
 
 @dataclass(frozen=True)
+class SplitSpec:
+    val_output: Path
+    val: float | None = None
+    val_rows: int | None = None
+    seed: int = 42
+    keys: tuple[str, ...] | None = None
+
+
+@dataclass(frozen=True)
 class Recipe:
     path: Path
     base_dir: Path
@@ -103,6 +112,7 @@ class Recipe:
     mix: MixSpec | None
     dedupe: DedupeSpec | None
     auth: AuthConfig
+    split: SplitSpec | None = None
 
 
 def load_recipe(path: str | Path) -> Recipe:
@@ -131,7 +141,18 @@ def parse_recipe(raw: Any, *, path: Path) -> Recipe:
     top = _mapping(raw, "recipe")
     _only(
         top,
-        {"version", "workdir", "output", "lock", "report", "auth", "sources", "mix", "dedupe"},
+        {
+            "version",
+            "workdir",
+            "output",
+            "lock",
+            "report",
+            "auth",
+            "sources",
+            "mix",
+            "dedupe",
+            "split",
+        },  # fmt: skip
         "",
     )
     if top.get("version", 1) != 1:
@@ -153,11 +174,12 @@ def parse_recipe(raw: Any, *, path: Path) -> Recipe:
             )
         sources[name] = _source(name, spec, base)
 
+    output = base / _str(top["output"], "output")
     return Recipe(
         path=path,
         base_dir=base,
         workdir=workdir,
-        output=base / _str(top["output"], "output"),
+        output=output,
         lock_path=base / _str(top.get("lock", f"{path.stem}.lock.json"), "lock"),
         report_path=base / _str(top["report"], "report")
         if "report" in top
@@ -166,6 +188,7 @@ def parse_recipe(raw: Any, *, path: Path) -> Recipe:
         mix=_mix(top.get("mix"), sources),
         dedupe=_dedupe(top.get("dedupe")),
         auth=auth,
+        split=_split(top.get("split"), base, output),
     )
 
 
@@ -371,6 +394,46 @@ def _dedupe(raw: Any) -> DedupeSpec | None:
     if algorithm not in ("md5", "sha256"):
         raise RecipeError("dedupe.algorithm: expected md5 or sha256")
     return DedupeSpec(keys=tuple(keys) if keys else None, algorithm=algorithm)
+
+
+def _split(raw: Any, base: Path, output: Path) -> SplitSpec | None:
+    from convmerge.split import default_val_path
+
+    if raw is None or raw is False:
+        return None
+    spec = _mapping(raw, "split")
+    _only(spec, {"val", "val_rows", "seed", "keys", "val_output"}, "split")
+    val, val_rows = spec.get("val"), spec.get("val_rows")
+    if (val is None) == (val_rows is None):
+        raise RecipeError("split: give exactly one of 'val' (a fraction) or 'val_rows' (a count)")
+    if val is not None and (
+        isinstance(val, bool) or not isinstance(val, (int, float)) or not 0 < val < 1
+    ):
+        raise RecipeError("split.val: expected a fraction between 0 and 1")
+    if val_rows is not None and (
+        isinstance(val_rows, bool) or not isinstance(val_rows, int) or val_rows < 0
+    ):
+        raise RecipeError("split.val_rows: expected a non-negative integer")
+    seed = spec.get("seed", 42)
+    if isinstance(seed, bool) or not isinstance(seed, int):
+        raise RecipeError("split.seed: expected an integer")
+    keys = spec.get("keys")
+    if keys is not None and not (isinstance(keys, list) and all(isinstance(k, str) for k in keys)):
+        raise RecipeError("split.keys: expected a list of top-level keys")
+    val_output = (
+        base / _str(spec["val_output"], "split.val_output")
+        if "val_output" in spec
+        else default_val_path(output)
+    )
+    if val_output == output:
+        raise RecipeError("split.val_output: must differ from output")
+    return SplitSpec(
+        val_output=val_output,
+        val=float(val) if val is not None else None,
+        val_rows=val_rows,
+        seed=seed,
+        keys=tuple(keys) if keys else None,
+    )
 
 
 def _auth(raw: Any, where: str) -> AuthConfig:

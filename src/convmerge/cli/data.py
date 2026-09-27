@@ -161,6 +161,75 @@ def _cmd_dedupe(args: argparse.Namespace) -> None:
         )
 
 
+def _add_split(sub: argparse._SubParsersAction) -> None:
+    p = sub.add_parser(
+        "split",
+        help="Split a JSONL file into train and validation sets by content hash",
+    )
+    p.add_argument("--input", "-i", type=Path, required=True)
+    p.add_argument("--output", "-o", type=Path, required=True, help="Train output")
+    p.add_argument(
+        "--val-output",
+        type=Path,
+        default=None,
+        help="Validation output (default: <output stem>.val.jsonl next to --output)",
+    )
+    size = p.add_mutually_exclusive_group(required=True)
+    size.add_argument(
+        "--val", type=_fraction, default=None, metavar="FRACTION",
+        help="Send about this fraction of rows to validation (e.g. 0.05)",
+    )  # fmt: skip
+    size.add_argument(
+        "--val-rows", type=_non_negative_int, default=None, metavar="N",
+        help="Send exactly N rows to validation",
+    )  # fmt: skip
+    p.add_argument("--seed", type=int, default=42)
+    p.add_argument(
+        "--keys",
+        nargs="+",
+        default=None,
+        help="Hash only these top-level keys, so rows sharing them stay on one side",
+    )
+
+
+def _cmd_split(args: argparse.Namespace) -> None:
+    from convmerge.split import SplitStats, default_val_path, split_jsonl
+
+    if not args.input.is_file():
+        print(f"error: input file not found: {args.input}", file=sys.stderr)
+        sys.exit(1)
+    val_output = args.val_output or default_val_path(args.output)
+    stats = SplitStats()
+    split_jsonl(
+        args.input, args.output, val_output,
+        val=args.val, val_rows=args.val_rows, seed=args.seed, keys=args.keys, stats=stats,
+    )  # fmt: skip
+    print(
+        f"train={stats.train:,} -> {args.output}\nval={stats.val:,} -> {val_output}",
+        file=sys.stderr,
+    )
+    if stats.first_invalid_line is not None:
+        print(
+            f"warning: dropped {stats.invalid_json:,} invalid JSON lines "
+            f"(first at line {stats.first_invalid_line})",
+            file=sys.stderr,
+        )
+
+
+def _fraction(value: str) -> float:
+    f = float(value)
+    if not 0.0 < f < 1.0:
+        raise argparse.ArgumentTypeError(f"must be between 0 and 1 (exclusive), got {value}")
+    return f
+
+
+def _non_negative_int(value: str) -> int:
+    n = int(value)
+    if n < 0:
+        raise argparse.ArgumentTypeError(f"must be >= 0, got {value}")
+    return n
+
+
 def _add_turns(sub: argparse._SubParsersAction) -> None:
     p = sub.add_parser(
         "turns",
