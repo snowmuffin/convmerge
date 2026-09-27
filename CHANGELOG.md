@@ -7,6 +7,59 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-09-27
+
+What the chat template actually sees: reasoning traces in the field each
+model reads, tool-call turns every template accepts, fixes for strict
+templates, and `tokens` checks for the failures that otherwise stay silent
+(no loss mask, no stop token, answers truncated away, reasoning dropped).
+
+### Added
+
+- Reasoning traces: `ChatMessage.reasoning`, read from `reasoning_content` /
+  `thinking` / `reasoning` turn keys (`ChatAdapterOptions.reasoning_keys`)
+  and, opt-in, from flat-record columns (`record_reasoning_keys`, e.g. s1K).
+  `convert --reasoning keep|inline|reasoning_content|thinking|drop`
+  (`EmitOptions.reasoning`) writes them where the target template reads them
+  (Qwen3 / DeepSeek: `reasoning_content`, gpt-oss: `thinking`); formats
+  without a field write them inline. Inline `<think>` text is untouched by
+  default. `convert` counts examples with a trace (`reasoning`).
+- Fixes for strict chat templates (`TransformOptions`, presets `transforms:`,
+  recipe source keys): `--system fold|drop`, `--merge-consecutive`,
+  `--split-turns` (one example per user turn), `--reasoning-turns last`;
+  counted in the report under `transforms`.
+- `convmerge tokens` checks: `generation_tags` (TRL `assistant_only_loss`
+  needs `{% generation %}`), `answer_beyond_limit` (rows whose answer starts
+  beyond `--max-tokens`), `stop_tokens` / `missing_eos` (tokenizer eos plus
+  `generation_config.json`), `reasoning_dropped` / `reasoning_dropped_final`,
+  and `hints` naming the `convert` flag that fixes each finding. They are
+  warnings; the exit status is unchanged.
+- Llama-Nemotron rows (`input` turns + `output`) and `system_prompt` columns.
+- Catalog: reasoning datasets (OpenR1-Math, OpenThoughts3, s1K-1.1,
+  Llama-Nemotron, Multilingual-Thinking, AM-Thinking); entries can carry
+  `--adapter-kwargs` and emit flags.
+- Guides: [reasoning data](docs/guides/reasoning.md) and a
+  [symptom → fix table](docs/guides/troubleshooting.md).
+
+### Changed
+
+- **Tool-call-only assistant turns are written with `"content": ""`**
+  instead of `null` (`--tool-content null` restores it): `null` fails in the
+  Qwen3, gpt-oss, DeepSeek-R1, GLM-4, Mistral, and Phi-4 templates, `""`
+  renders in all of them.
+- `llamafactory-info` refuses files with `reasoning_content` / `thinking`
+  fields, which LLaMA-Factory cannot read.
+- `tokens` renders tool-call content and reasoning fields exactly as the file
+  stores them.
+
+### Verified
+
+- TRL 1.14 `SFTTrainer` with the Qwen3 template: multi-turn
+  `reasoning_content` data trains 40 of 80 traces (as `tokens` reports) and
+  `--split-turns` data trains 80 of 80. gpt-oss template on `--reasoning
+  thinking` data with tool calls. LLaMA-Factory 0.9.5 with the `qwen3`
+  template on `--format sharegpt` reasoning data.
+
 ## [0.11.0] - 2026-09-27
 
 From converted data to a training run: filter for the target model, split

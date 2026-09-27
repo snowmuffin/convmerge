@@ -33,6 +33,25 @@ changes. What 1.x keeps stable is described in [stability.md](stability.md).
 `analyze_turn_distribution`, `split_by_turns`), but import them from
 `convmerge` in new code.
 
+## Behaviour changes in 0.12
+
+- `--format messages` / `preference`: an assistant turn that only calls
+  tools is written with `"content": ""` instead of `null`. `null` breaks the
+  Qwen3, gpt-oss, DeepSeek-R1, GLM-4, Mistral, and Phi-4 chat templates; `""`
+  renders in all of them. `--tool-content null` (or `tool_content: null` in a
+  preset / recipe, `EmitOptions(tool_content="null")`) restores the old
+  output.
+- Assistant turns with a `reasoning_content`, `thinking`, or `reasoning`
+  string now keep it (written as `reasoning_content` by default; see
+  `--reasoning`). Before 0.12 these fields were dropped.
+- Llama-Nemotron rows (`input` turns + `output` answer) convert instead of
+  being dropped, and a `system_prompt` column becomes the system turn like
+  `system` does.
+- `convert --report` and `tokens` JSON gain keys (`transforms`, `reasoning`;
+  `generation_tags`, `answer_beyond_limit`, `stop_tokens`, `missing_eos`,
+  `reasoning_dropped`, `reasoning_dropped_final`, `hints`); existing keys are
+  unchanged.
+
 ## Behaviour changes already in 0.9
 
 These are not deprecations; they shipped in 0.9 and stay:

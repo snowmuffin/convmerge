@@ -90,7 +90,8 @@ and then:
 | `convert.preference` | — | `chosen` / `rejected` for preference data. |
 | `convert.on_invalid` | `drop` | `drop`, `keep`, or `fail`. |
 | `convert.workers` | `1` | Parallel convert. Output does not depend on it, so changing it never re-runs a step. |
-| `convert.tool_arguments`, `keep_meta`, `meta_key`, `alpaca_multiturn` | — | Same as the `convert` flags. |
+| `convert.tool_arguments`, `keep_meta`, `meta_key`, `alpaca_multiturn`, `reasoning`, `tool_content` | — | Same as the `convert` flags. |
+| `convert.system`, `merge_consecutive`, `split_turns`, `reasoning_turns` | — | The template fixes of `convert` (`--system`, `--merge-consecutive`, `--split-turns`, `--reasoning-turns`); see [format.md](format.md#fixes-for-strict-chat-templates). |
 
 A directory source with several data files is converted file by file (sorted
 by path) and concatenated.
@@ -125,7 +126,8 @@ Stages run in this order: sources → `mix` → `dedupe` → `tokens` → `split
 | `split.val_output` | `<output stem>.val.jsonl` | Where the validation rows go; `output` gets the rest. |
 
 `tokens` drops rows the chat template rejects and rows over `max_tokens`
-(the report lists both, with the length distribution). `split` assigns rows
+(the report lists both, with the length distribution, and the warnings and
+`hints` described under `convmerge tokens` in the README). `split` assigns rows
 by content hash, so duplicates never straddle train and validation; it runs
 as two steps, `split.train` and `split.val`, that re-run independently.
 
