@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Iterator
+from collections.abc import Callable, Iterable, Iterator
 from dataclasses import asdict, dataclass, field
+from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, TextIO
 
@@ -21,6 +22,8 @@ from convmerge.emitters import (
 )
 from convmerge.io import ReadStats, iter_jsonl
 from convmerge.models import TrainingExample
+from convmerge.reasoning import has_reasoning
+from convmerge.transforms import TransformOptions, apply_transforms
 from convmerge.validate import ISSUES, validate_example
 
 if TYPE_CHECKING:
@@ -73,6 +76,11 @@ class ConvertStats:
     drop_reasons: dict[str, int] = field(default_factory=dict)
     drop_lines: dict[str, list[int]] = field(default_factory=dict)
     lossy: dict[str, int] = field(default_factory=dict)
+    transforms: dict[str, int] = field(default_factory=dict)
+    """How often each ``TransformOptions`` fix changed an example (see
+    :data:`convmerge.transforms.TRANSFORM_COUNTERS`)."""
+    reasoning: int = 0
+    """Written examples with a reasoning trace (a field or an inline ``<think>``)."""
 
     @property
     def skipped(self) -> int:
@@ -90,7 +98,7 @@ class ConvertStats:
         """Add ``other`` (a later chunk of the same input) into these stats."""
         for name in (
             "lines_read", "written", "blank", "invalid_json", "non_object",
-            "no_example", "dropped", "kept_invalid",
+            "no_example", "dropped", "kept_invalid", "reasoning",
         ):  # fmt: skip
             setattr(self, name, getattr(self, name) + getattr(other, name))
         if self.first_invalid_line is None:
@@ -102,6 +110,8 @@ class ConvertStats:
             mine.extend(lines[: max(0, _SAMPLE_LINES - len(mine))])
         for r, n in other.lossy.items():
             self.lossy[r] = self.lossy.get(r, 0) + n
+        for r, n in other.transforms.items():
+            self.transforms[r] = self.transforms.get(r, 0) + n
 
     def to_report(self) -> dict[str, object]:
         """JSON-ready summary (used by ``convert --report``)."""
@@ -166,6 +176,7 @@ def convert_file(
     on_invalid: OnInvalid = "drop",
     emit_options: EmitOptions | None = None,
     workers: int = 1,
+    transform_options: TransformOptions | None = None,
 ) -> tuple[int, int]:
     """
     Read JSONL lines, parse with adapter, validate, write emitted JSONL.
@@ -186,6 +197,11 @@ def convert_file(
     ``alpaca`` handles multi-turn conversations. Lossy-but-kept conversions
     are counted in ``stats.lossy``.
 
+    ``transform_options`` (:class:`convmerge.transforms.TransformOptions`)
+    fixes conversations for strict chat templates before validation (fold
+    system turns, merge consecutive turns, split at user turns, keep only the
+    last turn's reasoning); each fix is counted in ``stats.transforms``.
+
     Set ``progress=True`` to log periodic row counts to stderr (off by default;
     see :mod:`convmerge.progress`). Pass a :class:`ConvertStats` as ``stats``
     to learn how many lines were skipped and why (invalid JSON, non-object
@@ -199,7 +215,10 @@ def convert_file(
         raise ValueError(f"on_invalid must be 'drop', 'keep', or 'fail', got {on_invalid!r}")
     notes: list[str] = []
     emitter = get_emitter(output_format, options=emit_options, notes=notes)
-    adapter = resolve_adapter(adapter_name, adapter_options, pairs=wants_pairs(output_format))
+    pairs = wants_pairs(output_format)
+    check_transforms(transform_options, pairs=pairs)
+    adapter = resolve_adapter(adapter_name, adapter_options, pairs=pairs)
+    transform = _transformer(transform_options)
 
     st = stats if stats is not None else ConvertStats()
     reporter = ProgressReporter(f"convert {input_path.name}", enabled=progress)
@@ -215,13 +234,54 @@ def convert_file(
                 reporter,
                 encoding,
                 workers,
-                (adapter_name, adapter_options, output_format, emit_options, on_invalid),
+                (
+                    adapter_name,
+                    adapter_options,
+                    output_format,
+                    emit_options,
+                    on_invalid,
+                    transform_options,
+                ),
             )
         else:
-            _run(input_path, fout, adapter, emitter, st, reporter, encoding, on_invalid, notes)
+            _run(
+                input_path,
+                fout,
+                adapter,
+                emitter,
+                st,
+                reporter,
+                encoding,
+                on_invalid,
+                notes,
+                transform,
+            )
 
     reporter.done()
     return st.lines_read, st.written
+
+
+def check_transforms(options: TransformOptions | None, *, pairs: bool) -> None:
+    """Reject option combinations that cannot work (``split_turns`` with pairs)."""
+    if options is not None and options.split_turns and pairs:
+        raise ValueError(
+            "split_turns (--split-turns) cannot split preference pairs; use it with an SFT format"
+        )
+
+
+Transform = Callable[[TrainingExample, dict[str, int]], list[TrainingExample]]
+
+
+def _transformer(options: TransformOptions | None) -> Transform | None:
+    if options is None or not options.active:
+        return None
+    return partial(_apply, options=options)
+
+
+def _apply(
+    example: TrainingExample, counts: dict[str, int], *, options: TransformOptions
+) -> list[TrainingExample]:
+    return apply_transforms(example, options, counts)
 
 
 def validate_file(
@@ -264,13 +324,17 @@ def _run(
     encoding: str,
     on_invalid: OnInvalid,
     notes: list[str],
+    transform: Transform | None = None,
 ) -> None:
     read = ReadStats()
     try:
         for line in iter_jsonl(input_path, encoding=encoding, stats=read):
             if reporter is not None:
                 reporter.update()
-            for row in _process(line.value, line.number, adapter, emitter, st, on_invalid, notes):
+            rows = _process(
+                line.value, line.number, adapter, emitter, st, on_invalid, notes, transform
+            )
+            for row in rows:
                 if fout is not None:
                     fout.write(row)
     finally:
@@ -288,6 +352,7 @@ def _process(
     st: ConvertStats,
     on_invalid: OnInvalid,
     notes: list[str],
+    transform: Transform | None = None,
 ) -> list[str]:
     """Convert one parsed record; return its output lines and update ``st``."""
     if not isinstance(obj, dict):
@@ -295,7 +360,7 @@ def _process(
         return []
     rows: list[str] = []
     produced = 0
-    for example in adapter(obj):
+    for example in _examples(adapter(obj), transform, st):
         produced += 1
         reasons = validate_example(example)
         if reasons:
@@ -318,12 +383,29 @@ def _process(
             continue
         rows.append(json.dumps(row, ensure_ascii=False) + "\n")
         st.written += 1
+        if _has_reasoning(example):
+            st.reasoning += 1
         for note in notes:
             st.lossy[note] = st.lossy.get(note, 0) + 1
         notes.clear()
     if not produced:
         st.no_example += 1
     return rows
+
+
+def _examples(
+    examples: Iterable[TrainingExample], transform: Transform | None, st: ConvertStats
+) -> Iterator[TrainingExample]:
+    if transform is None:
+        yield from examples
+        return
+    for example in examples:
+        yield from transform(example, st.transforms)
+
+
+def _has_reasoning(example: TrainingExample) -> bool:
+    sides = [example.messages, example.rejected or []]
+    return any(m.role == "assistant" and has_reasoning(m) for side in sides for m in side)
 
 
 # --- parallel convert -------------------------------------------------------
@@ -333,7 +415,7 @@ _WORKER: dict[str, object] = {}
 
 
 def _worker_init(spec: tuple) -> None:
-    adapter_name, adapter_options, output_format, emit_options, on_invalid = spec
+    adapter_name, adapter_options, output_format, emit_options, on_invalid, transforms = spec
     notes: list[str] = []
     emitter = get_emitter(output_format, options=emit_options, notes=notes)
     _WORKER.update(
@@ -341,6 +423,7 @@ def _worker_init(spec: tuple) -> None:
         emitter=emitter,
         notes=notes,
         on_invalid=on_invalid,
+        transform=_transformer(transforms),
     )
 
 
@@ -364,6 +447,7 @@ def _worker_chunk(chunk: list[tuple[int, str]]) -> tuple[str, ConvertStats]:
                 st,
                 _WORKER["on_invalid"],  # type: ignore[arg-type]
                 _WORKER["notes"],  # type: ignore[arg-type]
+                _WORKER["transform"],  # type: ignore[arg-type]
             )
         )
     return "".join(out), st
@@ -434,11 +518,12 @@ def convert_with_config(
     on_invalid: OnInvalid = "drop",
     emit_options: EmitOptions | None = None,
     workers: int = 1,
+    transform_options: TransformOptions | None = None,
 ) -> tuple[int, int]:
     """Run :func:`convert_file` using a resolved :class:`convmerge.config.ConvertConfig`.
 
     ``emit_options`` defaults to ``cfg.emit_options`` (from a preset's
-    ``output_options``).
+    ``output_options``) and ``transform_options`` to ``cfg.transform_options``.
     """
     return convert_file(
         input_path,
@@ -452,6 +537,9 @@ def convert_with_config(
         on_invalid=on_invalid,
         emit_options=emit_options if emit_options is not None else cfg.emit_options,
         workers=workers,
+        transform_options=(
+            transform_options if transform_options is not None else cfg.transform_options
+        ),
     )
 
 

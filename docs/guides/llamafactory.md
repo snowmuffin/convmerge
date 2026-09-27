@@ -53,4 +53,15 @@ those.
 `llamafactory-info` also registers `--format alpaca` files and plain
 `messages` files (OpenAI role tags). Files with OpenAI `tool_calls` are
 refused — LLaMA-Factory cannot read them — with a hint to use
-`--format sharegpt`.
+`--format sharegpt`, and so are files with `reasoning_content` / `thinking`
+fields (LLaMA-Factory reads reasoning inline only; `--format sharegpt` and
+`--reasoning inline` write it that way).
+
+## Reasoning data
+
+`--format sharegpt` writes traces inline as `<think>...</think>`, which the
+`qwen3` / `deepseekr1` templates read. LLaMA-Factory trains every assistant
+turn, including traces in the history that Qwen3 never shows at inference;
+convert multi-turn data with `--reasoning-turns last` (LLaMA-Factory then
+writes empty `<think>` blocks for earlier turns) or `--split-turns`. Details:
+[reasoning.md](reasoning.md).

@@ -105,8 +105,8 @@
  },
  {
   "id": "open-r1/OpenR1-Math-220k",
-  "kind": "sft",
-  "shape": "messages",
+  "kind": "reasoning",
+  "shape": "messages, inline `<think>`",
   "config": null,
   "split": "train",
   "format": "messages",
@@ -406,6 +406,155 @@
     {
      "from": "gpt",
      "value": "White and red."
+    }
+   ]
+  }
+ },
+ {
+  "id": "open-thoughts/OpenThoughts3-1.2M",
+  "kind": "reasoning",
+  "shape": "ShareGPT, inline `<think>`",
+  "config": null,
+  "split": "train",
+  "format": "messages",
+  "record": {
+   "difficulty": 6,
+   "source": "stackexchange",
+   "domain": "math",
+   "conversations": [
+    {
+     "from": "human",
+     "value": "Is 91 prime?"
+    },
+    {
+     "from": "gpt",
+     "value": "<think>\nOkay, 91 = 7 * 13.\n</think>\n\nNo: 91 = 7 × 13."
+    }
+   ]
+  }
+ },
+ {
+  "id": "simplescaling/s1K-1.1",
+  "kind": "reasoning",
+  "shape": "question / trace / attempt columns",
+  "config": null,
+  "split": "train",
+  "format": "messages",
+  "adapter_kwargs": {
+   "chat": {
+    "output_keys": [
+     "deepseek_attempt"
+    ],
+    "record_reasoning_keys": [
+     "deepseek_thinking_trajectory"
+    ]
+   }
+  },
+  "record": {
+   "solution": "4",
+   "question": "What is 2+2?",
+   "cot_type": "math",
+   "source_type": "made-up",
+   "metadata": "{}",
+   "gemini_thinking_trajectory": "Add them.",
+   "gemini_attempt": "4",
+   "deepseek_thinking_trajectory": "Two plus two is four.",
+   "deepseek_attempt": "The answer is 4.",
+   "gemini_grade": "Yes",
+   "gemini_grade_reason": "ok",
+   "deepseek_grade": "Yes",
+   "deepseek_grade_reason": "ok"
+  }
+ },
+ {
+  "id": "nvidia/Llama-Nemotron-Post-Training-Dataset",
+  "kind": "reasoning",
+  "shape": "`input` turns + `output`",
+  "config": "SFT",
+  "split": "chat",
+  "format": "messages",
+  "record": {
+   "input": [
+    {
+     "role": "user",
+     "content": "Name a prime."
+    }
+   ],
+   "output": "<think>\nTwo is prime.\n</think>\n\n2",
+   "category": "chat",
+   "license": "cc-by-4.0",
+   "reasoning": "on",
+   "generator": "made-up",
+   "used_in_training": "Ultra, Super, Nano",
+   "version": "v1.1",
+   "system_prompt": "detailed thinking on"
+  }
+ },
+ {
+  "id": "HuggingFaceH4/Multilingual-Thinking",
+  "kind": "reasoning",
+  "shape": "messages + `thinking` field (gpt-oss)",
+  "config": null,
+  "split": "train",
+  "format": "messages",
+  "emit": {
+   "reasoning": "thinking"
+  },
+  "record": {
+   "reasoning_language": "French",
+   "developer": "Be brief.",
+   "user": "Hi!",
+   "analysis": "L'utilisateur salue.",
+   "final": "Hello!",
+   "messages": [
+    {
+     "role": "system",
+     "content": "reasoning language: French\n\nBe brief.",
+     "thinking": null
+    },
+    {
+     "role": "user",
+     "content": "Hi!",
+     "thinking": null
+    },
+    {
+     "role": "assistant",
+     "content": "Hello!",
+     "thinking": "L'utilisateur salue."
+    }
+   ]
+  }
+ },
+ {
+  "id": "a-m-team/AM-Thinking-v1-Distilled",
+  "kind": "reasoning",
+  "shape": "ShareGPT, `<think>` + `<answer>`",
+  "config": null,
+  "split": "train",
+  "format": "messages",
+  "record": {
+   "system": "",
+   "conversations": [
+    {
+     "from": "human",
+     "value": "What is 3*3?",
+     "info": {
+      "source": "made-up",
+      "category": "math"
+     }
+    },
+    {
+     "from": "assistant",
+     "value": "<think>3 times 3 is 9.</think>\n<answer>9</answer>",
+     "info": {
+      "source": "made-up",
+      "category": "math",
+      "think_content": "3 times 3 is 9.",
+      "answer_content": "9",
+      "verify_score": 1.0,
+      "model_name": "am_thinking_v1",
+      "ppl": 1.5
+     }
     }
    ]
   }

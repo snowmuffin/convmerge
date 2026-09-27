@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "convmerge"
-version = "0.11.0"
+version = "0.12.0"
 description = "Convert Alpaca / ShareGPT datasets to unified messages JSONL for LLM supervised fine-tuning — fetch from HuggingFace or GitHub, normalize, convert, mix, and dedupe in one CLI pipeline"
 readme = "README.md"
 license = "MIT"
@@ -104,9 +104,12 @@ module = ["datasets", "datasets.*", "pyarrow", "pyarrow.*"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
-# convmerge treats tokenizers as Any; following transformers pulls in numpy's
-# stubs, which use syntax newer than our python_version.
-module = ["transformers", "transformers.*", "tokenizers", "tokenizers.*"]
+# convmerge treats tokenizers as Any; following transformers or huggingface_hub
+# pulls in numpy's stubs, which use syntax newer than our python_version.
+module = [
+    "transformers", "transformers.*", "tokenizers", "tokenizers.*",
+    "huggingface_hub", "huggingface_hub.*",
+]
 ignore_missing_imports = true
 follow_imports = "skip"
 

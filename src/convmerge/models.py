@@ -65,6 +65,10 @@ class ChatMessage:
 
     ``content`` is a plain string, a sequence of :class:`ContentPart` (stored
     as a tuple), or ``None`` (e.g. an assistant turn that only calls tools).
+    ``reasoning`` is an assistant turn's reasoning trace when the source keeps
+    it apart from the answer (a ``reasoning_content`` / ``thinking`` field or
+    column); reasoning written inline as ``<think>...</think>`` stays in
+    ``content`` unless ``convert --reasoning`` asks for it to be split out.
     """
 
     role: str
@@ -72,6 +76,7 @@ class ChatMessage:
     tool_calls: Sequence[ToolCall] = ()
     tool_call_id: str | None = None
     name: str | None = None
+    reasoning: str | None = None
 
     def __post_init__(self) -> None:
         content = self.content

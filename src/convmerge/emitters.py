@@ -11,6 +11,7 @@ from typing import Any, Literal
 
 from convmerge.models import ChatMessage, ContentPart, ToolCall, TrainingExample
 from convmerge.plugins import EMITTER_GROUP, load_entry_points
+from convmerge.reasoning import REASONING_MODES, ReasoningMode, strip_reasoning, to_field, to_inline
 
 EmitterFn = Callable[[TrainingExample], dict[str, Any]]
 
@@ -29,6 +30,7 @@ class UnrepresentableExample(ValueError):
 
 ToolArguments = Literal["string", "object"]
 AlpacaMultiturn = Literal["flatten", "history", "drop"]
+ToolContent = Literal["empty", "null"]
 
 
 @dataclass(frozen=True)
@@ -45,12 +47,26 @@ class EmitOptions:
       ``instruction`` and keeps the last assistant turn (lossy; counted);
       ``"history"`` writes earlier pairs to a LLaMA-Factory ``history``
       list (lossless for alternating conversations); ``"drop"`` drops them.
+    - ``reasoning``: where an assistant turn's reasoning goes. ``"keep"``
+      (default) leaves inline ``<think>`` blocks as they are and writes a
+      separate trace as ``reasoning_content``; ``"reasoning_content"`` /
+      ``"thinking"`` move inline blocks into that field (the one the target
+      chat template reads: Qwen3 / DeepSeek, gpt-oss); ``"inline"`` writes
+      every trace as a leading ``<think>`` block; ``"drop"`` removes them.
+      Formats without a reasoning field (``alpaca``, ``sharegpt``) always
+      write traces inline.
+    - ``tool_content``: the ``content`` of an assistant turn that only calls
+      tools. ``"empty"`` (default) writes ``""``, which every common chat
+      template accepts; ``"null"`` writes ``null`` (several templates,
+      including Qwen3's and gpt-oss's, fail on it).
     """
 
     tool_arguments: ToolArguments = "string"
     keep_meta: bool | Sequence[str] = False
     meta_key: str = "meta"
     alpaca_multiturn: AlpacaMultiturn = "flatten"
+    reasoning: ReasoningMode = "keep"
+    tool_content: ToolContent = "empty"
 
     def __post_init__(self) -> None:
         if self.tool_arguments not in ("string", "object"):
@@ -62,6 +78,12 @@ class EmitOptions:
                 "alpaca_multiturn must be 'flatten', 'history', or 'drop', "
                 f"got {self.alpaca_multiturn!r}"
             )
+        if self.reasoning not in REASONING_MODES:
+            raise ValueError(
+                f"reasoning must be one of {', '.join(REASONING_MODES)}, got {self.reasoning!r}"
+            )
+        if self.tool_content not in ("empty", "null"):
+            raise ValueError(f"tool_content must be 'empty' or 'null', got {self.tool_content!r}")
         if not isinstance(self.keep_meta, bool):
             object.__setattr__(self, "keep_meta", tuple(self.keep_meta))
 
@@ -86,11 +108,8 @@ def emit_messages(
     writes tool-call arguments as JSON objects instead of JSON strings (some
     Hugging Face chat templates expect that).
     """
-    if options is not None:
-        tool_arguments = options.tool_arguments
-    row: dict[str, Any] = {
-        "messages": [_message_dict(m, tool_arguments) for m in example.messages],
-    }
+    opts = options if options is not None else EmitOptions(tool_arguments=tool_arguments)
+    row: dict[str, Any] = {"messages": _message_dicts(example.messages, opts)}
     if example.tools:
         row["tools"] = example.tools
     return _with_meta(row, example, options)
@@ -109,14 +128,67 @@ def _with_meta(
     return row
 
 
-def _message_dict(m: ChatMessage, tool_arguments: ToolArguments) -> dict[str, Any]:
+def _message_dicts(msgs: Sequence[ChatMessage], opts: EmitOptions) -> list[dict[str, Any]]:
+    key = "thinking" if opts.reasoning == "thinking" else "reasoning_content"
+    return [
+        _message_dict(
+            place_reasoning(m, opts.reasoning),
+            opts.tool_arguments,
+            reasoning_key=key,
+            tool_content=opts.tool_content,
+        )
+        for m in msgs
+    ]
+
+
+def place_reasoning(m: ChatMessage, mode: ReasoningMode, *, has_field: bool = True) -> ChatMessage:
+    """``m`` with its reasoning where ``mode`` puts it (see :class:`EmitOptions`).
+
+    ``has_field=False`` is for formats that cannot store a separate trace:
+    anything kept is written inline.
+    """
+    if m.role != "assistant":
+        return m
+    if mode == "drop":
+        return strip_reasoning(m)
+    if mode == "inline" or not has_field:
+        return to_inline(m)
+    if mode in ("reasoning_content", "thinking"):
+        return to_field(m)
+    return m
+
+
+def _inline_reasoning(example: TrainingExample, opts: EmitOptions) -> TrainingExample:
+    """For formats without a reasoning field: traces inline (or dropped)."""
+    sides = [example.messages, *([example.rejected] if example.rejected else [])]
+    if opts.reasoning != "drop" and not any(m.reasoning for side in sides for m in side):
+        return example
+
+    def place(msgs: list[ChatMessage]) -> list[ChatMessage]:
+        return [place_reasoning(m, opts.reasoning, has_field=False) for m in msgs]
+
+    rejected = place(example.rejected) if example.rejected is not None else None
+    return replace(example, messages=place(example.messages), rejected=rejected)
+
+
+def _message_dict(
+    m: ChatMessage,
+    tool_arguments: ToolArguments,
+    *,
+    reasoning_key: str = "reasoning_content",
+    tool_content: ToolContent = "empty",
+) -> dict[str, Any]:
     out: dict[str, Any] = {"role": m.role}
     if m.name is not None:
         out["name"] = m.name
-    if m.content is None or isinstance(m.content, str):
+    if m.content is None:
+        out["content"] = "" if m.tool_calls and tool_content == "empty" else None
+    elif isinstance(m.content, str):
         out["content"] = m.content
     else:
         out["content"] = [_part_dict(p) for p in m.content]
+    if m.reasoning is not None:
+        out[reasoning_key] = m.reasoning
     if m.tool_calls:
         out["tool_calls"] = [_tool_call_dict(tc, tool_arguments) for tc in m.tool_calls]
     if m.tool_call_id is not None:
@@ -161,7 +233,7 @@ def emit_alpaca(
     examples raise :class:`UnrepresentableExample`.
     """
     opts = options or EmitOptions()
-    msgs = example.messages
+    msgs = _inline_reasoning(example, opts).messages
     if example.tools or any(m.tool_calls or m.role == "tool" for m in msgs):
         raise UnrepresentableExample("unrepresentable_tool_calls")
     if any(m.media for m in msgs):
@@ -221,11 +293,10 @@ def emit_preference(
     """
     opts = options or EmitOptions()
     prompt, chosen_tail, rejected_tail = split_pair(example)
-    args = opts.tool_arguments
     row: dict[str, Any] = {
-        "prompt": [_message_dict(m, args) for m in prompt],
-        "chosen": [_message_dict(m, args) for m in chosen_tail],
-        "rejected": [_message_dict(m, args) for m in rejected_tail],
+        "prompt": _message_dicts(prompt, opts),
+        "chosen": _message_dicts(chosen_tail, opts),
+        "rejected": _message_dicts(rejected_tail, opts),
     }
     if example.tools:
         row["tools"] = example.tools
@@ -301,6 +372,7 @@ def emit_sharegpt(
     ``lossy_tool_call_text``); other conversations that do not fit raise
     :class:`UnrepresentableExample`.
     """
+    example = _inline_reasoning(example, options or EmitOptions())
     system, turns = _system_and_turns(example.messages)
     media: dict[str, list[str]] = {}
     conversations = _sharegpt_turns(turns, media, notes)
@@ -321,6 +393,7 @@ def emit_sharegpt_preference(
     must be a single assistant answer (LLaMA-Factory's ranking format has no
     room for multi-turn or tool-call continuations).
     """
+    example = _inline_reasoning(example, options or EmitOptions())
     prompt, chosen_tail, rejected_tail = split_pair(example)
     if not (_single_answer(chosen_tail) and _single_answer(rejected_tail)):
         raise UnrepresentableExample("unrepresentable_pair_continuation")

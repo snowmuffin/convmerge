@@ -70,7 +70,7 @@ def test_glaive_transcript_becomes_tool_calls(tmp_path: Path) -> None:
         },
         {"role": "user",
          "content": "Can you tell me the latest news headlines for the United States?"},
-        {"role": "assistant", "content": None,
+        {"role": "assistant", "content": "",
          "tool_calls": [_call("get_news_headlines", {"country": "United States"})]},
         {"role": "tool", "name": "get_news_headlines", "content": '{"headlines": ["A", "B"]}'},
         {"role": "assistant", "content": "Here are the headlines: A, B"},
@@ -135,7 +135,7 @@ def test_hermes_parallel_calls_and_responses(tmp_path: Path) -> None:
     assert msgs[0]["content"] == HERMES_SYSTEM  # the system prompt is kept as written
     assert msgs[2] == {
         "role": "assistant",
-        "content": None,
+        "content": "",
         "tool_calls": [
             _call("get_news_headlines", {"country": "US"}),
             _call("get_news_headlines", {"country": "France"}),
@@ -205,7 +205,7 @@ def test_xlam_record(tmp_path: Path) -> None:
         {"role": "user", "content": "Headlines for Japan and a 12-char password."},
         {
             "role": "assistant",
-            "content": None,
+            "content": "",
             "tool_calls": [
                 _call("get_news_headlines", {"country": "Japan"}),
                 _call("generate_password", {"length": 12}),
