@@ -216,6 +216,18 @@ LLaMA-Factory ranking, TRL, and Chatbot Arena shapes).
 Rendered `text` columns (ChatML, Llama 2/3, Gemma, `### Human:`, HH, the Alpaca
 prompt) are split back into turns by `--from auto`.
 
+Reasoning data: traces stored inline (`<think>...</think>`) or in a
+`reasoning_content` / `thinking` field are kept; `--reasoning` moves them to
+the field your model's chat template reads (`reasoning_content` for Qwen3 /
+DeepSeek, `thinking` for gpt-oss), inline, or drops them. See
+[docs/guides/reasoning.md](docs/guides/reasoning.md).
+
+Strict chat templates: `--system fold` (no system role), `--merge-consecutive`
+("roles must alternate"), `--reasoning-turns last` / `--split-turns`
+(templates that render reasoning only after the last user turn). Tool-call
+turns get `"content": ""`, which every common template accepts. Symptom →
+fix table: [docs/guides/troubleshooting.md](docs/guides/troubleshooting.md).
+
 Large files: `--workers N` converts with N processes (same output and
 stats as a single process; ~3.8x faster with 4 workers in our benchmark).
 
@@ -273,8 +285,11 @@ reproducibility. Omit `--total` to merge all records from every source.
 convmerge dedupe -i ./train/mixed.jsonl -o ./train/mixed.dedup.jsonl
 
 # Render every row with the model's chat template: length percentiles, rows the
-# template rejects (with line numbers), double-encoded tool arguments. -o keeps
-# the rows that render and fit. Needs convmerge[tokens] (transformers, no PyTorch).
+# template rejects (with line numbers), double-encoded tool arguments, answers
+# that start beyond --max-tokens, answers not followed by a stop token, reasoning
+# the template drops, and {% generation %} support -- with the convert flag that
+# fixes each ("hints"). -o keeps the rows that render and fit.
+# Needs convmerge[tokens] (transformers, no PyTorch).
 convmerge tokens -i ./train/mixed.dedup.jsonl --tokenizer Qwen/Qwen2.5-7B-Instruct \
   --max-tokens 4096 -o ./train/fit.jsonl
 

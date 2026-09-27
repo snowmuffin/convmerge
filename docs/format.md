@@ -25,6 +25,11 @@ exactly like the line above; richer data adds only what it needs:
   when the source had ids, and a top-level `tools` list of schemas.
   `arguments` is a JSON string (OpenAI style); `--tool-arguments object`
   writes an object instead, which some Hugging Face chat templates expect.
+  An assistant turn that only calls tools has `"content": ""`: `null` makes
+  the Qwen3, gpt-oss, DeepSeek-R1, GLM-4, Mistral, and Phi-4 templates fail,
+  while `""` renders everywhere. `--tool-content null` writes `null` (the
+  0.11 output).
+- **Reasoning** — see [Reasoning traces](#reasoning-traces-reasoning).
 - **Multimodal** — `content` becomes a list of parts:
   `{"type": "text", "text"}`, `{"type": "image_url", "image_url": {"url"}}`,
   and `audio_url` / `video_url` in the same shape (vLLM / Qwen-VL
@@ -36,7 +41,7 @@ exactly like the line above; richer data adds only what it needs:
 ```json
 {"messages": [
   {"role": "user", "content": "Weather in Seoul?"},
-  {"role": "assistant", "content": null, "tool_calls": [{"id": "call_1", "type": "function", "function": {"name": "get_weather", "arguments": "{\"city\": \"Seoul\"}"}}]},
+  {"role": "assistant", "content": "", "tool_calls": [{"id": "call_1", "type": "function", "function": {"name": "get_weather", "arguments": "{\"city\": \"Seoul\"}"}}]},
   {"role": "tool", "content": "{\"temp_c\": 21}", "tool_call_id": "call_1"},
   {"role": "assistant", "content": "It is 21°C in Seoul."}],
  "tools": [{"type": "function", "function": {"name": "get_weather", "parameters": {"type": "object"}}}]}
@@ -128,6 +133,52 @@ LLaMA-Factory ranking rows for DPO / ORPO / reward modeling: the prompt as
 Pairs are built as for [`preference`](#preference). Answers that are
 multi-turn or tool calls are dropped as `unrepresentable_pair_continuation`
 (use `preference` with TRL for those).
+
+### Reasoning traces (`--reasoning`)
+
+An assistant turn's reasoning is stored one of two ways, and chat templates
+disagree on which they read:
+
+| Stored as | Written by | Read by |
+|-----------|-----------|---------|
+| inline `<think>...</think>` before the answer | DeepSeek-R1 distillations, OpenR1, OpenThoughts, most ShareGPT sets | Qwen3 and DeepSeek-R1 templates (they split it off), LLaMA-Factory, any template as plain text |
+| a `reasoning_content` field on the turn | DeepSeek API, vLLM | Qwen3 templates |
+| a `thinking` field on the turn | gpt-oss data (`HuggingFaceH4/Multilingual-Thinking`) | gpt-oss templates |
+
+Adapters read `reasoning_content`, `thinking`, and `reasoning` turn keys
+(`ChatMessage.reasoning`); inline blocks stay in the content. For flat
+question/answer records, name the trace column with
+`--adapter-kwargs '{"chat": {"record_reasoning_keys": ["trace_column"]}}'`
+(it is off by default because a top-level `reasoning` column is often an
+on/off flag, as in Llama-Nemotron). `--reasoning` decides where traces go:
+
+| `--reasoning` | Effect |
+|---------------|--------|
+| `keep` (default) | Inline blocks stay as they are, byte for byte; a separate trace is written as `reasoning_content`. |
+| `reasoning_content` / `thinking` | Inline blocks move into that field (use the one your target template reads). `messages` and `preference` only. |
+| `inline` | Every trace is written as `<think>\n...\n</think>\n\n` before the answer. |
+| `drop` | Traces are removed (fields and inline blocks). |
+
+`alpaca`, `sharegpt`, and `sharegpt-preference` have no reasoning field and
+always write traces inline. `convert` prints how many examples carry a trace
+(`reasoning` in the report). Most reasoning templates render a trace only
+after the last user turn; see `--reasoning-turns` and `--split-turns` below,
+and `convmerge tokens`, which reports traces the template does not render.
+
+### Fixes for strict chat templates
+
+Off by default; each one is counted in the report's `transforms`:
+
+| Flag | Effect | For |
+|------|--------|-----|
+| `--system fold` | Leading system turns are prepended to the first user turn (`--system drop` removes all system turns). | Templates without a system role (Gemma 2: "System role not supported"). |
+| `--merge-consecutive` | Consecutive user turns, or consecutive assistant turns without tool calls, are joined with a blank line. Turns from different named speakers and tool turns are left alone. | "Conversation roles must alternate" (Mistral, Gemma, Llama 2); LLaMA-Factory's `unrepresentable_role_order`. |
+| `--reasoning-turns last` | Removes the reasoning of assistant turns before the last user turn. | Qwen3 / gpt-oss / DeepSeek-R1 templates, which drop those traces at inference. |
+| `--split-turns` | One example per user turn (the conversation up to the next user turn); earlier answers keep their text but lose their reasoning; `meta.turn` records the position. Not for preference formats. | Training every turn of a multi-turn reasoning conversation the way the model sees it. |
+
+Order: system, merge, split, reasoning turns. The same options exist in
+presets (`transforms:`), recipes (source `convert` keys), and the API
+(`TransformOptions`).
 
 ### Provenance (`--keep-meta`)
 
@@ -245,18 +296,22 @@ Tries, in order:
    turns ([below](#template-rendered-text)). Any other `text` → emitted as a
    single assistant message (and then dropped as `no_user`) — **but only when the
    record does not carry strong Alpaca cues.** If both an instruction key
-   and an output key (see step 5) are present, the record is routed to the
-   Alpaca branch (step 5) instead, so a stray `text` field cannot silently
+   and an output key (see step 6) are present, the record is routed to the
+   Alpaca branch (step 6) instead, so a stray `text` field cannot silently
    discard the instruction/output pair. When `text` is taken while only a
    partial Alpaca key is present, a `logging` warning is emitted.
-5. Fallback: flat question/answer keys — `instruction` / `question` / `prompt` /
+5. Llama-Nemotron rows: prompt turns in an `input` list and the answer in
+   an `output` string (`system_prompt` becomes the system turn, as `system`
+   does elsewhere).
+6. Fallback: flat question/answer keys — `instruction` / `question` / `prompt` /
    `problem` / `query`, optional `input` / `context`, and the first of `output` /
    `response` / `completion` / `solution` / `answer` (so a full `solution` wins over
    a short final `answer`) — with the `alpaca` adapter's `system` / `history` handling.
 
 You can override every part (`conversation_keys`, `role_keys`, `content_keys`,
-`role_map`, `instruction_keys`, `input_keys`, `output_keys`, `pairwise_mode`)
-when calling `iter_from_chat_line` programmatically.
+`role_map`, `instruction_keys`, `input_keys`, `output_keys`, `pairwise_mode`,
+`reasoning_keys`, `record_reasoning_keys`) with `--adapter-kwargs` or when
+calling `iter_from_chat_line` programmatically.
 
 <details>
 <summary>Sample inputs → output (<code>--format messages</code>)</summary>

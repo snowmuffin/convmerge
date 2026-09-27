@@ -146,9 +146,10 @@ class TokenStats:
             )
         if self.reasoning_dropped > self.reasoning_dropped_final:
             out.append(
-                "the template renders reasoning only after the last user turn, so earlier "
-                "traces are trained on but never seen at inference: convert with "
-                "--reasoning-turns last or --split-turns"
+                "the template leaves out earlier reasoning traces (most render reasoning "
+                "only after the last user turn), so a trainer that applies it never trains "
+                "on them: convert with --split-turns to train on every turn's trace, or "
+                "--reasoning-turns last to drop them from the data"
             )
         if self.generation_tags is False:
             out.append(

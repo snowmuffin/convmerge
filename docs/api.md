@@ -12,14 +12,15 @@ internal and may change without notice.
 
 | Name | Purpose |
 |------|---------|
-| `convert_file(input, output, *, adapter_name, output_format, ...)` | Read JSONL → adapter → validate → emit. Returns `(lines_read, lines_written)`. Options: `encoding`, `adapter_options`, `progress`, `stats`, `on_invalid` (`drop`/`keep`/`fail`), `emit_options`, `workers`. |
+| `convert_file(input, output, *, adapter_name, output_format, ...)` | Read JSONL → adapter → validate → emit. Returns `(lines_read, lines_written)`. Options: `encoding`, `adapter_options`, `progress`, `stats`, `on_invalid` (`drop`/`keep`/`fail`), `emit_options`, `workers`, `transform_options`. |
 | `convert_with_config(input, output, cfg, ...)` | Same, from a resolved `ConvertConfig`. |
 | `build_convert_config(*, preset_path, adapter, output_format, ...)` | Merge a preset file, `--adapter-kwargs` JSON, and explicit overrides into a `ConvertConfig`. |
 | `validate_file(input, *, adapter_name="chat")` | Run validation only; returns `ConvertStats`. |
 | `ConvertStats` | Counters and drop reasons; pass one as `stats=` and read it afterwards. `to_report()` gives the `--report` JSON. |
 | `InvalidExampleError` | Raised by `on_invalid="fail"`; has `line_number` and `reasons`. |
 | `ConvertConfig`, `AdapterOptions`, `ChatAdapterOptions`, `SharegptAdapterOptions` | Adapter configuration (see [custom_presets.md](custom_presets.md)). |
-| `EmitOptions` | Output options: `tool_arguments`, `keep_meta`, `meta_key`, `alpaca_multiturn`. |
+| `EmitOptions` | Output options: `tool_arguments`, `keep_meta`, `meta_key`, `alpaca_multiturn`, `reasoning`, `tool_content`. |
+| `TransformOptions` | Fixes for strict chat templates: `system`, `merge_consecutive`, `split_turns`, `reasoning_turns` (see [format.md](format.md#fixes-for-strict-chat-templates)). |
 | `validate_example(example)` | Reason codes that make a `TrainingExample` unfit for SFT (empty list = valid). |
 
 ```python
@@ -41,7 +42,7 @@ print(stats.written, stats.drop_reasons)
 | Name | Purpose |
 |------|---------|
 | `TrainingExample(messages, meta={}, tools=None, issues=[], rejected=None)` | One example between adapter and emitter. For preference data `messages` is the chosen conversation and `rejected` the rejected one (read by the `preference` format). |
-| `ChatMessage(role, content, tool_calls=(), tool_call_id=None, name=None)` | `content` is a string, a sequence of `ContentPart`, or `None`; `.text` gives the text-only view, `.media` the media parts. |
+| `ChatMessage(role, content, tool_calls=(), tool_call_id=None, name=None, reasoning=None)` | `content` is a string, a sequence of `ContentPart`, or `None`; `.text` gives the text-only view, `.media` the media parts. `reasoning` is a trace stored apart from the answer (inline `<think>` blocks stay in `content`). |
 | `ContentPart(type, text=None, url=None)` | `text`, or `image` / `audio` / `video` by reference (`url` is a URL or path). |
 | `ToolCall(name, arguments="{}", id=None)` | `arguments` is a JSON string; `ToolCall.from_any(name, dict_or_str)` builds one from a dict. |
 
