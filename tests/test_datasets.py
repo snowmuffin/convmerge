@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from convmerge import ConvertStats, build_convert_config, convert_with_config
+from convmerge import ConvertStats, convert_with_config
 
 ROOT = Path(__file__).resolve().parents[1]
 HERE = Path(__file__).parent / "datasets"
@@ -28,12 +28,10 @@ _spec.loader.exec_module(script)
 CATALOG = script.load_catalog()
 
 
-def _convert(
-    tmp_path: Path, record: dict, fmt: str, preference: str | None
-) -> tuple[list, ConvertStats]:
+def _convert(tmp_path: Path, entry: dict) -> tuple[list, ConvertStats]:
     src, dst = tmp_path / "in.jsonl", tmp_path / "out.jsonl"
-    src.write_text(json.dumps(record, ensure_ascii=False) + "\n", encoding="utf-8")
-    cfg = build_convert_config(adapter="auto", output_format=fmt, preference=preference)
+    src.write_text(json.dumps(entry["record"], ensure_ascii=False) + "\n", encoding="utf-8")
+    cfg = script.convert_config(entry)
     stats = ConvertStats()
     convert_with_config(src, dst, cfg, stats=stats)
     return [json.loads(x) for x in dst.read_text(encoding="utf-8").splitlines()], stats
@@ -42,7 +40,7 @@ def _convert(
 def _outputs(tmp_path: Path) -> dict[str, dict]:
     out = {}
     for e in CATALOG:
-        rows, stats = _convert(tmp_path, e["record"], e["format"], e.get("preference"))
+        rows, stats = _convert(tmp_path, e)
         assert stats.written == 1 and stats.dropped == 0 and stats.skipped == 0, (
             e["id"],
             stats.drop_reasons,
@@ -79,9 +77,19 @@ def test_every_catalog_dataset_converts_as_pinned(tmp_path: Path) -> None:
     "entry", [e for e in CATALOG if e["kind"] == "preference"], ids=lambda e: e["id"]
 )
 def test_preference_datasets_also_work_as_sft(tmp_path: Path, entry: dict) -> None:
-    rows, stats = _convert(tmp_path, entry["record"], "messages", "chosen")
+    rows, stats = _convert(tmp_path, {**entry, "format": "messages", "preference": "chosen"})
     assert stats.written == 1, stats.drop_reasons
     assert rows[0]["messages"][-1]["role"] == "assistant"
+
+
+@pytest.mark.parametrize(
+    "entry", [e for e in CATALOG if e["kind"] == "reasoning"], ids=lambda e: e["id"]
+)
+def test_reasoning_datasets_keep_their_trace(tmp_path: Path, entry: dict) -> None:
+    for mode, key in (("reasoning_content", "reasoning_content"), ("thinking", "thinking")):
+        rows, _ = _convert(tmp_path, {**entry, "emit": {"reasoning": mode}})
+        answer = rows[0]["messages"][-1]
+        assert answer[key] and "<think>" not in answer["content"], (entry["id"], answer)
 
 
 def test_readme_table_matches_catalog() -> None:
