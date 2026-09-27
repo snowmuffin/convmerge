@@ -102,6 +102,14 @@ def _add_convert(sub: argparse._SubParsersAction) -> None:
     )
     p.add_argument("--meta-key", default=None, help="Output key for --keep-meta (default: meta)")
     p.add_argument(
+        "--meta",
+        action="append",
+        default=None,
+        metavar="KEY=VALUE",
+        help="Also write this constant field under 'meta' on every row (repeatable), "
+        "e.g. --meta dataset=kullm --meta license=apache-2.0",
+    )
+    p.add_argument(
         "--alpaca-multiturn",
         choices=("flatten", "history", "drop"),
         default=None,
@@ -233,6 +241,14 @@ def _emit_overrides(args: argparse.Namespace) -> dict[str, object]:
         out["keep_meta"] = True if args.keep_meta == "*" else tuple(keys)
     if args.meta_key is not None:
         out["meta_key"] = args.meta_key
+    if args.meta:
+        values: dict[str, str] = {}
+        for item in args.meta:
+            key, sep, value = item.partition("=")
+            if not sep or not key.strip():
+                raise ValueError(f"--meta expects KEY=VALUE, got {item!r}")
+            values[key.strip()] = value
+        out["meta_values"] = values
     if args.alpaca_multiturn is not None:
         out["alpaca_multiturn"] = args.alpaca_multiturn
     if args.reasoning is not None:

@@ -80,6 +80,7 @@ _EMIT_OPTION_KEYS = (
     "alpaca_multiturn",
     "reasoning",
     "tool_content",
+    "meta",
 )
 _TRANSFORM_OPTION_KEYS = ("system", "merge_consecutive", "split_turns", "reasoning_turns")
 
@@ -104,6 +105,8 @@ def emit_options_from_mapping(data: dict[str, Any]) -> EmitOptions:
     for key in ("tool_arguments", "meta_key", "alpaca_multiturn", "reasoning", "tool_content"):
         if key in data:
             kw[key] = str(data[key])
+    if "meta" in data:
+        kw["meta_values"] = meta_values_from_mapping(data["meta"], where="output_options.meta")
     if "keep_meta" in data:
         km = data["keep_meta"]
         if isinstance(km, bool):
@@ -113,6 +116,18 @@ def emit_options_from_mapping(data: dict[str, Any]) -> EmitOptions:
         else:
             raise ValueError("output_options.keep_meta must be true/false or a list of keys")
     return EmitOptions(**kw)
+
+
+def meta_values_from_mapping(data: Any, *, where: str = "meta") -> dict[str, str]:
+    """Constant ``meta`` fields: a mapping of names to scalar values (kept as text)."""
+    if not isinstance(data, dict):
+        raise ValueError(f"{where}: expected a mapping of names to values")
+    out: dict[str, str] = {}
+    for k, v in data.items():
+        if isinstance(v, (dict, list)) or v is None:
+            raise ValueError(f"{where}.{k}: expected a string or number")
+        out[str(k)] = str(v)
+    return out
 
 
 def transform_options_from_mapping(
