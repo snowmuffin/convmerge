@@ -1,0 +1,19 @@
+# DPO pairs for TRL: {prompt, chosen, rejected} in the conversational format.
+# Run: convmerge run examples/trl/recipe_dpo.yaml   (needs convmerge[all])
+version: 1
+output: train/dpo.jsonl                 # validation pairs -> train/dpo.val.jsonl
+workdir: build/dpo
+lock: recipe_dpo.lock.json
+sources:
+  ultrafeedback:
+    fetch: { hf: HuggingFaceH4/ultrafeedback_binarized, split: train_prefs, max_rows: 20000 }
+    convert: { from: auto, format: preference }
+  orca:
+    fetch: { hf: Intel/orca_dpo_pairs, max_rows: 5000 }
+    convert: { from: auto, format: preference }
+mix: { seed: 42 }
+dedupe: true
+tokens:
+  tokenizer: Qwen/Qwen2.5-0.5B-Instruct
+  max_tokens: 2048                      # a pair counts as its longer side
+split: { val_rows: 500 }
