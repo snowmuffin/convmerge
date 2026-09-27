@@ -128,11 +128,13 @@ def check_entry(
     if entry.get("gated") and not os.environ.get("HF_TOKEN"):
         return Result(rid, "skip", note="gated: set HF_TOKEN to check it")
     stats = ConvertStats()
+    traced = 0  # raw rows that look like they carry a reasoning trace
     try:
         with tempfile.TemporaryDirectory() as tmp:
             src, dst = Path(tmp, "in.jsonl"), Path(tmp, "out.jsonl")
             with src.open("w", encoding="utf-8") as f:
                 for row in loader(entry, rows):
+                    traced += has_trace(row)
                     f.write(json.dumps(row, ensure_ascii=False, default=str) + "\n")
             convert_with_config(src, dst, convert_config(entry), stats=stats)
     except Exception as exc:  # noqa: BLE001 - report it and go on with the next dataset
@@ -145,11 +147,38 @@ def check_entry(
         result.status, result.note = "fail", "no rows"
     elif stats.written < min_ok * stats.lines_read:
         result.status, result.note = "fail", f"fewer than {min_ok:.0%} of rows converted"
+    elif entry["kind"] == "reasoning" and not stats.reasoning and traced:
+        result.status = "fail"
+        result.note = f"{traced} rows carry a reasoning trace, but no converted row does"
     elif entry["kind"] == "reasoning" and not stats.reasoning:
-        result.status, result.note = "fail", "no converted row carries a reasoning trace"
+        result.status, result.note = "warn", "these rows carry no reasoning trace"
     elif stats.written < stats.lines_read:
         result.status = "warn"
     return result
+
+
+_TRACE_KEY_PARTS = ("think", "reason", "thought", "trajectory")
+
+
+def has_trace(value: Any, depth: int = 0) -> bool:
+    """Whether a raw row looks like it holds a reasoning trace anywhere: a
+    ``<think>`` block, or a long string under a key such as ``thinking``,
+    ``reasoning_content``, or ``deepseek_thinking_trajectory`` (short values
+    like Llama-Nemotron's ``reasoning: "on"`` flag do not count)."""
+    if depth > 4:
+        return False
+    if isinstance(value, str):
+        return "<think>" in value
+    if isinstance(value, list):
+        return any(has_trace(v, depth + 1) for v in value)
+    if isinstance(value, dict):
+        for k, v in value.items():
+            named = any(part in str(k).lower() for part in _TRACE_KEY_PARTS)
+            if named and isinstance(v, str) and len(v) >= 20:
+                return True
+            if has_trace(v, depth + 1):
+                return True
+    return False
 
 
 def render_summary(results: list[Result], rows: int) -> str:
