@@ -50,6 +50,11 @@
   --val-rows
   --seed default=42
   --keys nargs=+
+[convmerge llamafactory-info]
+  --input, -i required
+  --name required
+  --info
+  --file-name
 [convmerge fetch]
   source
   --output, -o
