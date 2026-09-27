@@ -332,10 +332,17 @@ def _cmd_tokens(args: argparse.Namespace) -> None:
     if stats.over_limit:
         print(f"warning: {stats.over_limit:,} rows exceed {args.max_tokens:,} tokens",
               file=sys.stderr)  # fmt: skip
+    if stats.double_encoded_arguments:
+        print(
+            f"warning: {stats.double_encoded_arguments:,} rows store tool-call arguments as "
+            "JSON strings that this chat template encodes again; convert them with "
+            "--tool-arguments object",
+            file=sys.stderr,
+        )
     if args.output is not None:
         print(f"kept {stats.kept:,} -> {args.output}; rejected {stats.rejected:,}",
               file=sys.stderr)  # fmt: skip
-    elif failed or stats.over_limit:
+    elif failed or stats.over_limit or stats.double_encoded_arguments:
         sys.exit(1)  # check mode: problems found
 
 

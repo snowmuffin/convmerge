@@ -22,7 +22,7 @@ class MixSource(path: 'Path', weight: 'float') -> None
 class ReadStats(lines_read: 'int' = 0, blank: 'int' = 0, invalid_json: 'int' = 0, first_invalid_line: 'int | None' = None) -> None
 class SharegptAdapterOptions(turn_mode: 'str | None' = None) -> None
 class SplitStats(total: 'int' = 0, train: 'int' = 0, val: 'int' = 0, invalid_json: 'int' = 0, first_invalid_line: 'int | None' = None) -> None
-class TokenStats(rows: 'int' = 0, measured: 'int' = 0, unreadable: 'int' = 0, template_errors: 'dict[str, int]' = <factory>, error_lines: 'dict[str, list[int]]' = <factory>, over_limit: 'int' = 0, kept: 'int' = 0, rejected: 'int' = 0, invalid_json: 'int' = 0, first_invalid_line: 'int | None' = None, max_tokens: 'int | None' = None, tokenizer: 'str | None' = None, lengths: 'array' = <factory>) -> None
+class TokenStats(rows: 'int' = 0, measured: 'int' = 0, unreadable: 'int' = 0, template_errors: 'dict[str, int]' = <factory>, error_lines: 'dict[str, list[int]]' = <factory>, over_limit: 'int' = 0, double_encoded_arguments: 'int' = 0, kept: 'int' = 0, rejected: 'int' = 0, invalid_json: 'int' = 0, first_invalid_line: 'int | None' = None, max_tokens: 'int | None' = None, tokenizer: 'str | None' = None, lengths: 'array' = <factory>) -> None
     def to_report(self) -> 'dict[str, Any]'
 class ToolCall(name: 'str', arguments: 'str' = '{}', id: 'str | None' = None) -> None
     def arguments_object(self) -> 'Any'
