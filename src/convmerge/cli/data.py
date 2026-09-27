@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 
 from convmerge.cli._common import add_progress_flag as _add_progress_flag
+from convmerge.cli._common import positive_int as _positive_int
 
 
 def _add_inspect(sub: argparse._SubParsersAction) -> None:
@@ -272,6 +273,70 @@ def _cmd_llamafactory_info(args: argparse.Namespace) -> None:
     changed = update_dataset_info(args.info, args.name, entry)
     state = "updated" if changed else "unchanged"
     print(f"{args.info}: {args.name!r} {state} (use dataset: {args.name})", file=sys.stderr)
+
+
+def _add_tokens(sub: argparse._SubParsersAction) -> None:
+    p = sub.add_parser(
+        "tokens",
+        help="Token lengths and chat-template check for a model (optionally filter by length)",
+        description="Render every row with the model's chat template, count tokens, and "
+        "report rows the template rejects; -o keeps rows that render and fit --max-tokens. "
+        'Needs pip install "convmerge[tokens]" (transformers; no PyTorch).',
+    )
+    p.add_argument("--input", "-i", type=Path, required=True)
+    p.add_argument(
+        "--tokenizer", required=True, help="Model name on the Hub or a local tokenizer directory"
+    )
+    p.add_argument("--revision", default=None, help="Tokenizer revision (branch, tag, commit)")
+    p.add_argument("--hf-token", default=None, help="Token for gated tokenizers (or HF_TOKEN)")
+    p.add_argument(
+        "--chat-template", type=Path, default=None, metavar="JINJA",
+        help="Use this chat template file instead of the tokenizer's",
+    )  # fmt: skip
+    p.add_argument("--max-tokens", type=_positive_int, default=None)
+    p.add_argument(
+        "--output", "-o", type=Path, default=None,
+        help="Write rows that render and fit --max-tokens here",
+    )  # fmt: skip
+    p.add_argument("--rejects", type=Path, default=None, help="Write the other rows here")
+
+
+def _cmd_tokens(args: argparse.Namespace) -> None:
+    from convmerge.tokens import TokenStats, check_tokens, load_tokenizer
+
+    if not args.input.is_file():
+        print(f"error: input file not found: {args.input}", file=sys.stderr)
+        sys.exit(1)
+    try:
+        template = args.chat_template.read_text(encoding="utf-8") if args.chat_template else None
+        tok = load_tokenizer(args.tokenizer, revision=args.revision, token=args.hf_token)
+    except (ImportError, OSError, ValueError) as e:
+        print(f"error: {e}", file=sys.stderr)
+        sys.exit(2)
+    stats = TokenStats()
+    try:
+        check_tokens(
+            args.input, tokenizer=tok, max_tokens=args.max_tokens, output=args.output,
+            rejects=args.rejects, chat_template=template, stats=stats,
+        )  # fmt: skip
+    except ValueError as e:
+        print(f"error: {e}", file=sys.stderr)
+        sys.exit(2)
+    stats.tokenizer = args.tokenizer
+    print(json.dumps(stats.to_report(), ensure_ascii=False, indent=2))
+    failed = sum(stats.template_errors.values())
+    if failed:
+        top = max(stats.template_errors, key=stats.template_errors.__getitem__)
+        print(f"warning: {failed:,} rows fail the chat template (most common: {top})",
+              file=sys.stderr)  # fmt: skip
+    if stats.over_limit:
+        print(f"warning: {stats.over_limit:,} rows exceed {args.max_tokens:,} tokens",
+              file=sys.stderr)  # fmt: skip
+    if args.output is not None:
+        print(f"kept {stats.kept:,} -> {args.output}; rejected {stats.rejected:,}",
+              file=sys.stderr)  # fmt: skip
+    elif failed or stats.over_limit:
+        sys.exit(1)  # check mode: problems found
 
 
 def _add_turns(sub: argparse._SubParsersAction) -> None:

@@ -29,7 +29,7 @@ loading, no inference, no labeling, no training orchestration. See
 
 ```bash
 pip install convmerge                    # core: convert, dedupe, turns; normalize for .json/.jsonl
-pip install "convmerge[all]"             # full CLI: fetch (HF+GitHub), parquet, YAML presets
+pip install "convmerge[all]"             # full CLI: fetch (HF+GitHub), parquet, YAML presets, tokens
 ```
 
 Granular extras:
@@ -40,15 +40,17 @@ pip install "convmerge[fetch-all]"       # fetch + HuggingFace (``datasets``)
 pip install "convmerge[fetch-hf]"        # same dependencies as ``fetch-all`` (backward-compatible name)
 pip install "convmerge[parquet]"         # Parquet input for ``normalize``
 pip install "convmerge[preset]"          # YAML convert presets (`--preset`, `preset validate`)
+pip install "convmerge[tokens]"          # `tokens`: lengths + chat-template checks (transformers, no PyTorch)
 ```
 
 | Command / feature | Extra |
 |-------------------|--------|
-| `convert`, `dedupe`, `turns` | *(core)* |
+| `convert`, `dedupe`, `turns`, `split`, `llamafactory-info` | *(core)* |
 | `normalize` on `.parquet` | `[parquet]` |
 | `fetch` with YAML manifest or GitHub | `[fetch]` |
 | `fetch` with HuggingFace manifest entries | `[fetch-all]` or `[fetch-hf]` |
 | `convert --preset`, `preset` | `[preset]` |
+| `tokens` | `[tokens]` |
 | Everything above | `[all]` |
 
 Or from a clone:

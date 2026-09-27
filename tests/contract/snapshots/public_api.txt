@@ -22,6 +22,8 @@ class MixSource(path: 'Path', weight: 'float') -> None
 class ReadStats(lines_read: 'int' = 0, blank: 'int' = 0, invalid_json: 'int' = 0, first_invalid_line: 'int | None' = None) -> None
 class SharegptAdapterOptions(turn_mode: 'str | None' = None) -> None
 class SplitStats(total: 'int' = 0, train: 'int' = 0, val: 'int' = 0, invalid_json: 'int' = 0, first_invalid_line: 'int | None' = None) -> None
+class TokenStats(rows: 'int' = 0, measured: 'int' = 0, unreadable: 'int' = 0, template_errors: 'dict[str, int]' = <factory>, error_lines: 'dict[str, list[int]]' = <factory>, over_limit: 'int' = 0, kept: 'int' = 0, rejected: 'int' = 0, invalid_json: 'int' = 0, first_invalid_line: 'int | None' = None, max_tokens: 'int | None' = None, tokenizer: 'str | None' = None, lengths: 'array' = <factory>) -> None
+    def to_report(self) -> 'dict[str, Any]'
 class ToolCall(name: 'str', arguments: 'str' = '{}', id: 'str | None' = None) -> None
     def arguments_object(self) -> 'Any'
     @classmethod from_any(cls, name: 'str', arguments: 'Any', id: 'str | None' = None) -> 'ToolCall'
@@ -32,6 +34,7 @@ def analyze_turn_distribution(path: 'str | Path') -> 'dict[str, Any]'
 def available_adapters() -> 'list[str]'
 def available_formats() -> 'list[str]'
 def build_convert_config(*, preset_path: 'Path | None' = None, adapter: 'str | None' = None, output_format: 'str | None' = None, encoding: 'str | None' = None, adapter_options: 'AdapterOptions | None' = None, adapter_kwargs_json: 'str | None' = None, emit_overrides: 'dict[str, Any] | None' = None, preference: 'str | None' = None) -> 'ConvertConfig'
+def check_tokens(path: 'str | Path', *, tokenizer: 'Any', max_tokens: 'int | None' = None, output: 'str | Path | None' = None, rejects: 'str | Path | None' = None, chat_template: 'str | None' = None, encoding: 'str' = 'utf-8', stats: 'TokenStats | None' = None) -> 'TokenStats'
 def convert_file(input_path: 'Path', output_path: 'Path', *, adapter_name: 'str', output_format: 'str', encoding: 'str' = 'utf-8', adapter_options: 'AdapterOptions | None' = None, progress: 'bool' = False, stats: 'ConvertStats | None' = None, on_invalid: 'OnInvalid' = 'drop', emit_options: 'EmitOptions | None' = None, workers: 'int' = 1) -> 'tuple[int, int]'
 def convert_with_config(input_path: 'Path', output_path: 'Path', cfg: 'ConvertConfig', *, progress: 'bool' = False, stats: 'ConvertStats | None' = None, on_invalid: 'OnInvalid' = 'drop', emit_options: 'EmitOptions | None' = None, workers: 'int' = 1) -> 'tuple[int, int]'
 def deduplicate_jsonl(src: 'str | Path', dst: 'str | Path', *, keys: 'Iterable[str] | None' = None, algorithm: 'str | HashFn' = 'md5', progress: 'bool' = False, seen_store: 'str' = 'memory', seen_db: 'str | Path | None' = None, stats: 'DedupeStats | None' = None) -> 'tuple[int, int]'
