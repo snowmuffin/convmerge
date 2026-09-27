@@ -104,7 +104,7 @@ def test_emit_options_validation() -> None:
     with pytest.raises(ValueError, match="alpaca_multiturn"):
         EmitOptions(alpaca_multiturn="merge")  # type: ignore[arg-type]
     with pytest.raises(ValueError, match="Unknown output format"):
-        get_emitter("sharegpt")
+        get_emitter("no-such-format")
 
 
 def test_preset_output_options_and_cli_override(tmp_path: Path) -> None:

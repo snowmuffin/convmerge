@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 
 from convmerge.cli._common import add_progress_flag as _add_progress_flag
+from convmerge.cli._common import positive_int as _positive_int
 
 
 def _add_inspect(sub: argparse._SubParsersAction) -> None:
@@ -159,6 +160,192 @@ def _cmd_dedupe(args: argparse.Namespace) -> None:
             "run `convmerge normalize` first to repair the file",
             file=sys.stderr,
         )
+
+
+def _add_split(sub: argparse._SubParsersAction) -> None:
+    p = sub.add_parser(
+        "split",
+        help="Split a JSONL file into train and validation sets by content hash",
+    )
+    p.add_argument("--input", "-i", type=Path, required=True)
+    p.add_argument("--output", "-o", type=Path, required=True, help="Train output")
+    p.add_argument(
+        "--val-output",
+        type=Path,
+        default=None,
+        help="Validation output (default: <output stem>.val.jsonl next to --output)",
+    )
+    size = p.add_mutually_exclusive_group(required=True)
+    size.add_argument(
+        "--val", type=_fraction, default=None, metavar="FRACTION",
+        help="Send about this fraction of rows to validation (e.g. 0.05)",
+    )  # fmt: skip
+    size.add_argument(
+        "--val-rows", type=_non_negative_int, default=None, metavar="N",
+        help="Send exactly N rows to validation",
+    )  # fmt: skip
+    p.add_argument("--seed", type=int, default=42)
+    p.add_argument(
+        "--keys",
+        nargs="+",
+        default=None,
+        help="Hash only these top-level keys, so rows sharing them stay on one side",
+    )
+
+
+def _cmd_split(args: argparse.Namespace) -> None:
+    from convmerge.split import SplitStats, default_val_path, split_jsonl
+
+    if not args.input.is_file():
+        print(f"error: input file not found: {args.input}", file=sys.stderr)
+        sys.exit(1)
+    val_output = args.val_output or default_val_path(args.output)
+    stats = SplitStats()
+    split_jsonl(
+        args.input, args.output, val_output,
+        val=args.val, val_rows=args.val_rows, seed=args.seed, keys=args.keys, stats=stats,
+    )  # fmt: skip
+    print(
+        f"train={stats.train:,} -> {args.output}\nval={stats.val:,} -> {val_output}",
+        file=sys.stderr,
+    )
+    if stats.first_invalid_line is not None:
+        print(
+            f"warning: dropped {stats.invalid_json:,} invalid JSON lines "
+            f"(first at line {stats.first_invalid_line})",
+            file=sys.stderr,
+        )
+
+
+def _fraction(value: str) -> float:
+    f = float(value)
+    if not 0.0 < f < 1.0:
+        raise argparse.ArgumentTypeError(f"must be between 0 and 1 (exclusive), got {value}")
+    return f
+
+
+def _non_negative_int(value: str) -> int:
+    n = int(value)
+    if n < 0:
+        raise argparse.ArgumentTypeError(f"must be >= 0, got {value}")
+    return n
+
+
+def _add_llamafactory_info(sub: argparse._SubParsersAction) -> None:
+    p = sub.add_parser(
+        "llamafactory-info",
+        help="Write the LLaMA-Factory dataset_info.json entry for a converted file",
+    )
+    p.add_argument("--input", "-i", type=Path, required=True)
+    p.add_argument("--name", required=True, help="Dataset name to register (dataset: NAME)")
+    p.add_argument(
+        "--info",
+        type=Path,
+        default=None,
+        help="dataset_info.json to add the entry to (created if missing); "
+        "without it the entry is printed",
+    )
+    p.add_argument(
+        "--file-name",
+        default=None,
+        help="file_name to record (default: the input path relative to --info's "
+        "directory, or its name)",
+    )
+
+
+def _cmd_llamafactory_info(args: argparse.Namespace) -> None:
+    from convmerge.llamafactory import dataset_info_entry, relative_file_name, update_dataset_info
+
+    if not args.input.is_file():
+        print(f"error: input file not found: {args.input}", file=sys.stderr)
+        sys.exit(1)
+    file_name = args.file_name
+    if file_name is None and args.info is not None:
+        file_name = relative_file_name(args.input, args.info)
+    try:
+        entry = dataset_info_entry(args.input, file_name=file_name)
+    except ValueError as e:
+        print(f"error: {e}", file=sys.stderr)
+        sys.exit(1)
+    if args.info is None:
+        print(json.dumps({args.name: entry}, ensure_ascii=False, indent=2))
+        return
+    changed = update_dataset_info(args.info, args.name, entry)
+    state = "updated" if changed else "unchanged"
+    print(f"{args.info}: {args.name!r} {state} (use dataset: {args.name})", file=sys.stderr)
+
+
+def _add_tokens(sub: argparse._SubParsersAction) -> None:
+    p = sub.add_parser(
+        "tokens",
+        help="Token lengths and chat-template check for a model (optionally filter by length)",
+        description="Render every row with the model's chat template, count tokens, and "
+        "report rows the template rejects; -o keeps rows that render and fit --max-tokens. "
+        'Needs pip install "convmerge[tokens]" (transformers; no PyTorch).',
+    )
+    p.add_argument("--input", "-i", type=Path, required=True)
+    p.add_argument(
+        "--tokenizer", required=True, help="Model name on the Hub or a local tokenizer directory"
+    )
+    p.add_argument("--revision", default=None, help="Tokenizer revision (branch, tag, commit)")
+    p.add_argument("--hf-token", default=None, help="Token for gated tokenizers (or HF_TOKEN)")
+    p.add_argument(
+        "--chat-template", type=Path, default=None, metavar="JINJA",
+        help="Use this chat template file instead of the tokenizer's",
+    )  # fmt: skip
+    p.add_argument("--max-tokens", type=_positive_int, default=None)
+    p.add_argument(
+        "--output", "-o", type=Path, default=None,
+        help="Write rows that render and fit --max-tokens here",
+    )  # fmt: skip
+    p.add_argument("--rejects", type=Path, default=None, help="Write the other rows here")
+
+
+def _cmd_tokens(args: argparse.Namespace) -> None:
+    from convmerge.convert import REPORT_VERSION
+    from convmerge.tokens import TokenStats, check_tokens, load_tokenizer
+
+    if not args.input.is_file():
+        print(f"error: input file not found: {args.input}", file=sys.stderr)
+        sys.exit(1)
+    try:
+        template = args.chat_template.read_text(encoding="utf-8") if args.chat_template else None
+        tok = load_tokenizer(args.tokenizer, revision=args.revision, token=args.hf_token)
+    except (ImportError, OSError, ValueError) as e:
+        print(f"error: {e}", file=sys.stderr)
+        sys.exit(2)
+    stats = TokenStats()
+    try:
+        check_tokens(
+            args.input, tokenizer=tok, max_tokens=args.max_tokens, output=args.output,
+            rejects=args.rejects, chat_template=template, stats=stats,
+        )  # fmt: skip
+    except ValueError as e:
+        print(f"error: {e}", file=sys.stderr)
+        sys.exit(2)
+    stats.tokenizer = args.tokenizer
+    report = {"version": REPORT_VERSION, **stats.to_report()}
+    print(json.dumps(report, ensure_ascii=False, indent=2))
+    failed = sum(stats.template_errors.values())
+    if failed:
+        top = max(stats.template_errors, key=stats.template_errors.__getitem__)
+        print(f"warning: {failed:,} rows fail the chat template (most common: {top})",
+              file=sys.stderr)  # fmt: skip
+    if stats.over_limit:
+        print(f"warning: {stats.over_limit:,} rows exceed {args.max_tokens:,} tokens",
+              file=sys.stderr)  # fmt: skip
+    if stats.double_encoded_arguments:
+        print(
+            f"warning: {stats.double_encoded_arguments:,} rows store tool-call arguments as "
+            "JSON strings that this chat template encodes again; convert them with "
+            "--tool-arguments object",
+            file=sys.stderr,
+        )
+    if args.output is not None:
+        print(f"kept {stats.kept:,} -> {args.output}; rejected {stats.rejected:,}",
+              file=sys.stderr)  # fmt: skip
+    elif failed or stats.over_limit or stats.double_encoded_arguments:
+        sys.exit(1)  # check mode: problems found
 
 
 def _add_turns(sub: argparse._SubParsersAction) -> None:

@@ -1,0 +1,21 @@
+# SFT data for TRL: chat + tool calling, filtered for the model, with a validation split.
+# Run: convmerge run examples/trl/recipe_sft.yaml   (needs convmerge[all])
+version: 1
+output: train/sft.jsonl                 # validation rows -> train/sft.val.jsonl
+workdir: build/sft
+sources:
+  ultrachat:
+    fetch: { hf: HuggingFaceH4/ultrachat_200k, split: train_sft, max_rows: 20000 }
+    convert: { from: auto, format: messages }
+  tools:
+    fetch: { hf: glaiveai/glaive-function-calling-v2, max_rows: 5000 }
+    # HF chat templates (Qwen, Llama 3.1, ...) expect tool-call arguments as objects.
+    convert: { from: auto, format: messages, tool_arguments: object }
+mix:
+  seed: 42
+  weights: { ultrachat: 0.8, tools: 0.2 }
+dedupe: true
+tokens:                                 # drop rows the template rejects or that are too long
+  tokenizer: Qwen/Qwen2.5-0.5B-Instruct
+  max_tokens: 2048
+split: { val: 0.02 }

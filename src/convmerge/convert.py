@@ -6,7 +6,7 @@ import json
 from collections.abc import Iterator
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal, TextIO
+from typing import TYPE_CHECKING, Any, Literal, TextIO
 
 from convmerge._deprecation import deprecated_names
 from convmerge.adapter_resolve import resolve_adapter
@@ -16,9 +16,11 @@ from convmerge.emitters import (
     EmitterFn,
     UnrepresentableExample,
     get_emitter,
+    split_pair,
     wants_pairs,
 )
 from convmerge.io import ReadStats, iter_jsonl
+from convmerge.models import TrainingExample
 from convmerge.validate import ISSUES, validate_example
 
 if TYPE_CHECKING:
@@ -123,6 +125,13 @@ _UNREPRESENTABLE: dict[str, str] = {
         "not a chosen/rejected pair (the preference format needs one)"
     ),
     "unrepresentable_identical_pair": "the chosen and rejected conversations are identical",
+    "unrepresentable_role_order": (
+        "the turns do not alternate user/assistant as the format requires "
+        "(e.g. two user turns in a row, or a system turn mid-conversation)"
+    ),
+    "unrepresentable_pair_continuation": (
+        "an answer in the pair is not a single text reply (multi-turn or tool call)"
+    ),
     "unrepresentable_incomplete_pair": (
         "the pair has no user prompt, or one side has no assistant answer after the prompt"
     ),
@@ -225,14 +234,24 @@ def validate_file(
     """Check every example in a JSONL file without writing anything.
 
     Records are read through ``adapter_name`` (default ``chat``, which
-    understands the ``messages`` rows ``convert`` writes) and validated with
-    :func:`convmerge.validate.validate_example`. Invalid examples are counted
+    understands the ``messages`` and ``preference`` rows ``convert`` writes)
+    and validated with :func:`convmerge.validate.validate_example`; preference
+    rows must also form a usable chosen/rejected pair. Invalid examples are counted
     in ``dropped`` / ``drop_reasons`` / ``drop_lines`` of the returned stats.
     """
     st = ConvertStats()
-    adapter = resolve_adapter(adapter_name, adapter_options)
-    _run(input_path, None, adapter, None, st, None, encoding, "drop", [])
+    # Preference rows (prompt / chosen / rejected) are read as pairs and must
+    # also form a usable pair; other rows are checked as before.
+    pairs = adapter_options is None or not adapter_options.preference
+    adapter = resolve_adapter(adapter_name, adapter_options, pairs=pairs)
+    _run(input_path, None, adapter, _check_pair, st, None, encoding, "drop", [])
     return st
+
+
+def _check_pair(example: TrainingExample) -> dict[str, Any]:
+    if example.rejected is not None:
+        split_pair(example)
+    return {}
 
 
 def _run(

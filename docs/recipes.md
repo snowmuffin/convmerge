@@ -63,6 +63,8 @@ All paths are relative to the recipe file.
 | `sources` | *(required)* | Name → source. Names become directory names (letters, digits, `_ - .`). |
 | `mix` | — | How to combine sources (see below). |
 | `dedupe` | — | `true`, or `{keys: [...], algorithm: md5 \| sha256}`. |
+| `tokens` | — | Keep rows that render with a model's chat template and fit a length (see below). Needs `convmerge[tokens]`. |
+| `split` | — | Write a validation set next to the output (see below). |
 
 ### Sources
 
@@ -106,6 +108,26 @@ by path) and concatenated.
 With several sources and no `mix` block, every record of every source is
 merged and shuffled (seed 42). With one source and no `mix`, the converted
 file goes straight to `dedupe` or `output`.
+
+### Tokens and split
+
+Stages run in this order: sources → `mix` → `dedupe` → `tokens` → `split`.
+
+| Key | Default | Meaning |
+|-----|---------|---------|
+| `tokens.tokenizer` | *(required)* | Hub model name, or a tokenizer directory relative to the recipe (its files are step inputs). |
+| `tokens.max_tokens` | — | Drop rows longer than this (a preference pair counts as its longer side). |
+| `tokens.revision` | — | Tokenizer revision; pin it for fully reproducible builds. |
+| `tokens.chat_template` | the tokenizer's | A Jinja file to render with instead (a step input). |
+| `split.val` / `split.val_rows` | — | One of: a fraction of rows (hash-based, about that many) or an exact count. |
+| `split.seed` | `42` | |
+| `split.keys` | whole row | Hash only these top-level keys, so rows sharing them stay on one side. |
+| `split.val_output` | `<output stem>.val.jsonl` | Where the validation rows go; `output` gets the rest. |
+
+`tokens` drops rows the chat template rejects and rows over `max_tokens`
+(the report lists both, with the length distribution). `split` assigns rows
+by content hash, so duplicates never straddle train and validation; it runs
+as two steps, `split.train` and `split.val`, that re-run independently.
 
 ## How re-runs are decided
 

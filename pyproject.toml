@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "convmerge"
-version = "0.10.0"
+version = "0.11.0"
 description = "Convert Alpaca / ShareGPT datasets to unified messages JSONL for LLM supervised fine-tuning — fetch from HuggingFace or GitHub, normalize, convert, mix, and dedupe in one CLI pipeline"
 readme = "README.md"
 license = "MIT"
@@ -59,8 +59,10 @@ fetch-all = ["pyyaml>=6.0", "datasets>=2.16"]
 parquet = ["pyarrow>=14"]
 # YAML convert presets (convmerge convert --preset, convmerge preset validate).
 preset = ["pyyaml>=6.0"]
-# All runtime extras above (PyYAML, HuggingFace ``datasets``, PyArrow).
-all = ["pyyaml>=6.0", "datasets>=2.16", "pyarrow>=14"]
+# Token lengths and chat-template checks (convmerge tokens). No PyTorch needed.
+tokens = ["transformers>=4.43", "jinja2>=3.1"]
+# All runtime extras above (PyYAML, HuggingFace ``datasets``, PyArrow, ``transformers``).
+all = ["pyyaml>=6.0", "datasets>=2.16", "pyarrow>=14", "transformers>=4.43", "jinja2>=3.1"]
 dev = ["pytest>=8.0", "ruff>=0.4", "mypy>=1.10", "types-PyYAML"]
 
 [project.scripts]
@@ -100,6 +102,13 @@ no_implicit_optional = true
 [[tool.mypy.overrides]]
 module = ["datasets", "datasets.*", "pyarrow", "pyarrow.*"]
 ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# convmerge treats tokenizers as Any; following transformers pulls in numpy's
+# stubs, which use syntax newer than our python_version.
+module = ["transformers", "transformers.*", "tokenizers", "tokenizers.*"]
+ignore_missing_imports = true
+follow_imports = "skip"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
