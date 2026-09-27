@@ -135,3 +135,30 @@ def test_live_check_logic(tmp_path: Path, monkeypatch) -> None:
     r = script.check_entry(alpaca, 5, loader=broken)
     assert r.status == "fail" and "ConnectionError" in r.note
     assert "hub down \\| retry" in script.render_summary([r], 5)
+
+
+def test_check_script_imports_the_datasets_library(tmp_path: Path) -> None:
+    """Run as ``python scripts/datasets.py``, the script must not import itself as ``datasets``."""
+    import subprocess
+
+    fake = tmp_path / "fake" / "datasets"
+    fake.mkdir(parents=True)
+    (fake / "__init__.py").write_text(
+        "class _Rows:\n"
+        "    def take(self, n):\n"
+        "        return [{'instruction': 'Say hi.', 'input': '', 'output': 'Hi!'}] * n\n"
+        "def load_dataset(*args, **kwargs):\n"
+        "    return _Rows()\n",
+        encoding="utf-8",
+    )
+    env = {
+        **os.environ,
+        "PYTHONPATH": os.pathsep.join([str(fake.parent), str(ROOT / "src")]),
+    }
+    proc = subprocess.run(
+        [sys.executable, str(ROOT / "scripts" / "datasets.py"), "check",
+         "--only", "tatsu-lab/alpaca", "--rows", "3"],
+        capture_output=True, text=True, env=env, check=False,
+    )  # fmt: skip
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert "ok    tatsu-lab/alpaca: 3/3" in proc.stdout

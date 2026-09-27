@@ -217,4 +217,8 @@ def main(argv: list[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
+    # Run as a script, this file's folder is sys.path[0], and ``import datasets``
+    # would find this file instead of the Hugging Face library.
+    here = Path(__file__).resolve().parent
+    sys.path[:] = [p for p in sys.path if Path(p or ".").resolve() != here]
     sys.exit(main())
