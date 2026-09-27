@@ -78,7 +78,9 @@ plus the trainer config. The TRL and LLaMA-Factory guides were run end to end.
 
 Every dataset below is converted in the test suite from a record with its exact
 layout, and `python scripts/datasets.py check` runs the same conversions on real
-rows from the Hub. For example:
+rows from the Hub. The [Datasets workflow](.github/workflows/datasets.yml) runs
+that check weekly and on pull requests that touch the catalog or the adapters.
+For example:
 
 ```bash
 convmerge fetch hf://NousResearch/hermes-function-calling-v1 --config func_calling --max-rows 1000 -o raw
