@@ -50,6 +50,15 @@
   --val-rows
   --seed default=42
   --keys nargs=+
+[convmerge tokens]
+  --input, -i required
+  --tokenizer required
+  --revision
+  --hf-token
+  --chat-template
+  --max-tokens
+  --output, -o
+  --rejects
 [convmerge llamafactory-info]
   --input, -i required
   --name required

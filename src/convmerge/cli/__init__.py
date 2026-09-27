@@ -43,7 +43,8 @@ optional dependencies (pip install "convmerge[EXTRA]"):
   [fetch-all]  above + HuggingFace (datasets); same packages as fetch-hf
   [parquet]    .parquet input for normalize
   [preset]     YAML presets (convert --preset, preset validate)
-  [all]        fetch-all + parquet + preset (full CLI feature set)
+  [tokens]     token lengths and chat-template checks (transformers, no PyTorch)
+  [all]        fetch-all + parquet + preset + tokens (full CLI feature set)
 """.strip()
 
 
@@ -57,6 +58,7 @@ _COMMANDS: dict[str, tuple[Callable, Callable]] = {
     "dedupe": (_data._add_dedupe, _data._cmd_dedupe),
     "turns": (_data._add_turns, _data._cmd_turns),
     "split": (_data._add_split, _data._cmd_split),
+    "tokens": (_data._add_tokens, _data._cmd_tokens),
     "llamafactory-info": (_data._add_llamafactory_info, _data._cmd_llamafactory_info),
     "fetch": (_fetch._add_fetch, _fetch._cmd_fetch),
     "preset": (_convert._add_preset, _convert._cmd_preset),
