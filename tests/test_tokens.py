@@ -12,6 +12,7 @@ from pathlib import Path
 import pytest
 
 pytest.importorskip("transformers")
+pytest.importorskip("jinja2")
 
 from convmerge.cli import main  # noqa: E402
 from convmerge.tokens import TokenStats, check_tokens  # noqa: E402
@@ -202,3 +203,14 @@ def test_double_encoded_tool_arguments_are_reported(tmp_path: Path, tokenizer_di
     assert check_tokens(src, tokenizer=tok, chat_template=tojson).double_encoded_arguments == 1
     assert check_tokens(obj, tokenizer=tok, chat_template=tojson).double_encoded_arguments == 0
     assert check_tokens(src, tokenizer=tok, chat_template=raw_args).double_encoded_arguments == 0
+
+
+def test_missing_jinja2_is_one_clear_error(
+    tmp_path: Path, tokenizer_dir: Path, monkeypatch
+) -> None:
+    import sys
+
+    monkeypatch.setitem(sys.modules, "jinja2", None)  # makes `import jinja2` fail
+    src = _write(tmp_path / "in.jsonl", [{"messages": M(("user", "a"), ("assistant", "b"))}])
+    with pytest.raises(ImportError, match=r"jinja2 is missing.*convmerge\[tokens\]"):
+        check_tokens(src, tokenizer=str(tokenizer_dir))

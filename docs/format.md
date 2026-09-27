@@ -89,6 +89,46 @@ as for `messages`. Dropped, with a reason:
 
 `convmerge validate` checks `messages` rows, not preference rows.
 
+### `sharegpt` output (LLaMA-Factory, Unsloth)
+
+LLaMA-Factory / Unsloth ShareGPT rows (register them for LLaMA-Factory with
+`convmerge llamafactory-info`, see [guides/llamafactory.md](guides/llamafactory.md)):
+
+```json
+{"conversations": [{"from": "human", "value": "<image>\nWhat is this?"},
+                   {"from": "function_call", "value": "{\"name\": \"lookup\", \"arguments\": {\"q\": \"bus\"}}"},
+                   {"from": "observation", "value": "{\"answer\": \"a bus\"}"},
+                   {"from": "gpt", "value": "A bus."}],
+ "system": "Be brief.", "tools": "[{\"name\": \"lookup\", ...}]", "images": ["bus.jpg"]}
+```
+
+- The system prompt goes to `system`; tool schemas to `tools` as a JSON
+  string of function specs; media to `<image>` / `<video>` / `<audio>` tokens
+  plus `images` / `videos` / `audios` lists.
+- An assistant turn with tool calls becomes one `function_call` turn (a JSON
+  list for parallel calls); consecutive tool results become one
+  `observation` (joined by newlines). Text written next to a tool call has
+  no place in this format and is counted as `lossy_tool_call_text`.
+- LLaMA-Factory requires turns that alternate user side (`human`,
+  `observation`) and model side (`gpt`, `function_call`), starting with
+  `human` and ending with a model turn. Other conversations — two user turns
+  in a row, a system turn in the middle — are dropped as
+  `unrepresentable_role_order`.
+
+### `sharegpt-preference` output (LLaMA-Factory ranking)
+
+LLaMA-Factory ranking rows for DPO / ORPO / reward modeling: the prompt as
+`conversations`, each answer as one `gpt` turn.
+
+```json
+{"conversations": [{"from": "human", "value": "Name a fruit."}],
+ "chosen": {"from": "gpt", "value": "Apple."}, "rejected": {"from": "gpt", "value": "Carrot."}}
+```
+
+Pairs are built as for [`preference`](#preference). Answers that are
+multi-turn or tool calls are dropped as `unrepresentable_pair_continuation`
+(use `preference` with TRL for those).
+
 ### Provenance (`--keep-meta`)
 
 `--keep-meta` adds the example's provenance under `meta` (`--meta-key` to
@@ -329,7 +369,7 @@ that would train badly are **dropped by default** and counted by reason:
 | `unresolved_image` / `_video` / `_audio` | a media placeholder has no matching reference in the record |
 | `unused_image` / `_video` / `_audio` | the record lists more media references than placeholders |
 | `preference_record` | a chosen/rejected record in an SFT conversion (use `--format preference` or `--preference chosen`) |
-| `unrepresentable_*` | the output format cannot hold the example losslessly (see `alpaca` and `preference` above) |
+| `unrepresentable_*` | the output format cannot hold the example losslessly (see the output formats above) |
 
 Adapters skip blank turns (such as an empty system prompt) instead of
 failing the whole example. Tool calls without ids (LLaMA-Factory) are paired

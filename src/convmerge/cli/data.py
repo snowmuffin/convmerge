@@ -302,6 +302,7 @@ def _add_tokens(sub: argparse._SubParsersAction) -> None:
 
 
 def _cmd_tokens(args: argparse.Namespace) -> None:
+    from convmerge.convert import REPORT_VERSION
     from convmerge.tokens import TokenStats, check_tokens, load_tokenizer
 
     if not args.input.is_file():
@@ -323,7 +324,8 @@ def _cmd_tokens(args: argparse.Namespace) -> None:
         print(f"error: {e}", file=sys.stderr)
         sys.exit(2)
     stats.tokenizer = args.tokenizer
-    print(json.dumps(stats.to_report(), ensure_ascii=False, indent=2))
+    report = {"version": REPORT_VERSION, **stats.to_report()}
+    print(json.dumps(report, ensure_ascii=False, indent=2))
     failed = sum(stats.template_errors.values())
     if failed:
         top = max(stats.template_errors, key=stats.template_errors.__getitem__)
