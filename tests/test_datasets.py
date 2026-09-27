@@ -119,7 +119,14 @@ def test_live_check_logic(tmp_path: Path, monkeypatch) -> None:
     reasoning = next(e for e in CATALOG if e["id"] == "simplescaling/s1K-1.1")
     no_trace = {**reasoning, "adapter_kwargs": None}  # the trace column is not mapped
     r = script.check_entry(no_trace, 5, loader=_catalog_rows)
-    assert (r.status, r.written) == ("fail", 3) and "reasoning trace" in r.note
+    assert (r.status, r.written) == ("fail", 3) and "3 rows carry a reasoning trace" in r.note
+
+    # Rows without any trace (e.g. Llama-Nemotron "reasoning: off" rows) only warn.
+    nemotron = next(e for e in CATALOG if "Nemotron" in e["id"])
+    plain = {**nemotron["record"], "output": "Two.", "reasoning": "off"}
+    r = script.check_entry(nemotron, 5, loader=lambda e, n: [plain] * 3)
+    assert r.status == "warn" and "no reasoning trace" in r.note
+    assert not script.has_trace(plain) and script.has_trace(nemotron["record"])
 
     alpaca = next(e for e in CATALOG if e["id"] == "tatsu-lab/alpaca")
 
