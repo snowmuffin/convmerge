@@ -50,6 +50,8 @@ _EXPORTS: dict[str, str] = {
     "normalize_to_jsonl": "convmerge.normalize.jsonl",
     "profile_schema": "convmerge.normalize.schema",
     "split_by_turns": "convmerge.normalize.turns",
+    "split_jsonl": "convmerge.split",
+    "SplitStats": "convmerge.split",
     "analyze_turn_distribution": "convmerge.normalize.turns",
     "iter_jsonl": "convmerge.io",
     "JsonlLine": "convmerge.io",
@@ -74,6 +76,7 @@ __all__ = [
     "MixSource",
     "ReadStats",
     "SharegptAdapterOptions",
+    "SplitStats",
     "ToolCall",
     "TrainingExample",
     "UnrepresentableExample",
@@ -91,6 +94,7 @@ __all__ = [
     "register_adapter",
     "register_emitter",
     "split_by_turns",
+    "split_jsonl",
     "validate_example",
     "validate_file",
 ]
@@ -138,4 +142,5 @@ if TYPE_CHECKING:  # pragma: no cover - for type checkers and IDEs only
     from convmerge.normalize.jsonl import normalize_to_jsonl
     from convmerge.normalize.schema import profile_schema
     from convmerge.normalize.turns import analyze_turn_distribution, split_by_turns
+    from convmerge.split import SplitStats, split_jsonl
     from convmerge.validate import validate_example

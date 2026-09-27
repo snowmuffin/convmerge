@@ -42,6 +42,14 @@
   --input, -i required
   --single-out
   --multi-out
+[convmerge split]
+  --input, -i required
+  --output, -o required
+  --val-output
+  --val
+  --val-rows
+  --seed default=42
+  --keys nargs=+
 [convmerge fetch]
   source
   --output, -o

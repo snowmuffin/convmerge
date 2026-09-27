@@ -21,6 +21,7 @@ class MixResult(total_written: 'int', seed: 'int', output: 'Path', sources: 'lis
 class MixSource(path: 'Path', weight: 'float') -> None
 class ReadStats(lines_read: 'int' = 0, blank: 'int' = 0, invalid_json: 'int' = 0, first_invalid_line: 'int | None' = None) -> None
 class SharegptAdapterOptions(turn_mode: 'str | None' = None) -> None
+class SplitStats(total: 'int' = 0, train: 'int' = 0, val: 'int' = 0, invalid_json: 'int' = 0, first_invalid_line: 'int | None' = None) -> None
 class ToolCall(name: 'str', arguments: 'str' = '{}', id: 'str | None' = None) -> None
     def arguments_object(self) -> 'Any'
     @classmethod from_any(cls, name: 'str', arguments: 'Any', id: 'str | None' = None) -> 'ToolCall'
@@ -41,13 +42,14 @@ def profile_schema(records: 'Iterable[dict[str, Any]] | str | Path', *, max_rows
 def register_adapter(name: 'str', fn: 'AdapterFn', *, replace: 'bool' = False) -> 'None'
 def register_emitter(name: 'str', fn: 'EmitterFn', *, replace: 'bool' = False) -> 'None'
 def split_by_turns(src: 'str | Path', *, single_out: 'str | Path', multi_out: 'str | Path') -> 'tuple[int, int]'
+def split_jsonl(src: 'str | Path', train_out: 'str | Path', val_out: 'str | Path', *, val: 'float | None' = None, val_rows: 'int | None' = None, seed: 'int' = 42, keys: 'Iterable[str] | None' = None, encoding: 'str' = 'utf-8', stats: 'SplitStats | None' = None) -> 'tuple[int, int]'
 def validate_example(example: 'TrainingExample') -> 'list[str]'
 def validate_file(input_path: 'Path', *, adapter_name: 'str' = 'chat', adapter_options: 'AdapterOptions | None' = None, encoding: 'str' = 'utf-8') -> 'ConvertStats'
 
 [convmerge.recipe]
 class PlannedStep(step: 'Step', action: 'str', reason: 'str') -> None
 RECIPE_TEMPLATE: str
-class Recipe(path: 'Path', base_dir: 'Path', workdir: 'Path', output: 'Path', lock_path: 'Path', report_path: 'Path', sources: 'dict[str, SourceSpec]', mix: 'MixSpec | None', dedupe: 'DedupeSpec | None', auth: 'AuthConfig') -> None
+class Recipe(path: 'Path', base_dir: 'Path', workdir: 'Path', output: 'Path', lock_path: 'Path', report_path: 'Path', sources: 'dict[str, SourceSpec]', mix: 'MixSpec | None', dedupe: 'DedupeSpec | None', auth: 'AuthConfig', split: 'SplitSpec | None' = None) -> None
 class RecipeError(ValueError)
 class RecipeRunError(RuntimeError)
 class RunResult(ran: 'list[str]' = <factory>, skipped: 'list[str]' = <factory>, report: 'dict[str, Any]' = <factory>) -> None
