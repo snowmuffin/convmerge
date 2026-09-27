@@ -29,6 +29,7 @@ _EXPORTS: dict[str, str] = {
     "build_convert_config": "convmerge.config",
     "EmitOptions": "convmerge.emitters",
     "UnrepresentableExample": "convmerge.emitters",
+    "TransformOptions": "convmerge.transforms",
     # data model
     "TrainingExample": "convmerge.models",
     "ChatMessage": "convmerge.models",
@@ -82,6 +83,7 @@ __all__ = [
     "TokenStats",
     "ToolCall",
     "TrainingExample",
+    "TransformOptions",
     "UnrepresentableExample",
     "analyze_turn_distribution",
     "available_adapters",
@@ -148,4 +150,5 @@ if TYPE_CHECKING:  # pragma: no cover - for type checkers and IDEs only
     from convmerge.normalize.turns import analyze_turn_distribution, split_by_turns
     from convmerge.split import SplitStats, split_jsonl
     from convmerge.tokens import TokenStats, check_tokens
+    from convmerge.transforms import TransformOptions
     from convmerge.validate import validate_example

@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 import re
 from collections.abc import Iterable
+from dataclasses import replace
 from typing import Any
 
 from convmerge.adapters.tool_formats import hermes_tools, rewrite_hermes, uses_hermes_tags
@@ -45,6 +46,12 @@ _MEDIA_COLUMNS: tuple[tuple[str, str, str], ...] = (
 _MEDIA_COLUMN_NAMES: frozenset[str] = frozenset(c for c, _, _ in _MEDIA_COLUMNS)
 
 MISSING = object()
+
+# Turn keys holding an assistant's reasoning trace apart from its answer:
+# ``reasoning_content`` (DeepSeek API, Qwen3 templates), ``thinking`` (gpt-oss
+# templates, HuggingFaceH4/Multilingual-Thinking), ``reasoning`` (OpenRouter,
+# vLLM). Only non-empty strings count.
+DEFAULT_REASONING_KEYS: tuple[str, ...] = ("reasoning_content", "thinking", "reasoning")
 
 
 def parse_content(value: Any, *, strip: bool = False) -> Any:
@@ -159,9 +166,10 @@ def normalize_tools(value: Any) -> list[dict[str, Any]] | None:
 
 
 def with_system(messages: list[ChatMessage], record: dict[str, Any]) -> list[ChatMessage]:
-    """Prepend a top-level ``system`` column unless a system turn already exists."""
-    system = record.get("system")
-    if not isinstance(system, str) or not system.strip():
+    """Prepend a top-level ``system`` (or Llama-Nemotron ``system_prompt``) column
+    unless a system turn already exists."""
+    system = first_text(record, ("system", "system_prompt"))
+    if system is None:
         return messages
     if any(m.role == "system" for m in messages):
         return messages
@@ -205,15 +213,7 @@ def attach_media(
             content = _split_tokens(content, tokens)
         if content is not None and not isinstance(content, str):
             content = collapse_text(tuple(_resolve(p, queues, issues) for p in content))
-        out.append(
-            ChatMessage(
-                m.role,
-                content,
-                tool_calls=m.tool_calls,
-                tool_call_id=m.tool_call_id,
-                name=m.name,
-            )
-        )
+        out.append(replace(m, content=content))
     for media, left in queues.items():
         if left:
             issues.append(f"unused_{media}")
@@ -251,9 +251,7 @@ def _prepend_media(messages: list[ChatMessage], queues: dict[str, list[str]]) ->
         )
     else:
         rest = tuple(m.content or ())
-    new = ChatMessage(
-        m.role, (*parts, *rest), tool_calls=m.tool_calls, tool_call_id=m.tool_call_id, name=m.name
-    )
+    new = replace(m, content=(*parts, *rest))
     return [*messages[:idx], new, *messages[idx + 1 :]]
 
 
@@ -338,6 +336,7 @@ def coerce_messages(
     content_keys: tuple[str, ...],
     role_map: dict[str, str],
     strip: bool = False,
+    reasoning_keys: tuple[str, ...] = DEFAULT_REASONING_KEYS,
 ) -> list[ChatMessage]:
     """Map a list of turn dicts to messages.
 
@@ -345,7 +344,9 @@ def coerce_messages(
     ``role_map``); content from the first usable ``content_keys`` value
     (string or parts). ``function_call`` turns become assistant tool calls.
     Turns without content (missing, null, or blank text) are skipped unless
-    they carry tool calls; with ``strip=True`` text is also stripped.
+    they carry tool calls; with ``strip=True`` text is also stripped. An
+    assistant turn's reasoning comes from the first non-empty string under
+    ``reasoning_keys``.
     """
     out: list[ChatMessage] = []
     rk0, ck0 = role_keys[0], content_keys[0]
@@ -384,16 +385,27 @@ def coerce_messages(
             continue
         name = item.get("name")
         tool_call_id = item.get("tool_call_id")
+        role = role_map.get(role_raw, role_raw)
         out.append(
             ChatMessage(
-                role_map.get(role_raw, role_raw),
+                role,
                 None if content is MISSING else collapse_text(content),
                 tool_calls=tool_calls,
                 tool_call_id=tool_call_id if isinstance(tool_call_id, str) else None,
                 name=name if isinstance(name, str) and name else None,
+                reasoning=first_text(item, reasoning_keys) if role == "assistant" else None,
             )
         )
     return out
+
+
+def first_text(record: dict[str, Any], keys: Iterable[str]) -> str | None:
+    """The first non-blank string under ``keys``."""
+    for k in keys:
+        v = record.get(k)
+        if isinstance(v, str) and v.strip():
+            return v
+    return None
 
 
 def _first_content(item: dict[str, Any], content_keys: tuple[str, ...], *, strip: bool) -> Any:

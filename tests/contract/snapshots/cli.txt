@@ -16,6 +16,12 @@
   --keep-meta nargs=?
   --meta-key
   --alpaca-multiturn choices=flatten|history|drop
+  --reasoning choices=keep|inline|reasoning_content|thinking|drop
+  --tool-content choices=empty|null
+  --system choices=keep|fold|drop
+  --merge-consecutive (switch)
+  --split-turns (switch)
+  --reasoning-turns choices=all|last
   --progress (switch)
 [convmerge validate]
   --input, -i required

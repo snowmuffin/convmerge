@@ -108,6 +108,53 @@ def _add_convert(sub: argparse._SubParsersAction) -> None:
         help="alpaca format, conversations longer than one pair: flatten into one "
         "instruction (default, lossy), write a LLaMA-Factory 'history' list, or drop",
     )
+    p.add_argument(
+        "--reasoning",
+        choices=("keep", "inline", "reasoning_content", "thinking", "drop"),
+        default=None,
+        help="Assistant reasoning traces: keep them as found (default), write them "
+        "inline as <think>...</think>, move them to a reasoning_content (Qwen3, "
+        "DeepSeek) or thinking (gpt-oss) field, or drop them",
+    )
+    p.add_argument(
+        "--tool-content",
+        choices=("empty", "null"),
+        default=None,
+        help='content of assistant turns that only call tools: "" (default; every '
+        "common chat template accepts it) or null",
+    )
+    g = p.add_argument_group("fixes for strict chat templates (all off by default)")
+    g.add_argument(
+        "--system",
+        dest="system_mode",
+        choices=("keep", "fold", "drop"),
+        default=None,
+        help="fold: move system turns into the first user turn (templates without a "
+        "system role, e.g. Gemma 2); drop: remove them",
+    )
+    g.add_argument(
+        "--merge-consecutive",
+        action="store_const",
+        const=True,
+        default=None,
+        help="Join consecutive user (or assistant) turns, for templates that require "
+        "alternating roles",
+    )
+    g.add_argument(
+        "--split-turns",
+        action="store_const",
+        const=True,
+        default=None,
+        help="One example per user turn; earlier turns keep their answers but lose "
+        "their reasoning (multi-turn reasoning data for Qwen3-style templates)",
+    )
+    g.add_argument(
+        "--reasoning-turns",
+        choices=("all", "last"),
+        default=None,
+        help="last: remove reasoning from assistant turns before the last user turn "
+        "(what Qwen3 / gpt-oss templates render)",
+    )
     _add_progress_flag(p)
 
 
@@ -126,6 +173,7 @@ def _cmd_convert(args: argparse.Namespace) -> None:
             adapter_kwargs_json=args.adapter_kwargs,
             emit_overrides=_emit_overrides(args),
             preference=args.preference,
+            transform_overrides=_transform_overrides(args),
         )
     except config_errors() as e:
         print(f"error: {e}", file=sys.stderr)
@@ -147,11 +195,17 @@ def _cmd_convert(args: argparse.Namespace) -> None:
             on_invalid=args.on_invalid,
             emit_options=cfg.emit_options,
             workers=max(1, args.workers),
+            transform_options=cfg.transform_options,
         )
     except InvalidExampleError as e:
         print(f"error: {e} (use --on-invalid drop or keep to continue)", file=sys.stderr)
         sys.exit(1)
     print(f"read {n_in} lines, wrote {n_out} examples", file=sys.stderr)
+    if stats.reasoning:
+        print(f"{stats.reasoning:,} examples carry a reasoning trace", file=sys.stderr)
+    if stats.transforms:
+        fixes = ", ".join(f"{k}={n:,}" for k, n in sorted(stats.transforms.items()))
+        print(f"fixes: {fixes}", file=sys.stderr)
     _print_drop_summary(stats, kept=args.on_invalid == "keep")
     if args.report:
         _write_report(args.report, stats)
@@ -181,6 +235,23 @@ def _emit_overrides(args: argparse.Namespace) -> dict[str, object]:
         out["meta_key"] = args.meta_key
     if args.alpaca_multiturn is not None:
         out["alpaca_multiturn"] = args.alpaca_multiturn
+    if args.reasoning is not None:
+        out["reasoning"] = args.reasoning
+    if args.tool_content is not None:
+        out["tool_content"] = args.tool_content
+    return out
+
+
+def _transform_overrides(args: argparse.Namespace) -> dict[str, object]:
+    out: dict[str, object] = {}
+    if args.system_mode is not None:
+        out["system"] = args.system_mode
+    if args.merge_consecutive is not None:
+        out["merge_consecutive"] = True
+    if args.split_turns is not None:
+        out["split_turns"] = True
+    if args.reasoning_turns is not None:
+        out["reasoning_turns"] = args.reasoning_turns
     return out
 
 
@@ -206,6 +277,10 @@ _DROP_HINTS = {
     "unrepresentable_not_preference": (
         "unrepresentable_not_preference: --format preference writes only records "
         "that have both a chosen and a rejected answer"
+    ),
+    "unrepresentable_role_order": (
+        "unrepresentable_role_order: --merge-consecutive joins repeated user or "
+        "assistant turns; --system fold moves a system turn into the first user turn"
     ),
 }
 

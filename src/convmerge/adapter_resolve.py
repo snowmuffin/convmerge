@@ -76,4 +76,6 @@ def _resolve(name: str, opts: AdapterOptions | None):
         instruction_keys=o.instruction_keys,
         output_keys=o.output_keys,
         input_keys=o.input_keys,
+        reasoning_keys=o.reasoning_keys,
+        record_reasoning_keys=o.record_reasoning_keys,
     )

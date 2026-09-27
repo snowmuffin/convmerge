@@ -7,6 +7,7 @@ from dataclasses import dataclass, fields, replace
 from pathlib import Path
 from typing import Any
 
+from convmerge.adapters._common import DEFAULT_REASONING_KEYS
 from convmerge.adapters.chat import (
     DEFAULT_CONTENT_KEYS,
     DEFAULT_CONVERSATION_KEYS,
@@ -16,6 +17,7 @@ from convmerge.adapters.chat import (
     DEFAULT_ROLE_KEYS,
 )
 from convmerge.emitters import EmitOptions
+from convmerge.transforms import TransformOptions
 
 
 @dataclass
@@ -30,6 +32,8 @@ class ChatAdapterOptions:
     instruction_keys: tuple[str, ...] = DEFAULT_INSTRUCTION_KEYS
     output_keys: tuple[str, ...] = DEFAULT_OUTPUT_KEYS
     input_keys: tuple[str, ...] = DEFAULT_INPUT_KEYS
+    reasoning_keys: tuple[str, ...] = DEFAULT_REASONING_KEYS
+    record_reasoning_keys: tuple[str, ...] = ()
 
 
 @dataclass
@@ -63,9 +67,18 @@ class ConvertConfig:
     encoding: str = "utf-8"
     adapter_options: AdapterOptions | None = None
     emit_options: EmitOptions | None = None
+    transform_options: TransformOptions | None = None
 
 
-_EMIT_OPTION_KEYS = ("tool_arguments", "keep_meta", "meta_key", "alpaca_multiturn")
+_EMIT_OPTION_KEYS = (
+    "tool_arguments",
+    "keep_meta",
+    "meta_key",
+    "alpaca_multiturn",
+    "reasoning",
+    "tool_content",
+)
+_TRANSFORM_OPTION_KEYS = ("system", "merge_consecutive", "split_turns", "reasoning_turns")
 
 
 def check_preference(value: Any) -> str:
@@ -85,7 +98,7 @@ def emit_options_from_mapping(data: dict[str, Any]) -> EmitOptions:
             f"supported: {', '.join(_EMIT_OPTION_KEYS)}"
         )
     kw: dict[str, Any] = {}
-    for key in ("tool_arguments", "meta_key", "alpaca_multiturn"):
+    for key in ("tool_arguments", "meta_key", "alpaca_multiturn", "reasoning", "tool_content"):
         if key in data:
             kw[key] = str(data[key])
     if "keep_meta" in data:
@@ -97,6 +110,28 @@ def emit_options_from_mapping(data: dict[str, Any]) -> EmitOptions:
         else:
             raise ValueError("output_options.keep_meta must be true/false or a list of keys")
     return EmitOptions(**kw)
+
+
+def transform_options_from_mapping(
+    data: dict[str, Any], *, where: str = "transforms"
+) -> TransformOptions:
+    """Build :class:`TransformOptions` from a preset's or recipe's mapping."""
+    unknown = set(data) - set(_TRANSFORM_OPTION_KEYS)
+    if unknown:
+        raise ValueError(
+            f"{where}: unknown option(s) {sorted(unknown)}; "
+            f"supported: {', '.join(_TRANSFORM_OPTION_KEYS)}"
+        )
+    kw: dict[str, Any] = {}
+    for key in ("merge_consecutive", "split_turns"):
+        if key in data:
+            if not isinstance(data[key], bool):
+                raise ValueError(f"{where}.{key} must be true or false")
+            kw[key] = data[key]
+    for key in ("system", "reasoning_turns"):
+        if key in data:
+            kw[key] = str(data[key])
+    return TransformOptions(**kw)
 
 
 def _as_tuple_str(v: Any, *, field_name: str) -> tuple[str, ...]:
@@ -128,6 +163,9 @@ def chat_adapter_options_from_mapping(data: dict[str, Any]) -> ChatAdapterOption
         kw["output_keys"] = _as_tuple_str(data["output_keys"], field_name="output_keys")
     if "input_keys" in data:
         kw["input_keys"] = _as_tuple_str(data["input_keys"], field_name="input_keys")
+    for key in ("reasoning_keys", "record_reasoning_keys"):
+        if key in data:
+            kw[key] = _as_tuple_str(data[key], field_name=key)
     if "pairwise_mode" in data:
         kw["pairwise_mode"] = str(data["pairwise_mode"])
     if "role_map" in data:
@@ -188,6 +226,7 @@ def build_convert_config(
     adapter_kwargs_json: str | None = None,
     emit_overrides: dict[str, Any] | None = None,
     preference: str | None = None,
+    transform_overrides: dict[str, Any] | None = None,
 ) -> ConvertConfig:
     """
     Merge preset file, explicit CLI/API arguments, and optional JSON adapter kwargs.
@@ -198,6 +237,8 @@ def build_convert_config(
     and ``emit_overrides`` (keys of :class:`EmitOptions`) override the
     preset's ``output_options``. ``preference`` (``--preference``) overrides
     ``adapter_options.preference`` from the preset or ``--adapter-kwargs``.
+    ``transform_overrides`` (keys of :class:`TransformOptions`) override the
+    preset's ``transforms``.
     """
     from convmerge.preset import load_convert_preset
 
@@ -205,6 +246,7 @@ def build_convert_config(
     cfg_format: str | None = None
     cfg_encoding: str | None = None
     cfg_emit: EmitOptions | None = None
+    cfg_transforms: TransformOptions | None = None
     chat_layers: list[dict[str, Any]] = []
     sharegpt_layers: list[dict[str, Any]] = []
     cfg_preference: str | None = None
@@ -215,6 +257,7 @@ def build_convert_config(
         cfg_format = p.output_format
         cfg_encoding = p.encoding
         cfg_emit = p.emit_options
+        cfg_transforms = p.transform_options
         if p.adapter_options and p.adapter_options.chat:
             chat_layers.append(_chat_options_to_override_dict(p.adapter_options.chat))
         if p.adapter_options and p.adapter_options.sharegpt:
@@ -284,6 +327,12 @@ def build_convert_config(
 
     if emit_overrides:
         cfg_emit = replace(cfg_emit or EmitOptions(), **emit_overrides)
+    if transform_overrides:
+        cfg_transforms = replace(cfg_transforms or TransformOptions(), **transform_overrides)
+    if cfg_emit is not None:
+        _check_reasoning_format(cfg_emit.reasoning, cfg_format)
+    if cfg_transforms is not None:
+        _check_split_turns(cfg_transforms, cfg_format)
 
     return ConvertConfig(
         adapter=cfg_adapter,
@@ -291,7 +340,33 @@ def build_convert_config(
         encoding=cfg_encoding or "utf-8",
         adapter_options=adapter_opts,
         emit_options=cfg_emit,
+        transform_options=cfg_transforms,
     )
+
+
+# Built-in formats that have no place for a reasoning trace but inline text.
+_INLINE_REASONING_FORMATS = frozenset({"alpaca", "sharegpt", "sharegpt-preference"})
+
+
+def _check_reasoning_format(reasoning: str, output_format: str) -> None:
+    if reasoning in ("reasoning_content", "thinking") and output_format in (
+        _INLINE_REASONING_FORMATS
+    ):
+        raise ValueError(
+            f"reasoning={reasoning!r} (--reasoning) writes a separate field, but the "
+            f"{output_format!r} format has none: use --reasoning inline (or keep / drop)"
+        )
+
+
+def _check_split_turns(transforms: TransformOptions, output_format: str) -> None:
+    from convmerge.convert import check_transforms
+    from convmerge.emitters import get_emitter, wants_pairs
+
+    try:
+        get_emitter(output_format)
+    except ValueError:
+        return
+    check_transforms(transforms, pairs=wants_pairs(output_format))
 
 
 def _check_preference_format(preference: str, output_format: str) -> None:
