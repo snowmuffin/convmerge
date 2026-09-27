@@ -1,0 +1,19 @@
+# LLaMA-Factory data: ShareGPT SFT (with tool calls) and ranking pairs for DPO.
+# Run: convmerge run examples/llamafactory/recipe.yaml   (needs convmerge[all])
+# then register the files (see docs/guides/llamafactory.md):
+#   convmerge llamafactory-info -i data/sft.jsonl --name my_sft --info data/dataset_info.json
+version: 1
+output: data/sft.jsonl                  # validation rows -> data/sft.val.jsonl
+workdir: build/llamafactory
+sources:
+  alpaca_ko:
+    fetch: { hf: beomi/KoAlpaca-v1.1a, max_rows: 20000 }
+    convert: { from: auto, format: sharegpt }
+  tools:
+    fetch: { hf: NousResearch/hermes-function-calling-v1, config: func_calling }
+    convert: { from: auto, format: sharegpt }
+mix:
+  seed: 42
+  weights: { alpaca_ko: 0.8, tools: 0.2 }
+dedupe: true
+split: { val: 0.02 }

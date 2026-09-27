@@ -62,6 +62,18 @@ python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev,all]"
 ```
 
+## From datasets to a training run
+
+| Trainer | Guide | Formats |
+|---------|-------|---------|
+| TRL (`SFTTrainer`, `DPOTrainer`) | [docs/guides/trl.md](docs/guides/trl.md) | `messages`, `preference` |
+| LLaMA-Factory | [docs/guides/llamafactory.md](docs/guides/llamafactory.md) | `sharegpt`, `sharegpt-preference` + `llamafactory-info` |
+| axolotl | [docs/guides/axolotl.md](docs/guides/axolotl.md) | `messages` |
+
+Each guide is one recipe — fetch, convert, mix, dedupe, a `tokens` filter for
+the target model's chat template and length, and a train/validation `split` —
+plus the trainer config. The TRL and LLaMA-Factory guides were run end to end.
+
 ## Tested datasets
 
 Every dataset below is converted in the test suite from a record with its exact
