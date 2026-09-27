@@ -60,6 +60,7 @@ _COMMANDS: dict[str, tuple[Callable, Callable]] = {
     "split": (_data._add_split, _data._cmd_split),
     "tokens": (_data._add_tokens, _data._cmd_tokens),
     "llamafactory-info": (_data._add_llamafactory_info, _data._cmd_llamafactory_info),
+    "axolotl-config": (_data._add_axolotl_config, _data._cmd_axolotl_config),
     "fetch": (_fetch._add_fetch, _fetch._cmd_fetch),
     "preset": (_convert._add_preset, _convert._cmd_preset),
     "mix": (_mix._add_mix, _mix._cmd_mix),

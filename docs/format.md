@@ -187,6 +187,16 @@ rename it): `source` (the adapter branch, e.g. `sharegpt`, `chat:pairwise`),
 the record's own `id` when it has one, and the pairwise `branch`.
 `--keep-meta source,id` keeps only those keys. Off by default.
 
+`--meta KEY=VALUE` (repeatable; `meta:` in a recipe's convert block,
+`output_options.meta` in a preset) writes constant fields under `meta` on
+every row, with or without `--keep-meta`. Tag each source before a mix and
+every training row still says where it came from:
+
+```bash
+convmerge convert -i kullm.jsonl -o kullm.messages.jsonl --from auto -f messages \
+  --meta dataset=kullm-v2 --meta license=apache-2.0
+```
+
 ## Source adapters (`--from`)
 
 ### `alpaca`
@@ -381,10 +391,45 @@ chat template. These are split back into turns:
 | Guanaco | `### Human: ... ### Assistant: ...` | `timdettmers/openassistant-guanaco` |
 | HH-RLHF | `Human: ...` / `Assistant: ...` separated by blank lines | |
 | Alpaca prompt | `### Instruction:` / `### Input:` / `### Response:` | |
+| `<usr>` / `<bot>` | `<usr> ...` / `<bot> ...` lines; a leading `<sys>` is the system prompt, one after a user turn is its input | `heegyu/open-korean-instructions` |
 
 A trailing user turn without an answer is dropped (Guanaco often ends with
 one). Records that also have Alpaca `instruction` / `output` keys use those
 instead.
+
+### Field mapping (`--from map`)
+
+For records no adapter above recognizes, such as AI Hub exports, in-house
+logs, or nested API dumps, `--from map` takes a mapping of dotted paths
+instead of code. Two shapes:
+
+```bash
+# One exchange per record, anywhere in the record
+convmerge convert -i qa.jsonl -o out.jsonl --from map -f messages --adapter-kwargs '{"map": {
+  "system": "meta.instruction", "user": "question.text", "assistant": "answer.text",
+  "reasoning": "answer.rationale"}}'
+
+# A list of turns (here nested: every utterance of every dialogue section)
+convmerge convert -i aihub.jsonl -o out.jsonl --from map -f messages --adapter-kwargs '{"map": {
+  "turns": "dialogue[].utterances[]", "role": "speaker", "content": "text",
+  "role_map": {"고객": "user", "상담사": "assistant"}, "system": "info.topic"}}'
+```
+
+| Key | Meaning |
+|-----|---------|
+| `user`, `assistant` | Paths to a single exchange (flat mode). |
+| `chosen`, `rejected` | Instead of `assistant`: a preference pair (`--format preference`, or `--preference chosen` for SFT). |
+| `turns` | Path to the list of turns (turns mode). |
+| `role`, `content`, `name` | Paths inside each turn (defaults `role`, `content`). |
+| `role_map` | Extra role names: `{label: user \| assistant \| system \| tool}`. `human` / `gpt` / `bot` / `model` are known already. |
+| `reasoning` | The answer's reasoning trace (flat mode: from the record; turns mode: inside each assistant turn). |
+| `system`, `tools` | Paths from the record in both modes. |
+
+Path syntax: `a.b` (keys), `a[0]` / `a[-1]` (one item), `a[]` (every
+item of a list; `a[].b[]` flattens nested lists), `a."b.c"` (a key with
+dots). A record in which a required path matches nothing is dropped as
+`map_path_missing` and counted. In a recipe, write the mapping as the
+source's `convert.map` block; it implies `from: map`.
 
 ## Preference data
 
@@ -424,6 +469,7 @@ that would train badly are **dropped by default** and counted by reason:
 | `unresolved_image` / `_video` / `_audio` | a media placeholder has no matching reference in the record |
 | `unused_image` / `_video` / `_audio` | the record lists more media references than placeholders |
 | `preference_record` | a chosen/rejected record in an SFT conversion (use `--format preference` or `--preference chosen`) |
+| `map_path_missing` | a `--from map` path matched nothing in the record |
 | `unrepresentable_*` | the output format cannot hold the example losslessly (see the output formats above) |
 
 Adapters skip blank turns (such as an empty system prompt) instead of

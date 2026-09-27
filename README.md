@@ -45,7 +45,7 @@ pip install "convmerge[tokens]"          # `tokens`: lengths + chat-template che
 
 | Command / feature | Extra |
 |-------------------|--------|
-| `convert`, `dedupe`, `turns`, `split`, `llamafactory-info` | *(core)* |
+| `convert`, `dedupe`, `turns`, `split`, `llamafactory-info`, `axolotl-config` | *(core)* |
 | `normalize` on `.parquet` | `[parquet]` |
 | `fetch` with YAML manifest or GitHub | `[fetch]` |
 | `fetch` with HuggingFace manifest entries | `[fetch-all]` or `[fetch-hf]` |
@@ -68,11 +68,12 @@ pip install -e ".[dev,all]"
 |---------|-------|---------|
 | TRL (`SFTTrainer`, `DPOTrainer`) | [docs/guides/trl.md](docs/guides/trl.md) | `messages`, `preference` |
 | LLaMA-Factory | [docs/guides/llamafactory.md](docs/guides/llamafactory.md) | `sharegpt`, `sharegpt-preference` + `llamafactory-info` |
-| axolotl | [docs/guides/axolotl.md](docs/guides/axolotl.md) | `messages` |
+| axolotl | [docs/guides/axolotl.md](docs/guides/axolotl.md) | `messages`, `sharegpt`, `preference` + `axolotl-config` |
 
 Each guide is one recipe — fetch, convert, mix, dedupe, a `tokens` filter for
 the target model's chat template and length, and a train/validation `split` —
-plus the trainer config. The TRL and LLaMA-Factory guides were run end to end.
+plus the trainer config. All three were run end to end (SFT and DPO).
+Korean data: [docs/guides/korean.md](docs/guides/korean.md) (한국어 가이드).
 
 ## Tested datasets
 
@@ -203,7 +204,9 @@ convmerge preset validate convert_preset.yaml
 convmerge convert -i ./jsonl/mixed.jsonl -o ./out.jsonl --preset convert_preset.yaml
 ```
 
-Adapters: `alpaca`, `sharegpt`, `chat` (alias `auto`).  
+Adapters: `alpaca`, `sharegpt`, `chat` (alias `auto`), and `map` for any other
+layout (dotted paths such as `dialogue[].utterances[]`, no code; see
+[docs/format.md](docs/format.md#field-mapping---from-map)).  
 Output formats: `messages`, `alpaca`, `preference` (DPO pairs), `sharegpt` and
 `sharegpt-preference` (LLaMA-Factory / Unsloth).
 
@@ -307,6 +310,9 @@ convmerge split -i ./train/fit.jsonl -o ./train/train.jsonl --val 0.02   # + tra
 
 # LLaMA-Factory: add the dataset_info.json entry for a --format sharegpt file.
 convmerge llamafactory-info -i ./data/sft.jsonl --name my_sft --info ./data/dataset_info.json
+
+# axolotl: the datasets: block whose field names match a converted file.
+convmerge axolotl-config -i ./train/train.jsonl --val ./train/train.val.jsonl
 
 # Single-turn vs multi-turn report (and split)
 convmerge turns -i ./train/train.jsonl --single-out single.jsonl --multi-out multi.jsonl

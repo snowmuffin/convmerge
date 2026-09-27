@@ -71,6 +71,11 @@
   --name required
   --info
   --file-name
+[convmerge axolotl-config]
+  --input, -i required
+  --val
+  --config-dir
+  --output, -o
 [convmerge fetch]
   source
   --output, -o
