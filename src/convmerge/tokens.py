@@ -14,6 +14,17 @@ tokenized. That gives:
 - rows whose tool-call arguments are stored as JSON strings but that the
   template encodes a second time (it expects objects — convert with
   ``--tool-arguments object``);
+- whether the template marks assistant text with ``{% generation %}`` (TRL's
+  ``assistant_only_loss`` needs it) and, with ``max_tokens``, rows whose
+  first answer starts beyond the limit (truncated to that length they train
+  on no answer at all);
+- rows whose rendered answer is not followed by a stop token (the
+  tokenizer's ``eos_token`` or a ``generation_config.json`` ``eos_token_id``),
+  so the model never learns to stop;
+- rows whose reasoning trace does not appear in the rendered text (most
+  reasoning templates render it only after the last user turn, and each
+  reads its own field: ``reasoning_content`` or ``thinking``);
+- ``hints``: the ``convert`` options that fix what was found;
 - optionally, a filtered copy: rows that render and fit go to ``output``,
   the rest to ``rejects``, both byte-for-byte as read.
 
@@ -25,6 +36,7 @@ no PyTorch).
 from __future__ import annotations
 
 import json
+import re
 from array import array
 from collections.abc import Iterator
 from dataclasses import dataclass, field
@@ -35,6 +47,8 @@ from convmerge.io import ReadStats, iter_jsonl
 
 _BATCH = 256
 _REASON_CHARS = 160
+_SNIPPET = 40
+_GENERATION_TAG = re.compile(r"\{%-?\s*generation\s*-?%\}")
 
 
 @dataclass
@@ -57,6 +71,17 @@ class TokenStats:
     first_invalid_line: int | None = None
     max_tokens: int | None = None
     tokenizer: str | None = None
+    generation_tags: bool | None = None
+    """Whether the chat template marks assistant text with ``{% generation %}``."""
+    answer_beyond_limit: int = 0
+    """Rows whose first answer starts at or after ``max_tokens`` (only with a limit)."""
+    stop_tokens: list[str] = field(default_factory=list)
+    missing_eos: int = 0
+    """Rows whose rendered final answer is not followed by any of ``stop_tokens``."""
+    reasoning_dropped: int = 0
+    """Rows with a reasoning trace the rendered text does not contain."""
+    reasoning_dropped_final: int = 0
+    """Of those, rows where even the final answer's trace is missing."""
     lengths: array = field(default_factory=lambda: array("I"), repr=False)
 
     def to_report(self) -> dict[str, Any]:
@@ -72,8 +97,15 @@ class TokenStats:
             "max_tokens": self.max_tokens,
             "over_limit": self.over_limit,
             "double_encoded_arguments": self.double_encoded_arguments,
+            "generation_tags": self.generation_tags,
+            "answer_beyond_limit": self.answer_beyond_limit,
+            "stop_tokens": list(self.stop_tokens),
+            "missing_eos": self.missing_eos,
+            "reasoning_dropped": self.reasoning_dropped,
+            "reasoning_dropped_final": self.reasoning_dropped_final,
             "kept": self.kept,
             "rejected": self.rejected,
+            "hints": self.hints(),
         }
         if lengths:
             report["tokens"] = {
@@ -85,6 +117,59 @@ class TokenStats:
             }
             report["histogram"] = _histogram(lengths)
         return report
+
+    def hints(self) -> list[str]:
+        """The ``convert`` options (or settings) that fix what this check found."""
+        out: list[str] = []
+        errors = " ".join(self.template_errors).lower()
+        if "alternate" in errors:
+            out.append(
+                "roles must alternate: convert with --merge-consecutive (and --system fold "
+                "if a system turn is in the way)"
+            )
+        if "system role" in errors or "system message" in errors:
+            out.append("the template has no system role: convert with --system fold")
+        if "nonetype" in errors:
+            out.append(
+                "the template fails on null content: convert with --tool-content empty "
+                "(the default since convmerge 0.12)"
+            )
+        if self.double_encoded_arguments:
+            out.append(
+                "tool-call arguments are encoded twice: convert with --tool-arguments object"
+            )
+        if self.reasoning_dropped_final:
+            out.append(
+                "the template does not render the stored reasoning: convert with --reasoning "
+                "reasoning_content (Qwen3, DeepSeek), --reasoning thinking (gpt-oss), or "
+                "--reasoning inline"
+            )
+        if self.reasoning_dropped > self.reasoning_dropped_final:
+            out.append(
+                "the template renders reasoning only after the last user turn, so earlier "
+                "traces are trained on but never seen at inference: convert with "
+                "--reasoning-turns last or --split-turns"
+            )
+        if self.generation_tags is False:
+            out.append(
+                "the template has no {% generation %} markers: if you train with TRL "
+                "assistant_only_loss, use a template that has them (otherwise the loss "
+                "covers the prompt too, or nothing at all)"
+            )
+        if self.answer_beyond_limit:
+            out.append(
+                f"{self.answer_beyond_limit:,} rows start their answer beyond "
+                f"{self.max_tokens:,} tokens and train on nothing when truncated; filter them "
+                "with -o (tokens --max-tokens) or raise the trainer's max length"
+            )
+        if self.missing_eos:
+            stops = ", ".join(self.stop_tokens) or "none"
+            out.append(
+                f"answers are not followed by a stop token ({stops}), so the model does not "
+                "learn to stop: set the tokenizer's eos_token (or generation_config "
+                "eos_token_id) to the template's end-of-turn token"
+            )
+        return out
 
 
 def load_tokenizer(
@@ -138,17 +223,19 @@ def check_tokens(
     st = stats if stats is not None else TokenStats()
     st.max_tokens = max_tokens
     st.tokenizer = tokenizer if isinstance(tokenizer, str) else getattr(tok, "name_or_path", None)
+    st.generation_tags = bool(_GENERATION_TAG.search(template))
+    st.stop_tokens = _stop_tokens(tok)
 
     out = open(output, "w", encoding=encoding) if output is not None else None
     rej = open(rejects, "w", encoding=encoding) if rejects is not None else None
     try:
-        batch: list[tuple[int, str, list[str]]] = []
-        for number, raw, texts in _render(path, tok, template, encoding, st):
-            if texts is None:  # unreadable or rejected by the template
-                _write(rej, raw)
+        batch: list[_Row] = []
+        for row in _render(path, tok, template, encoding, st, prefixes=max_tokens is not None):
+            if row.texts is None:  # unreadable or rejected by the template
+                _write(rej, row.raw)
                 st.rejected += out is not None
                 continue
-            batch.append((number, raw, texts))
+            batch.append(row)
             if len(batch) >= _BATCH:
                 _measure(batch, tok, max_tokens, st, out, rej)
                 batch = []
@@ -160,9 +247,24 @@ def check_tokens(
     return st
 
 
+@dataclass
+class _Row:
+    number: int
+    raw: str
+    texts: list[str] | None
+    prefix: str | None = None
+    """The rendered prompt up to the first answer (with the generation prompt)."""
+
+
 def _render(
-    path: str | Path, tok: Any, template: str, encoding: str, st: TokenStats
-) -> Iterator[tuple[int, str, list[str] | None]]:
+    path: str | Path,
+    tok: Any,
+    template: str,
+    encoding: str,
+    st: TokenStats,
+    *,
+    prefixes: bool = False,
+) -> Iterator[_Row]:
     from convmerge.adapter_resolve import resolve_adapter
     from convmerge.emitters import ToolArguments, _message_dict, split_pair
 
@@ -172,15 +274,18 @@ def _render(
         for line in iter_jsonl(path, encoding=encoding, stats=read):
             st.rows += 1
             examples = list(adapter(line.value)) if isinstance(line.value, dict) else []
-            # Render tool-call arguments the way the file stores them, as a trainer would.
+            # Render tool-call arguments, content, and reasoning the way the file
+            # stores them, as a trainer would.
             as_strings = _stores_string_arguments(line.value)
             args: ToolArguments = "string" if as_strings else "object"
-            double_encoded = False
+            key = _reasoning_key(line.value)
+            double_encoded = missing_eos = dropped = dropped_final = False
             if not examples:
                 st.unreadable += 1
-                yield line.number, line.raw, None
+                yield _Row(line.number, line.raw, None)
                 continue
             texts: list[str] = []
+            prefix: str | None = None
             error: str | None = None
             for ex in examples:
                 if ex.rejected is not None:
@@ -192,7 +297,9 @@ def _render(
                 else:
                     sides = [ex.messages]
                 for msgs in sides:
-                    dicts = [_message_dict(m, args) for m in msgs]
+                    dicts = [
+                        _message_dict(m, args, reasoning_key=key, tool_content="null") for m in msgs
+                    ]
                     try:
                         text = tok.apply_chat_template(
                             dicts, tools=ex.tools, chat_template=template, tokenize=False
@@ -207,20 +314,127 @@ def _render(
                         double_encoded = any(
                             json.dumps(tc.arguments) in text for m in msgs for tc in m.tool_calls
                         )
+                    if st.stop_tokens and not missing_eos:
+                        missing_eos = _missing_stop(msgs, text, st.stop_tokens)
+                    lost, lost_final = _lost_reasoning(msgs, text)
+                    dropped, dropped_final = dropped or lost, dropped_final or lost_final
                 if error:
                     break
+                if prefixes and prefix is None:
+                    prefix = _render_prefix(tok, template, sides[0], ex.tools, args, key)
             st.double_encoded_arguments += double_encoded
             if error:
                 st.template_errors[error] = st.template_errors.get(error, 0) + 1
                 lines = st.error_lines.setdefault(error, [])
                 if len(lines) < 5:
                     lines.append(line.number)
-                yield line.number, line.raw, None
-            else:
-                yield line.number, line.raw, texts
+                yield _Row(line.number, line.raw, None)
+                continue
+            st.missing_eos += missing_eos
+            st.reasoning_dropped += dropped
+            st.reasoning_dropped_final += dropped_final
+            yield _Row(line.number, line.raw, texts, prefix)
     finally:
         st.invalid_json = read.invalid_json
         st.first_invalid_line = read.first_invalid_line
+
+
+def _render_prefix(
+    tok: Any, template: str, msgs: list[Any], tools: Any, args: Any, key: str
+) -> str | None:
+    """The prompt before the first answer, as the model sees it when generating it."""
+    from convmerge.emitters import _message_dict
+
+    first = next((i for i, m in enumerate(msgs) if m.role == "assistant"), None)
+    if not first:
+        return None
+    dicts = [_message_dict(m, args, reasoning_key=key, tool_content="null") for m in msgs[:first]]
+    try:
+        text = tok.apply_chat_template(
+            dicts, tools=tools, chat_template=template, tokenize=False, add_generation_prompt=True
+        )
+    except Exception:  # noqa: BLE001 - some templates refuse a prompt-only conversation
+        return None
+    return text if isinstance(text, str) else None
+
+
+def _missing_stop(msgs: list[Any], text: str, stops: list[str]) -> bool:
+    """Whether the final answer's rendered text is not followed by a stop token."""
+    if not msgs or msgs[-1].role != "assistant":
+        return False
+    answer = msgs[-1].text.strip()
+    if not answer:
+        return False
+    snippet = answer[-_SNIPPET:]
+    at = text.rfind(snippet)
+    if at < 0:
+        return False  # the template rewrote the answer; nothing to anchor on
+    tail = text[at + len(snippet) :]
+    return not any(stop in tail for stop in stops)
+
+
+def _lost_reasoning(msgs: list[Any], text: str) -> tuple[bool, bool]:
+    """(some reasoning trace is missing from ``text``, the final answer's is)."""
+    from convmerge.reasoning import reasoning_text
+
+    last = max((i for i, m in enumerate(msgs) if m.role == "assistant"), default=-1)
+    lost = lost_final = False
+    for i, m in enumerate(msgs):
+        if m.role != "assistant":
+            continue
+        trace = (reasoning_text(m) or "").strip()
+        if trace and trace[:_SNIPPET] not in text:
+            lost = True
+            lost_final = lost_final or i == last
+    return lost, lost_final
+
+
+def _reasoning_key(value: Any) -> str:
+    """The turn key a row stores reasoning under (``thinking`` or ``reasoning_content``)."""
+    if isinstance(value, dict):
+        for key in ("messages", "prompt", "chosen", "rejected", "conversations"):
+            turns = value.get(key)
+            for turn in turns if isinstance(turns, list) else ():
+                if isinstance(turn, dict) and isinstance(turn.get("thinking"), str):
+                    return "thinking"
+    return "reasoning_content"
+
+
+def _stop_tokens(tok: Any) -> list[str]:
+    """The tokenizer's ``eos_token`` plus the ``eos_token_id`` of ``generation_config.json``."""
+    stops: list[str] = []
+    eos = getattr(tok, "eos_token", None)
+    if isinstance(eos, str) and eos:
+        stops.append(eos)
+    for token_id in _generation_eos_ids(getattr(tok, "name_or_path", None)):
+        try:
+            token = tok.convert_ids_to_tokens(token_id)
+        except Exception:  # noqa: BLE001 - an id outside the vocabulary
+            continue
+        if isinstance(token, str) and token and token not in stops:
+            stops.append(token)
+    return stops
+
+
+def _generation_eos_ids(name_or_path: str | None) -> list[int]:
+    if not name_or_path:
+        return []
+    local = Path(name_or_path)
+    try:
+        if local.is_dir():
+            path = local / "generation_config.json"
+            if not path.is_file():
+                return []
+        else:
+            from huggingface_hub import hf_hub_download
+
+            path = Path(hf_hub_download(name_or_path, "generation_config.json"))
+        ids = json.loads(path.read_text(encoding="utf-8")).get("eos_token_id")
+    except Exception:  # noqa: BLE001 - no generation config is fine
+        return []
+    if isinstance(ids, int):
+        return [ids]
+    return [i for i in ids if isinstance(i, int)] if isinstance(ids, list) else []
 
 
 def _stores_string_arguments(value: Any) -> bool:
@@ -241,7 +455,7 @@ def _stores_string_arguments(value: Any) -> bool:
 
 
 def _measure(
-    batch: list[tuple[int, str, list[str]]],
+    batch: list[_Row],
     tok: Any,
     max_tokens: int | None,
     st: TokenStats,
@@ -250,12 +464,23 @@ def _measure(
 ) -> None:
     if not batch:
         return
-    flat = [t for _, _, texts in batch for t in texts]
+    flat: list[str] = []
+    for row in batch:
+        assert row.texts is not None
+        flat.extend(row.texts)
+        if row.prefix is not None:
+            flat.append(row.prefix)
     ids = tok(flat, add_special_tokens=False)["input_ids"]
     pos = 0
-    for _, raw, texts in batch:
+    for row in batch:
+        texts = row.texts or []
+        raw = row.raw
         length = max(len(ids[pos + i]) for i in range(len(texts)))
         pos += len(texts)
+        if row.prefix is not None:
+            if max_tokens is not None and len(ids[pos]) >= max_tokens:
+                st.answer_beyond_limit += 1
+            pos += 1
         st.measured += 1
         st.lengths.append(length)
         if max_tokens is not None and length > max_tokens:
