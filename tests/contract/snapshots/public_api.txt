@@ -52,7 +52,7 @@ def validate_file(input_path: 'Path', *, adapter_name: 'str' = 'chat', adapter_o
 [convmerge.recipe]
 class PlannedStep(step: 'Step', action: 'str', reason: 'str') -> None
 RECIPE_TEMPLATE: str
-class Recipe(path: 'Path', base_dir: 'Path', workdir: 'Path', output: 'Path', lock_path: 'Path', report_path: 'Path', sources: 'dict[str, SourceSpec]', mix: 'MixSpec | None', dedupe: 'DedupeSpec | None', auth: 'AuthConfig', split: 'SplitSpec | None' = None) -> None
+class Recipe(path: 'Path', base_dir: 'Path', workdir: 'Path', output: 'Path', lock_path: 'Path', report_path: 'Path', sources: 'dict[str, SourceSpec]', mix: 'MixSpec | None', dedupe: 'DedupeSpec | None', auth: 'AuthConfig', split: 'SplitSpec | None' = None, tokens: 'TokensSpec | None' = None) -> None
 class RecipeError(ValueError)
 class RecipeRunError(RuntimeError)
 class RunResult(ran: 'list[str]' = <factory>, skipped: 'list[str]' = <factory>, report: 'dict[str, Any]' = <factory>) -> None

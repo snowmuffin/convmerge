@@ -141,3 +141,45 @@ def test_cli(tmp_path: Path, tokenizer_dir: Path, capsys) -> None:
     with pytest.raises(SystemExit) as exc:
         main(["tokens", "-i", str(src), "--tokenizer", str(tmp_path / "no-such-tokenizer")])
     assert exc.value.code == 2
+
+
+def test_recipe_tokens_stage(tmp_path: Path, tokenizer_dir: Path) -> None:
+    import shutil
+
+    from convmerge.recipe import RecipeError, parse_recipe, run
+
+    shutil.copytree(tokenizer_dir, tmp_path / "tok")
+    rows = [{"messages": M(("user", "w " * n), ("assistant", "ok"))} for n in range(1, 41)]
+    _write(tmp_path / "a.jsonl", rows)
+    raw = {
+        "output": "train.jsonl",
+        "sources": {"a": {"path": "a.jsonl", "normalize": False, "convert": {"from": "auto"}}},
+        "tokens": {"tokenizer": "tok", "max_tokens": 30},
+        "split": {"val_rows": 2},
+    }
+    quiet = lambda _m: None  # noqa: E731
+    recipe = parse_recipe(raw, path=tmp_path / "r.yaml")
+    assert run(recipe, log=quiet).ran == ["a.convert", "tokens", "split.train", "split.val"]
+    # user turn = n + 3 tokens, assistant turn = 4: n <= 23 fits in 30.
+    kept = len((tmp_path / "train.jsonl").read_text().splitlines())
+    assert kept + len((tmp_path / "train.val.jsonl").read_text().splitlines()) == 23
+    report = json.loads((tmp_path / "build" / "report.json").read_text())
+    assert report["steps"]["tokens"]["stats"]["over_limit"] == 17
+    assert run(recipe, log=quiet).ran == []
+
+    raw["tokens"]["max_tokens"] = 40
+    recipe = parse_recipe(raw, path=tmp_path / "r.yaml")
+    assert run(recipe, log=quiet).ran == ["tokens", "split.train", "split.val"]
+
+    (tmp_path / "strict.jinja").write_text(STRICT)
+    raw["tokens"]["chat_template"] = "strict.jinja"
+    recipe = parse_recipe(raw, path=tmp_path / "r.yaml")
+    assert run(recipe, log=quiet).ran == ["tokens", "split.train", "split.val"]
+    (tmp_path / "strict.jinja").write_text(STRICT + " ")  # template edits re-run the step
+    assert run(recipe, log=quiet).ran[0] == "tokens"
+
+    with pytest.raises(RecipeError, match="tokens.max_tokens"):
+        parse_recipe({**raw, "tokens": {"tokenizer": "tok", "max_tokens": 0}},
+                     path=tmp_path / "r.yaml")  # fmt: skip
+    with pytest.raises(RecipeError, match="tokens.tokenizer: required"):
+        parse_recipe({**raw, "tokens": {"max_tokens": 5}}, path=tmp_path / "r.yaml")

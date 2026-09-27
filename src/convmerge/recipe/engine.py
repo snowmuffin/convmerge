@@ -93,6 +93,8 @@ def build_steps(
         stages.append(("mixed", lambda src, out: _mix_step(recipe, converted, out)))
     if recipe.dedupe is not None:
         stages.append(("deduped", lambda src, out: _dedupe_step(recipe, src, out)))
+    if recipe.tokens is not None:
+        stages.append(("filtered", lambda src, out: _tokens_step(recipe, src, out)))
     last = converted[names[0]]
     for i, (label, make) in enumerate(stages):
         final = i == len(stages) - 1 and recipe.split is None
@@ -248,6 +250,41 @@ def _dedupe_step(recipe: Recipe, src: Path, out: Path) -> Step:
 
     options = {"keys": list(spec.keys) if spec.keys else None, "algorithm": spec.algorithm}
     return Step("dedupe", "dedupe", [src], out, options, run)
+
+
+def _tokens_step(recipe: Recipe, src: Path, out: Path) -> Step:
+    from convmerge.fetch.auth import resolve_token
+    from convmerge.tokens import TokenStats, check_tokens, load_tokenizer
+
+    spec = recipe.tokens
+    assert spec is not None
+    inputs = [src]
+    if spec.local is not None:
+        inputs.append(spec.local)
+    if spec.chat_template is not None:
+        inputs.append(spec.chat_template)
+
+    def run(stage: Path) -> dict[str, Any]:
+        name = str(spec.local) if spec.local is not None else spec.tokenizer
+        token = resolve_token(recipe.auth.hf)
+        tok = load_tokenizer(name, revision=spec.revision, token=token)
+        template = spec.chat_template.read_text(encoding="utf-8") if spec.chat_template else None
+        st = TokenStats()
+        check_tokens(src, tokenizer=tok, max_tokens=spec.max_tokens, output=stage,
+                     chat_template=template, stats=st)  # fmt: skip
+        report = st.to_report()
+        report["tokenizer"] = spec.tokenizer
+        return report
+
+    options = {
+        "tokenizer": spec.tokenizer,
+        "revision": spec.revision,
+        "max_tokens": spec.max_tokens,
+        "chat_template": _display(spec.chat_template, recipe.base_dir)
+        if spec.chat_template
+        else None,
+    }
+    return Step("tokens", "tokens", inputs, out, options, run)
 
 
 def _split_steps(recipe: Recipe, src: Path) -> list[Step]:

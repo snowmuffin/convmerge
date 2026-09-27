@@ -63,6 +63,7 @@ sources:
     convert:
       from: auto
       # preset: presets/chat.yaml
+      # format: messages          # messages | alpaca | preference | sharegpt | sharegpt-preference
       # preference: chosen        # DPO / reward data: train on the chosen answer
       # on_invalid: drop          # drop | keep | fail
       # workers: 4                # parallel convert (does not change the output)
@@ -73,4 +74,10 @@ mix:                            # optional with one source; merge-all if omitted
   weights: { alpaca: 0.7, local_chat: 0.3 }
 
 dedupe: true                    # or { keys: [messages], algorithm: md5 }
+
+# tokens:                       # needs convmerge[tokens]; keeps rows that render and fit
+#   tokenizer: Qwen/Qwen2.5-7B-Instruct
+#   max_tokens: 4096
+# split:                        # train -> output, validation -> <output>.val.jsonl
+#   val: 0.02                   # or val_rows: 1000
 """
