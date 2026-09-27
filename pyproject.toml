@@ -104,9 +104,12 @@ module = ["datasets", "datasets.*", "pyarrow", "pyarrow.*"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
-# convmerge treats tokenizers as Any; following transformers pulls in numpy's
-# stubs, which use syntax newer than our python_version.
-module = ["transformers", "transformers.*", "tokenizers", "tokenizers.*"]
+# convmerge treats tokenizers as Any; following transformers or huggingface_hub
+# pulls in numpy's stubs, which use syntax newer than our python_version.
+module = [
+    "transformers", "transformers.*", "tokenizers", "tokenizers.*",
+    "huggingface_hub", "huggingface_hub.*",
+]
 ignore_missing_imports = true
 follow_imports = "skip"
 
