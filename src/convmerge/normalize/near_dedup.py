@@ -1,7 +1,8 @@
 """Near-duplicate removal with MinHash LSH (``convmerge dedupe --near``).
 
-Each row's text (every turn of a conversation, both sides of a preference
-pair; or the string values of ``keys``) is cut into word ``shingle``-grams.
+Each row's text (every turn of a conversation except the system prompt,
+both sides of a preference pair; or the string values of ``keys``) is cut
+into word ``shingle``-grams.
 Rows whose estimated Jaccard similarity to an earlier kept row reaches
 ``threshold`` are dropped, so the first of a group of near-copies stays.
 This catches the same source translated or reformatted slightly
@@ -114,8 +115,11 @@ def _row_text(value: Any, adapter: Any, keys: list[str] | None) -> str:
     if isinstance(value, dict) and keys is None:
         parts: list[str] = []
         for ex in adapter(value):
+            # System prompts are often shared templates (tool definitions,
+            # personas) that would make unrelated rows look alike.
             for m in (*ex.messages, *(ex.rejected or ())):
-                parts.append(m.text)
+                if m.role != "system":
+                    parts.append(m.text)
         if any(parts):
             return "\n".join(parts)
     if isinstance(value, dict) and keys is not None:
