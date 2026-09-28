@@ -14,6 +14,7 @@ import urllib.request
 from pathlib import Path
 from urllib.parse import urlparse
 
+from convmerge import __version__
 from convmerge.fetch.auth import redact_url
 from convmerge.lfs import LfsPointerError, is_lfs_pointer, parse_lfs_pointer
 
@@ -22,6 +23,7 @@ _GITHUB_REPO_RE = re.compile(
 )
 
 _DEFAULT_TIMEOUT = 60
+_USER_AGENT = f"convmerge-fetch/{__version__}"
 _CHUNK = 1 << 20
 
 # Hosts that may receive a GitHub token. Other URLs are fetched anonymously.
@@ -74,7 +76,7 @@ def download_raw_file(
 def _open(url: str, *, token: str | None = None, headers: dict[str, str] | None = None):
     req = urllib.request.Request(url)
     _add_auth(req, token)
-    req.add_header("User-Agent", "convmerge-fetch/0.7")
+    req.add_header("User-Agent", _USER_AGENT)
     for k, v in (headers or {}).items():
         req.add_unredirected_header(k, v)
     try:
@@ -129,7 +131,7 @@ def _resolve_lfs(
     req = urllib.request.Request(batch_url, data=body, method="POST")
     req.add_header("Accept", "application/vnd.git-lfs+json")
     req.add_header("Content-Type", "application/vnd.git-lfs+json")
-    req.add_header("User-Agent", "convmerge-fetch/0.7")
+    req.add_header("User-Agent", _USER_AGENT)
     if token:
         basic = base64.b64encode(f"user:{token}".encode()).decode("ascii")
         req.add_unredirected_header("Authorization", f"Basic {basic}")
@@ -218,7 +220,7 @@ def _get_tree(owner: str, repo: str, branch: str, *, token: str | None) -> dict:
 def _github_api_json(url: str, *, token: str | None) -> dict:
     req = urllib.request.Request(url)
     req.add_header("Accept", "application/vnd.github.v3+json")
-    req.add_header("User-Agent", "convmerge-fetch/0.2")
+    req.add_header("User-Agent", _USER_AGENT)
     _add_auth(req, token)
     try:
         with urllib.request.urlopen(req, timeout=_DEFAULT_TIMEOUT) as resp:

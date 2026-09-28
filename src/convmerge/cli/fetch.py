@@ -55,6 +55,10 @@ def _add_fetch(sub: argparse._SubParsersAction) -> None:
     p.add_argument("--lfs", action="store_true")
     p.add_argument("--split", default=None, help="hf:// shortcut: dataset split")
     p.add_argument("--config", default=None, help="hf:// shortcut: dataset config")
+    p.add_argument(
+        "--revision", default=None,
+        help="hf:// shortcut: commit sha, tag, or branch to pin the dataset to",
+    )  # fmt: skip
 
 
 def _cmd_fetch(args: argparse.Namespace) -> None:
@@ -121,6 +125,7 @@ def _cmd_fetch_shortcut(args: argparse.Namespace, source: str) -> None:
             split=args.split,
             token=args.hf_token,
             max_rows=args.max_rows,
+            revision=args.revision,
         )
         print(f"[ok] {dataset_id} -> {dst}", file=sys.stderr)
         return

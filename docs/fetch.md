@@ -107,7 +107,9 @@ datasets:
 - `name` — unique label used to form the output subdirectory
   (characters `<>:"/\|?*` and whitespace become `_`).
 - Exactly one of `hf` or `url`.
-- HuggingFace extras: `split`, `config`.
+- HuggingFace extras: `split`, `config`, and `revision` (a commit sha, tag, or
+  branch; pin a commit sha so a re-run reads exactly the same rows, and
+  `--revision` on the `hf://` shortcut).
 - GitHub extras: `ext` (tuple of suffixes), `mode` (`tree` default, or `clone`),
   `lfs` (bool, only meaningful when `mode: clone`).
 - `output` — optional explicit path that overrides `defaults.output_root / name`.
@@ -155,7 +157,8 @@ does not discard a successful download; the next resume conservatively fetches
 it again.
 
 A sampled fetch records its `max_rows` in the marker, so a sample never
-satisfies a later full fetch (or a sample of a different size).
+satisfies a later full fetch (or a sample of a different size). A pinned
+`revision` is recorded the same way, so changing it fetches again.
 
 With the marker present and valid, the runner skips:
 

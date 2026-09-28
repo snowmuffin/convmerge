@@ -59,3 +59,49 @@ def test_download_hf_dataset_missing_datasets(monkeypatch, tmp_path: Path) -> No
 
     with pytest.raises(ImportError):
         download_hf_dataset("org/ds", tmp_path / "out.jsonl")
+
+
+def test_download_hf_dataset_pins_revision(monkeypatch, tmp_path: Path) -> None:
+    calls: list[dict] = []
+    _install_fake_datasets(monkeypatch, calls)
+
+    from convmerge.fetch.hf import download_hf_dataset
+
+    download_hf_dataset("org/ds", tmp_path / "out.jsonl", revision="abc123")
+    assert calls[0]["kwargs"]["revision"] == "abc123"
+
+
+def test_manifest_revision_reaches_the_download_and_scopes_resume(
+    monkeypatch, tmp_path: Path
+) -> None:
+    from convmerge.fetch import hf
+    from convmerge.fetch.manifest import _from_dict as parse_manifest
+    from convmerge.fetch.runner import run_manifest
+
+    seen: list[str | None] = []
+
+    def fake(dataset_id, dst, **kw):
+        seen.append(kw.get("revision"))
+        Path(dst).write_text('{"a": 1}\n', encoding="utf-8")
+        return Path(dst)
+
+    monkeypatch.setattr(hf, "download_hf_dataset", fake)
+    entry = {"name": "one", "hf": "org/ds", "revision": "v1"}
+    run_manifest(parse_manifest({"datasets": [entry]}), output_root=tmp_path)
+    run_manifest(parse_manifest({"datasets": [entry]}), output_root=tmp_path)
+    run_manifest(parse_manifest({"datasets": [{**entry, "revision": "v2"}]}), output_root=tmp_path)
+    assert seen == ["v1", "v2"]
+
+
+@pytest.mark.parametrize(
+    ("entry", "error"),
+    [
+        ({"name": "x", "url": "https://example.com/a.jsonl", "revision": "v1"}, "only applies"),
+        ({"name": "x", "hf": "org/ds", "revision": ""}, "non-empty string"),
+    ],
+)
+def test_manifest_revision_errors(entry: dict, error: str) -> None:
+    from convmerge.fetch.manifest import _from_dict as parse_manifest
+
+    with pytest.raises(ValueError, match=error):
+        parse_manifest({"datasets": [entry]})

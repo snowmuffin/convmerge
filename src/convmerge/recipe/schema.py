@@ -42,7 +42,7 @@ _CONVERT_KEYS = {
     "map",
     "meta",
 }
-_FETCH_ENTRY_KEYS = {"hf", "url", "config", "split", "ext", "mode", "lfs", "max_rows"}
+_FETCH_ENTRY_KEYS = {"hf", "url", "config", "split", "revision", "ext", "mode", "lfs", "max_rows"}
 
 
 class RecipeError(ValueError):
