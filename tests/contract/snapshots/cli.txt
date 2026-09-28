@@ -44,6 +44,9 @@
   --algorithm choices=md5|sha256 default='md5'
   --seen-store choices=memory|sqlite default='memory'
   --seen-db
+  --near (switch)
+  --threshold default=0.8
+  --num-perm default=128
   --progress (switch)
 [convmerge turns]
   --input, -i required
@@ -57,6 +60,29 @@
   --val-rows
   --seed default=42
   --keys nargs=+
+[convmerge filter]
+  --input, -i required
+  --output, -o
+  --rejects
+  --enable choices=empty_answer|refusal|repetition|near_identical_pair|rejected_empty|length|slop|script default=[]
+  --disable choices=empty_answer|refusal|repetition|near_identical_pair|rejected_empty|length|slop|script default=[]
+  --min-answer-chars default=1
+  --min-chars
+  --max-chars
+  --repetition-max default=0.5
+  --slop-max default=3
+  --min-script default=[]
+  --rules-file
+[convmerge decontam]
+  --input, -i required
+  --against required
+  --output, -o
+  --rejects
+  --ngram default=13
+  --min-tokens default=8
+  --check choices=prompts|all default='prompts'
+  --fields
+  --hf-token
 [convmerge tokens]
   --input, -i required
   --tokenizer required

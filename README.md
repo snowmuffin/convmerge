@@ -28,8 +28,8 @@ loading, no inference, no labeling, no training orchestration. See
 ## Install
 
 ```bash
-pip install convmerge                    # core: convert, dedupe, turns; normalize for .json/.jsonl
-pip install "convmerge[all]"             # full CLI: fetch (HF+GitHub), parquet, YAML presets, tokens
+pip install convmerge                    # core: convert, dedupe, filter, decontam; normalize for .json/.jsonl
+pip install "convmerge[all]"             # full CLI: fetch (HF+GitHub), parquet, YAML presets, tokens, near dedupe
 ```
 
 Granular extras:
@@ -41,16 +41,19 @@ pip install "convmerge[fetch-hf]"        # same dependencies as ``fetch-all`` (b
 pip install "convmerge[parquet]"         # Parquet input for ``normalize``
 pip install "convmerge[preset]"          # YAML convert presets (`--preset`, `preset validate`)
 pip install "convmerge[tokens]"          # `tokens`: lengths + chat-template checks (transformers, no PyTorch)
+pip install "convmerge[quality]"         # `dedupe --near`: near-duplicate removal (datasketch)
 ```
 
 | Command / feature | Extra |
 |-------------------|--------|
-| `convert`, `dedupe`, `turns`, `split`, `llamafactory-info`, `axolotl-config` | *(core)* |
+| `convert`, `dedupe`, `filter`, `decontam` (local eval files), `turns`, `split`, `llamafactory-info`, `axolotl-config` | *(core)* |
 | `normalize` on `.parquet` | `[parquet]` |
 | `fetch` with YAML manifest or GitHub | `[fetch]` |
 | `fetch` with HuggingFace manifest entries | `[fetch-all]` or `[fetch-hf]` |
 | `convert --preset`, `preset` | `[preset]` |
 | `tokens` | `[tokens]` |
+| `dedupe --near` | `[quality]` |
+| `decontam --against hf:...` | `[fetch-all]` or `[fetch-hf]` |
 | Everything above | `[all]` |
 
 Or from a clone:
