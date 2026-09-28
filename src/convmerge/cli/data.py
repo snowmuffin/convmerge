@@ -126,6 +126,17 @@ def _add_dedupe(sub: argparse._SubParsersAction) -> None:
         default=None,
         help="sqlite store path (default: a temp file removed on completion)",
     )
+    p.add_argument(
+        "--near", action="store_true",
+        help="Also drop near-duplicates (MinHash LSH over word 5-grams); "
+        'needs pip install "convmerge[quality]"',
+    )  # fmt: skip
+    p.add_argument(
+        "--threshold", type=float, default=0.8,
+        help="--near: estimated Jaccard similarity that makes a row a duplicate (0.8)",
+    )  # fmt: skip
+    p.add_argument("--num-perm", type=_positive_int, default=128,
+                   help="--near: MinHash permutations (128)")  # fmt: skip
     _add_progress_flag(p)
 
 
@@ -136,6 +147,9 @@ def _cmd_dedupe(args: argparse.Namespace) -> None:
     if not Path(args.input).is_file():
         print(f"error: input file not found: {args.input}", file=sys.stderr)
         sys.exit(1)
+    if args.near:
+        _near_dedupe(args)
+        return
     stats = DedupeStats()
     total, kept = deduplicate_jsonl(
         args.input,
@@ -161,6 +175,27 @@ def _cmd_dedupe(args: argparse.Namespace) -> None:
             "run `convmerge normalize` first to repair the file",
             file=sys.stderr,
         )
+
+
+def _near_dedupe(args: argparse.Namespace) -> None:
+    from convmerge.normalize.near_dedup import NearDedupeStats, deduplicate_near_jsonl
+
+    stats = NearDedupeStats()
+    try:
+        total, kept = deduplicate_near_jsonl(
+            args.input, args.output, threshold=args.threshold, num_perm=args.num_perm,
+            keys=args.keys, stats=stats,
+        )  # fmt: skip
+    except (ImportError, ValueError) as e:
+        print(f"error: {e}", file=sys.stderr)
+        sys.exit(2)
+    removed = total - kept
+    pct = (removed / total * 100) if total else 0.0
+    print(
+        f"total={total:,} kept={kept:,} removed={removed:,} ({pct:.2f}%) "
+        f"[near_duplicates={stats.near_duplicates:,} invalid_json={stats.invalid_json:,}]",
+        file=sys.stderr,
+    )
 
 
 def _add_split(sub: argparse._SubParsersAction) -> None:

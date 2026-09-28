@@ -11,7 +11,9 @@ import pytest
 from convmerge.cli import main
 
 ROOT = Path(__file__).parents[1]
-RUNTIME_EXTRAS = {"fetch", "fetch-hf", "fetch-all", "parquet", "preset", "tokens", "all"}
+RUNTIME_EXTRAS = {
+    "fetch", "fetch-hf", "fetch-all", "parquet", "preset", "tokens", "quality", "all",
+}  # fmt: skip
 
 
 def _optional_dependencies() -> dict[str, list[str]]:
@@ -63,6 +65,7 @@ def test_subcommand_help_mentions_its_runtime_extra(capsys) -> None:
         "fetch": "[fetch]",
         "preset": "[preset]",
         "tokens": "[tokens]",
+        "dedupe": "[quality]",
     }
     for command, extra in expected.items():
         output = _help([command, "--help"], capsys)
@@ -79,6 +82,7 @@ def test_error_hints_include_narrow_and_umbrella_extras() -> None:
         "src/convmerge/fetch/manifest.py": "[fetch]",
         "src/convmerge/fetch/hf.py": "[fetch-all]",
         "src/convmerge/tokens.py": "[tokens]",
+        "src/convmerge/normalize/near_dedup.py": "[quality]",
     }
     for relative, narrow in expected.items():
         text = (ROOT / relative).read_text(encoding="utf-8")
