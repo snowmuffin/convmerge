@@ -220,6 +220,9 @@ def decontaminate_jsonl(
                     for name, counts in zip(index.names, index.counts)}  # fmt: skip
     adapter = resolve_adapter("auto", None, pairs=True)
     read = ReadStats()
+    for target in (output, rejects):
+        if target is not None:
+            Path(target).parent.mkdir(parents=True, exist_ok=True)
     out = open(output, "w", encoding=encoding) if output is not None else None
     rej = open(rejects, "w", encoding=encoding) if rejects is not None else None
     try:
