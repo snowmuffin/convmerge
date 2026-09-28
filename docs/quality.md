@@ -152,8 +152,12 @@ convmerge dedupe -i mixed.jsonl -o deduped.jsonl --near --threshold 0.7
   reformatted slightly differently, or answers that differ in a few words.
 - It is approximate. MinHash estimates the similarity, and LSH finds the
   candidates.
-- The index stays in memory, so it suits up to a few million rows. For
-  larger corpora use a distributed tool such as
+- The index stays in memory. On 200,000 chat rows (4 KB each) the peak
+  was 733 MB with the default `--num-perm 128` and 445 MB with
+  `--num-perm 64`, which removed nearly the same rows (6.78% and 6.70%).
+  That is about 3.5 KB and 2 KB per row, or roughly 3.5 GB and 2 GB per
+  million rows; it ran at about 2,300 rows per second either way. Beyond a
+  few million rows use a distributed tool such as
   [datatrove](https://github.com/huggingface/datatrove).
 - `--threshold` must be below 1. Very high thresholds (0.95 and up) need a
   larger `--num-perm`.

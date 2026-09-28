@@ -285,3 +285,31 @@ def test_lock_prunes_removed_steps_and_files(project: Path) -> None:
     lock = load_lock(project / "recipe.lock.json")
     assert "dedupe" not in lock["steps"]
     assert all((project / k).is_file() for k in lock["files"])
+
+
+def test_fetch_revision_reaches_the_download(tmp_path: Path, monkeypatch) -> None:
+    import convmerge.fetch.hf as hf
+    import convmerge.licenses as licenses
+
+    seen: list[str | None] = []
+
+    def fake_download(dataset_id, dst, **kw):
+        seen.append(kw.get("revision"))
+        return _jsonl(Path(dst), A)
+
+    monkeypatch.setattr(hf, "download_hf_dataset", fake_download)
+    monkeypatch.setattr(licenses, "detect_hf_license", lambda *a, **k: None)
+    r = parse_recipe(
+        {
+            "output": "o.jsonl",
+            "sources": {
+                "a": {
+                    "fetch": {"hf": "org/ds", "revision": "abc123"},
+                    "convert": {"from": "alpaca"},
+                }
+            },
+        },
+        path=tmp_path / "r.yaml",
+    )
+    run(r, log=_quiet)
+    assert seen == ["abc123"]

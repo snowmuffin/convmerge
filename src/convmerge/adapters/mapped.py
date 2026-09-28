@@ -19,10 +19,25 @@ is the last item), and
 others are paths from the record. A record where a required path is missing
 yields an example carrying the ``map_path_missing`` issue, so ``convert``
 drops and counts it.
+
+Preference data whose label says which of two answers won (PKU-SafeRLHF,
+SHP, HelpSteer3) names both answers and the label::
+
+    {"user": "prompt", "responses": ["response_0", "response_1"],
+     "preferred": "better_response_id"}
+
+    # label values that are not the index of the winner
+    {"user": "history", "responses": ["human_ref_A", "human_ref_B"],
+     "preferred": "labels", "preferred_values": {"1": 0, "0": 1}}
+
+``preferred_values`` maps a label value (as written in JSON: ``"1"``,
+``"-2"``, ``"true"``) to the index of the winning answer; a value it does not
+list (a tie) yields the ``no_preference`` issue.
 """
 
 from __future__ import annotations
 
+import json
 import re
 from collections.abc import Iterator, Mapping
 from dataclasses import dataclass, field
@@ -49,8 +64,11 @@ _ROLES: dict[str, str] = {
     "tool": "tool",
 }
 
-_FLAT_KEYS = ("system", "user", "assistant", "reasoning", "chosen", "rejected", "tools")
-_TURN_KEYS = ("turns", "role", "content", "name", "reasoning", "role_map", "system", "tools")
+_PAIR_KEYS = ("chosen", "rejected", "responses", "preferred", "preferred_values")
+_FLAT_KEYS = ("system", "user", "assistant", "reasoning", *_PAIR_KEYS, "tools")
+_TURN_KEYS = (
+    "turns", "role", "content", "name", "reasoning", "role_map", "system", *_PAIR_KEYS, "tools",
+)  # fmt: skip
 MAP_KEYS: tuple[str, ...] = tuple(dict.fromkeys((*_FLAT_KEYS, *_TURN_KEYS)))
 
 _STEP = re.compile(r'"((?:[^"\\]|\\.)*)"|([^.\[\]"]+)|\[(-?\d+|)\]')
@@ -121,8 +139,12 @@ class MapSpec:
     / ``name`` / ``reasoning`` are then paths inside a turn and ``role_map``
     renames roles) or ``user`` and ``assistant`` (paths to a single exchange;
     ``reasoning`` is then the answer's trace). ``system`` and ``tools`` are
-    paths from the record in both modes. ``chosen`` / ``rejected`` (flat mode)
-    make a preference pair: ``chosen`` replaces ``assistant``.
+    paths from the record in both modes. ``chosen`` / ``rejected`` make a
+    preference pair: ``chosen`` replaces ``assistant`` (or, with ``turns``,
+    answers the last turn). ``responses`` (two paths) with ``preferred`` (the
+    path to a label) do the same when a label says which answer won; the
+    label is the winner's index unless ``preferred_values`` maps label values
+    to indices.
     """
 
     turns: Path | None = None
@@ -137,6 +159,9 @@ class MapSpec:
     chosen: Path | None = None
     rejected: Path | None = None
     tools: Path | None = None
+    responses: tuple[Path, ...] | None = None
+    preferred: Path | None = None
+    preferred_values: Mapping[str, int] | None = None
 
     @classmethod
     def from_mapping(cls, data: Any) -> MapSpec:
@@ -153,27 +178,58 @@ class MapSpec:
             or not all(isinstance(k, str) and isinstance(v, str) for k, v in role_map.items())
         ):
             raise ValueError("map.role_map: expected a mapping of labels to roles")
-        paths = {k: Path.parse(v) for k, v in data.items() if k != "role_map"}
-        spec = cls(**paths, role_map=dict(role_map) if role_map else None)
+        responses = data.get("responses")
+        if responses is not None and (not isinstance(responses, list) or len(responses) != 2):
+            raise ValueError("map.responses: expected a list of two paths")
+        values = data.get("preferred_values")
+        if values is not None and (
+            not isinstance(values, Mapping)
+            or not all(
+                isinstance(k, str) and isinstance(v, int) and not isinstance(v, bool)
+                and v in (0, 1)
+                for k, v in values.items()
+            )
+        ):  # fmt: skip
+            raise ValueError(
+                "map.preferred_values: expected label values mapped to 0 or 1, "
+                'e.g. {"1": 0, "0": 1}'
+            )
+        special = ("role_map", "responses", "preferred_values")
+        paths = {k: Path.parse(v) for k, v in data.items() if k not in special}
+        spec = cls(
+            **paths,
+            role_map=dict(role_map) if role_map else None,
+            responses=tuple(Path.parse(r) for r in responses) if responses else None,
+            preferred_values=dict(values) if values else None,
+        )
         spec._check()
         return spec
 
     def _check(self) -> None:
+        if (self.chosen is None) != (self.rejected is None):
+            raise ValueError("map: 'chosen' and 'rejected' go together")
+        if (self.responses is None) != (self.preferred is None):
+            raise ValueError("map: 'responses' and 'preferred' go together")
+        if self.preferred_values is not None and self.preferred is None:
+            raise ValueError("map: 'preferred_values' needs 'responses' and 'preferred'")
+        if self.chosen is not None and self.responses is not None:
+            raise ValueError("map: give 'chosen'/'rejected' or 'responses'/'preferred', not both")
+        pair = self.chosen is not None or self.responses is not None
         if self.turns is not None:
-            flat = [k for k in ("user", "assistant", "chosen", "rejected") if getattr(self, k)]
+            flat = [k for k in ("user", "assistant") if getattr(self, k)]
             if flat:
                 raise ValueError(f"map: 'turns' cannot be combined with {flat}")
         else:
-            if self.user is None or (self.assistant is None and self.chosen is None):
+            if self.user is None or (self.assistant is None and not pair):
                 raise ValueError(
                     "map: give 'turns' (a list of turns) or 'user' and 'assistant' "
-                    "(or 'chosen') paths"
+                    "(or 'chosen' / 'responses') paths"
                 )
-            if (self.chosen is None) != (self.rejected is None):
-                raise ValueError("map: 'chosen' and 'rejected' go together")
             for key in ("role", "content", "name", "role_map"):
                 if getattr(self, key) is not None:
                     raise ValueError(f"map: {key!r} only applies with 'turns'")
+        if pair and self.assistant is not None:
+            raise ValueError("map: 'assistant' cannot be combined with a preference pair")
 
     def to_mapping(self) -> dict[str, Any]:
         out: dict[str, Any] = {}
@@ -181,6 +237,8 @@ class MapSpec:
             value = getattr(self, key)
             if isinstance(value, Path):
                 out[key] = value.text
+            elif isinstance(value, tuple):
+                out[key] = [p.text for p in value]
             elif value is not None:
                 out[key] = dict(value)
         return out
@@ -198,11 +256,17 @@ def iter_from_mapped_line(
         if spec.turns is not None:
             msgs = _turns(record, spec)
             rejected = None
+            if spec.chosen is not None or spec.responses is not None:
+                chosen, rejected = _pair(record, spec, reasoning=None)
+                msgs, rejected = _pick(msgs, chosen, rejected, preference)
         else:
             msgs, rejected = _flat(record, spec, preference)
     except _Missing as e:
         meta: dict[str, object] = {"source": "map", "missing": e.path}
         yield TrainingExample(meta=meta, issues=["map_path_missing"])
+        return
+    except _Tie as e:
+        yield TrainingExample(meta={"source": "map", "label": e.label}, issues=["no_preference"])
         return
     extras: dict[str, Any] = {"id": record.get("id")}
     if spec.tools is not None:
@@ -217,6 +281,12 @@ class _Missing(Exception):
     def __init__(self, path: str):
         super().__init__(path)
         self.path = path
+
+
+class _Tie(Exception):
+    def __init__(self, label: str):
+        super().__init__(label)
+        self.label = label
 
 
 def _text(path: Path, obj: Any, *, required: bool) -> Any:
@@ -249,19 +319,54 @@ def _flat(
     user = _text(spec.user, record, required=True)
     reasoning = _reasoning(spec.reasoning, record)
     msgs = [*_system(record, spec), ChatMessage("user", user)]
-    if spec.chosen is None:
+    if spec.chosen is None and spec.responses is None:
         assert spec.assistant is not None
         answer = _text(spec.assistant, record, required=True)
         return [*msgs, ChatMessage("assistant", answer, reasoning=reasoning)], None
-    assert spec.rejected is not None
-    chosen_text = _text(spec.chosen, record, required=True)
-    chosen = ChatMessage("assistant", chosen_text, reasoning=reasoning)
-    rejected = ChatMessage("assistant", _text(spec.rejected, record, required=True))
+    chosen, rejected = _pair(record, spec, reasoning=reasoning)
+    return _pick(msgs, chosen, rejected, preference)
+
+
+def _pick(
+    msgs: list[ChatMessage], chosen: ChatMessage, rejected: ChatMessage, preference: str | None
+) -> tuple[list[ChatMessage], ChatMessage | None]:
     if preference == "rejected":
         return [*msgs, rejected], None
     if preference == "chosen":
         return [*msgs, chosen], None
     return [*msgs, chosen], rejected
+
+
+def _pair(
+    record: dict[str, Any], spec: MapSpec, *, reasoning: str | None
+) -> tuple[ChatMessage, ChatMessage]:
+    """The (chosen, rejected) answers, from fixed paths or a label."""
+    if spec.chosen is not None:
+        assert spec.rejected is not None
+        chosen_path, rejected_path = spec.chosen, spec.rejected
+    else:
+        assert spec.responses is not None and spec.preferred is not None
+        winner = _winner(record, spec.preferred, spec.preferred_values)
+        chosen_path, rejected_path = spec.responses[winner], spec.responses[1 - winner]
+    chosen = ChatMessage(
+        "assistant", _text(chosen_path, record, required=True), reasoning=reasoning
+    )
+    rejected = ChatMessage("assistant", _text(rejected_path, record, required=True))
+    return chosen, rejected
+
+
+def _winner(record: dict[str, Any], path: Path, values: Mapping[str, int] | None) -> int:
+    label = path.get(record)
+    if label is MISSING or label is None:
+        raise _Missing(path.text)
+    key = label if isinstance(label, str) else json.dumps(label)
+    if values is not None:
+        if key not in values:
+            raise _Tie(key)
+        return values[key]
+    if isinstance(label, bool) or not isinstance(label, int) or label not in (0, 1):
+        raise _Tie(key)
+    return label
 
 
 def _reasoning(path: Path | None, obj: Any) -> str | None:

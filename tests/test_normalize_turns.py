@@ -52,3 +52,11 @@ def test_split_by_turns(tmp_path: Path) -> None:
     assert (s, m) == (2, 2)
     assert sum(1 for _ in single_out.open(encoding="utf-8")) == 2
     assert sum(1 for _ in multi_out.open(encoding="utf-8")) == 2
+
+
+def test_turns_counts_non_list_messages_as_zero(tmp_path) -> None:
+    from convmerge.normalize.turns import analyze_turn_distribution
+
+    p = tmp_path / "a.jsonl"
+    p.write_bytes(b'{"messages": 3}\n{"messages": true}\n{"messages": "x"}\n')
+    assert analyze_turn_distribution(p)["distribution"] == {0: 3}

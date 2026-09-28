@@ -22,7 +22,9 @@ TURN_MODES: tuple[str, ...] = ("pairs", "full")
 
 # Full-conversation role map: the classic labels plus LLaMA-Factory tool turns
 # (``function_call`` turns are decoded into assistant tool calls separately).
-_FULL_ROLE_MAP: dict[str, str] = {**_FROM_TO_ROLE, "observation": "tool", "tool": "tool"}
+_FULL_ROLE_MAP: dict[str, str] = {
+    **_FROM_TO_ROLE, "observation": "tool", "tool": "tool", "function-response": "tool",
+}  # fmt: skip
 
 
 def _normalize_role(from_key: str) -> str:

@@ -19,6 +19,7 @@ def download_hf_dataset(
     split: str | None = None,
     token: str | None = None,
     max_rows: int | None = None,
+    revision: str | None = None,
 ) -> Path:
     """Load a HuggingFace dataset and dump it to a JSONL file.
 
@@ -28,7 +29,8 @@ def download_hf_dataset(
 
     With ``max_rows`` the split is opened in streaming mode and only the first
     N rows are written, so nothing else is downloaded. Values JSON cannot
-    represent (e.g. decoded images) are written as strings.
+    represent (e.g. decoded images) are written as strings. ``revision`` (a
+    commit sha, tag, or branch) pins the dataset version.
     """
     try:
         from datasets import load_dataset
@@ -47,6 +49,8 @@ def download_hf_dataset(
     load_kwargs["split"] = split or "train"
     if token:
         load_kwargs["token"] = token
+    if revision:
+        load_kwargs["revision"] = revision
 
     if max_rows is None:
         ds = load_dataset(dataset_id, **load_kwargs)

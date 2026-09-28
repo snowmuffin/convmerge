@@ -9,6 +9,9 @@ Invalid JSON lines are skipped. Empty adapter output yields no output lines.
 
 ## Output formats (`--format`)
 
+`--format` defaults to `messages` (as in recipes). An unknown `--from` or
+`--format` name is a usage error (exit code 2) that suggests the closest name.
+
 ### `messages`
 
 OpenAI-style chat JSONL:
@@ -287,11 +290,13 @@ Tries, in order:
 1. Pairwise preference rows (`conversation_a` / `conversation_b` with optional `winner`).
    - Default `pairwise_mode="winner"` emits only the winning branch; ties/unknown are skipped.
    - `pairwise_mode="both"` emits both branches; `"a"` / `"b"` always pick one side.
-2. Chat-list containers named `messages`, `conversation`, or `conversations`.
+2. Chat-list containers named `messages`, `conversation`, or `conversations`
+   (also when the list is stored as a JSON string, as in
+   `microsoft/orca-agentinstruct-1M-v1`).
    - Both `{role, content}` and ShareGPT-style `{from, value}` entries work,
      as do Capybara-style `{input, output}` turn pairs.
    - A default role map normalizes `human → user`, `gpt/bing/bot/model → assistant`,
-     and `function/observation → tool`.
+     and `function/function-response/observation → tool`.
    - OpenAI-style content arrays are kept as content parts (text, and media by
      reference: `image_url`, `{"type": "image"}` placeholders, audio, video);
      text-only arrays collapse to a string. `tool_calls` (and the legacy
@@ -315,8 +320,9 @@ Tries, in order:
    does elsewhere).
 6. Fallback: flat question/answer keys — `instruction` / `question` / `prompt` /
    `problem` / `query`, optional `input` / `context`, and the first of `output` /
-   `response` / `completion` / `solution` / `answer` (so a full `solution` wins over
-   a short final `answer`) — with the `alpaca` adapter's `system` / `history` handling.
+   `response` / `completion` / `solution` / `answer` / `generated_solution` /
+   `generation` (so a full `solution` wins over a short final `answer`) — with the
+   `alpaca` adapter's `system` / `history` handling.
 
 You can override every part (`conversation_keys`, `role_keys`, `content_keys`,
 `role_map`, `instruction_keys`, `input_keys`, `output_keys`, `pairwise_mode`,
@@ -370,12 +376,17 @@ top-level `tools` list — whatever the source used:
 | Hermes `<tool_call>` / `<tool_response>` tags | `NousResearch/hermes-function-calling-v1` | each `<tool_call>` block becomes a call (text around it is kept); each `<tool_response>` block becomes its own `tool` turn; schemas from the `tools` column or the system prompt's `<tools>` block |
 | Glaive `system` + `chat` strings | `glaiveai/glaive-function-calling-v2` | `USER:` / `ASSISTANT:` / `FUNCTION RESPONSE:` turns; `<functioncall>` becomes a call; the function JSON in the system prompt moves to `tools` |
 | xLAM `query` / `answers` / `tools` | `Salesforce/xlam-function-calling-60k` | user query + one assistant turn with the calls |
+| Bracket calls `[Func Name(key="v", n=1), Other()]` + a JSON function list in the system prompt | `Team-ACE/ToolACE` | each call becomes a structured call; the listed functions become `tools`; the system prompt is kept as written |
+| `function-call` / `function-response` turns | `Locutusque/function-calling-chatml` | Glaive-style `{"name": ..., "arguments": '...'}` becomes a call; the function JSON in the system turn moves to `tools` |
 
 Hermes tags are decoded only in conversations that have a `tools` column, a
 `tool` turn, or a `<tools>` block in the system prompt, so ordinary text that
 mentions `<tool_call>` is left alone; a block that is not valid JSON stays in
-the text. The system prompt itself is kept as written. Tool calls get no
-invented ids (results pair with calls by order).
+the text. The system prompt itself is kept as written. Bracket calls are
+decoded only when every name is a function listed in the system prompt and
+every argument is a keyword with a literal value (parsed, never evaluated);
+anything else stays text. Tool calls get no invented ids (results pair with
+calls by order).
 
 ### Template-rendered `text`
 
@@ -418,12 +429,32 @@ convmerge convert -i aihub.jsonl -o out.jsonl --from map -f messages --adapter-k
 | Key | Meaning |
 |-----|---------|
 | `user`, `assistant` | Paths to a single exchange (flat mode). |
-| `chosen`, `rejected` | Instead of `assistant`: a preference pair (`--format preference`, or `--preference chosen` for SFT). |
+| `chosen`, `rejected` | Instead of `assistant`: a preference pair (`--format preference`, or `--preference chosen` for SFT). With `turns`, the pair answers the last turn. |
+| `responses`, `preferred` | Instead of `chosen` / `rejected`, when a label says which answer won: two answer paths and the path to the label. The label is the winner's index (0 or 1) unless `preferred_values` says otherwise. |
+| `preferred_values` | Label value (as written in JSON: `"1"`, `"-2"`, `"true"`) → index of the winning answer. A value not listed (a tie) drops the row as `no_preference`. |
 | `turns` | Path to the list of turns (turns mode). |
 | `role`, `content`, `name` | Paths inside each turn (defaults `role`, `content`). |
 | `role_map` | Extra role names: `{label: user \| assistant \| system \| tool}`. `human` / `gpt` / `bot` / `model` are known already. |
 | `reasoning` | The answer's reasoning trace (flat mode: from the record; turns mode: inside each assistant turn). |
 | `system`, `tools` | Paths from the record in both modes. |
+
+Preference data where a label picks the winner:
+
+```bash
+# PKU-SafeRLHF: better_response_id is the index of the better answer
+--from map -f preference --adapter-kwargs '{"map": {"user": "prompt",
+  "responses": ["response_0", "response_1"], "preferred": "better_response_id"}}'
+
+# SHP: labels is 1 when A is preferred
+--from map -f preference --adapter-kwargs '{"map": {"user": "history",
+  "responses": ["human_ref_A", "human_ref_B"], "preferred": "labels",
+  "preferred_values": {"1": 0, "0": 1}}}'
+
+# HelpSteer3: a conversation, then the sign of overall_preference (0 is a tie)
+--from map -f preference --adapter-kwargs '{"map": {"turns": "context",
+  "responses": ["response1", "response2"], "preferred": "overall_preference",
+  "preferred_values": {"-3": 0, "-2": 0, "-1": 0, "1": 1, "2": 1, "3": 1}}}'
+```
 
 Path syntax: `a.b` (keys), `a[0]` / `a[-1]` (one item), `a[]` (every
 item of a list; `a[].b[]` flattens nested lists), `a."b.c"` (a key with
@@ -470,7 +501,14 @@ that would train badly are **dropped by default** and counted by reason:
 | `unused_image` / `_video` / `_audio` | the record lists more media references than placeholders |
 | `preference_record` | a chosen/rejected record in an SFT conversion (use `--format preference` or `--preference chosen`) |
 | `map_path_missing` | a `--from map` path matched nothing in the record |
+| `no_preference` | a `--from map` `preferred` label names no winner (a tie) |
 | `unrepresentable_*` | the output format cannot hold the example losslessly (see the output formats above) |
+
+Lines that are not usable JSON are skipped and counted as `invalid_json`
+before any adapter runs: broken JSON, bytes that are not valid in
+`--encoding`, unpaired UTF-16 surrogate escapes (`"\ud800"`), and nesting too
+deep to parse. When nothing is written, `convert` prints a hint: run
+`normalize` first, use `--from auto`, or map the listed keys with `--from map`.
 
 Adapters skip blank turns (such as an empty system prompt) instead of
 failing the whole example. Tool calls without ids (LLaMA-Factory) are paired

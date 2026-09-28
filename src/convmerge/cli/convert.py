@@ -41,8 +41,8 @@ def _add_convert(sub: argparse._SubParsersAction) -> None:
         dest="output_format",
         default=None,
         metavar="FORMAT",
-        help="Output format: messages, alpaca, preference (DPO pairs); "
-        "optional if --preset sets it",
+        help="Output format: messages (default), alpaca, sharegpt, preference (DPO "
+        "pairs), sharegpt-preference; see `convmerge formats`",
     )
     p.add_argument(
         "--adapter-kwargs",
@@ -209,6 +209,9 @@ def _cmd_convert(args: argparse.Namespace) -> None:
         print(f"error: {e} (use --on-invalid drop or keep to continue)", file=sys.stderr)
         sys.exit(1)
     print(f"read {n_in} lines, wrote {n_out} examples", file=sys.stderr)
+    if n_out == 0:
+        for hint in _explain_empty(args.input, cfg.adapter, cfg.encoding, stats):
+            print(f"hint: {hint}", file=sys.stderr)
     if stats.reasoning:
         print(f"{stats.reasoning:,} examples carry a reasoning trace", file=sys.stderr)
     if stats.transforms:
@@ -230,6 +233,55 @@ def _cmd_convert(args: argparse.Namespace) -> None:
             "run `convmerge normalize` first to repair the file",
             file=sys.stderr,
         )
+
+
+# Rows sampled from the head of the file to explain an empty result.
+_EXPLAIN_ROWS = 50
+
+
+def _explain_empty(path: Path, adapter: str, encoding: str, stats: ConvertStats) -> list[str]:
+    """Why nothing was written, and what to run instead (best effort)."""
+    from convmerge.adapters.chat import iter_from_chat_line
+    from convmerge.io import iter_jsonl
+    from convmerge.normalize.jsonl import detect_jsonl_shape
+    from convmerge.validate import validate_example
+
+    if stats.lines_read == stats.blank:
+        return []
+    if stats.invalid_json or stats.non_object:
+        try:
+            shape = detect_jsonl_shape(path)
+        except (OSError, ValueError):
+            shape = "invalid"
+        if shape in ("json_array", "single_line", "jsonl_of_arrays"):
+            return [
+                f"the file is not one JSON object per line (looks like {shape}); "
+                f"run `convmerge normalize -i {path} -o <out.jsonl>` first"
+            ]
+    missing = {"no_messages", "no_user", "no_assistant"}
+    if not stats.no_example and not missing & set(stats.drop_reasons):
+        return []
+    rows = []
+    for line in iter_jsonl(path, encoding=encoding):
+        if isinstance(line.value, dict):
+            rows.append(line.value)
+            if len(rows) >= _EXPLAIN_ROWS:
+                break
+    if not rows:
+        return []
+    if adapter not in ("auto", "chat"):
+        ok = sum(
+            1 for row in rows if any(not validate_example(ex) for ex in iter_from_chat_line(row))
+        )
+        if ok:
+            return [f"{ok} of the first {len(rows)} rows convert with --from auto"]
+    keys = ", ".join(list(rows[0])[:12])
+    return [
+        f"no conversation fields recognised; the first row has keys: {keys}",
+        "map them with --from map --adapter-kwargs "
+        '\'{"map": {"user": "<field>", "assistant": "<field>"}}\' '
+        "(`convmerge inspect` lists every field)",
+    ]
 
 
 def _emit_overrides(args: argparse.Namespace) -> dict[str, object]:

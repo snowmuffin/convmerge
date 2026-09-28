@@ -9,7 +9,7 @@ from convmerge.adapters.alpaca import iter_from_alpaca_line
 from convmerge.adapters.chat import iter_from_chat_line
 from convmerge.adapters.sharegpt import iter_from_sharegpt_line
 from convmerge.models import TrainingExample
-from convmerge.plugins import ADAPTER_GROUP, load_entry_points
+from convmerge.plugins import ADAPTER_GROUP, load_entry_points, unknown_name_message
 
 AdapterFn = Callable[[dict[str, Any]], Iterator[TrainingExample]]
 
@@ -59,6 +59,5 @@ def get_adapter(name: str) -> AdapterFn:
     if name not in ADAPTERS:
         load_entry_points(ADAPTER_GROUP, ADAPTERS)
     if name not in ADAPTERS:
-        known = ", ".join(sorted(ADAPTERS))
-        raise ValueError(f"Unknown adapter {name!r}. Choose one of: {known}")
+        raise ValueError(unknown_name_message("adapter", name, list(ADAPTERS)))
     return ADAPTERS[name]

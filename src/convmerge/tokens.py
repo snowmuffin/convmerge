@@ -134,6 +134,16 @@ class TokenStats:
                 "the template fails on null content: convert with --tool-content empty "
                 "(the default since convmerge 0.12)"
             )
+        if 'not "dict"' in errors or "'dict object'" in errors:
+            out.append(
+                "the template expects tool-call arguments as a JSON string: convert with "
+                "--tool-arguments string"
+            )
+        if "'str object' has no attribute 'items'" in errors:
+            out.append(
+                "the template expects tool-call arguments as an object: convert with "
+                "--tool-arguments object"
+            )
         if self.double_encoded_arguments:
             out.append(
                 "tool-call arguments are encoded twice: convert with --tool-arguments object"
