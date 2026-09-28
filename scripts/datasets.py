@@ -44,7 +44,7 @@ def load_catalog() -> list[dict[str, Any]]:
 
 
 def flags(entry: dict[str, Any]) -> str:
-    out = f"--from auto --format {entry['format']}"
+    out = f"--from {entry.get('adapter', 'auto')} --format {entry['format']}"
     if entry.get("preference"):
         out += f" --preference {entry['preference']}"
     for key, value in entry.get("emit", {}).items():
@@ -60,7 +60,7 @@ def convert_config(entry: dict[str, Any]) -> Any:
 
     kwargs = entry.get("adapter_kwargs")
     return build_convert_config(
-        adapter="auto",
+        adapter=entry.get("adapter", "auto"),
         output_format=entry["format"],
         preference=entry.get("preference"),
         emit_overrides=entry.get("emit") or None,

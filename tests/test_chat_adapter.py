@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+import json
+
+import pytest
+
 from convmerge.adapters import ADAPTERS
 from convmerge.adapters.chat import iter_from_chat_line
 
@@ -137,3 +141,17 @@ def test_text_taken_with_partial_alpaca_warns(caplog) -> None:
         out = list(iter_from_chat_line(record))
     assert out[0].meta["source"] == "chat:text"
     assert any("text" in r.message for r in caplog.records)
+
+
+def test_messages_stored_as_a_json_string() -> None:
+    record = {"messages": json.dumps([{"role": "user", "content": "q"},
+                                      {"role": "assistant", "content": "a"}])}  # fmt: skip
+    (ex,) = list(iter_from_chat_line(record))
+    assert [m.content for m in ex.messages] == ["q", "a"]
+    assert list(iter_from_chat_line({"messages": "[not json"})) == []
+
+
+@pytest.mark.parametrize("answer_key", ["generation", "generated_solution"])
+def test_more_answer_field_names(answer_key: str) -> None:
+    (ex,) = list(iter_from_chat_line({"instruction": "q", answer_key: "a"}))
+    assert ex.messages[-1].content == "a"

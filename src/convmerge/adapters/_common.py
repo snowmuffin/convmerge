@@ -16,11 +16,19 @@ from collections.abc import Iterable
 from dataclasses import replace
 from typing import Any
 
-from convmerge.adapters.tool_formats import hermes_tools, rewrite_hermes, uses_hermes_tags
+from convmerge.adapters.tool_formats import (
+    glaive_call_object,
+    hermes_tools,
+    looks_like_bracket_calls,
+    rewrite_bracket_calls,
+    rewrite_hermes,
+    system_tool_specs,
+    uses_hermes_tags,
+)
 from convmerge.models import ChatMessage, ContentPart, ToolCall, TrainingExample
 
 # Raw role labels whose *value* is a JSON function call (LLaMA-Factory style).
-FUNCTION_CALL_ROLES: frozenset[str] = frozenset({"function_call"})
+FUNCTION_CALL_ROLES: frozenset[str] = frozenset({"function_call", "function-call"})
 
 # Part ``type`` values (OpenAI, vLLM, HF chat templates) → our media type.
 _PART_MEDIA_TYPES: dict[str, str] = {
@@ -133,7 +141,8 @@ def function_call_value(value: Any) -> list[ToolCall] | None:
         try:
             value = json.loads(value)
         except ValueError:
-            return None
+            call = glaive_call_object(value)
+            return [call] if call is not None else None
     items = value if isinstance(value, list) else [value]
     calls: list[ToolCall] = []
     for obj in items:
@@ -312,7 +321,8 @@ def build_example(
 ) -> TrainingExample:
     """Wrap turns in a :class:`TrainingExample`, attaching the record-level
     ``system`` / ``tools`` / media columns and decoding Hermes-style
-    ``<tool_call>`` / ``<tool_response>`` tags (see
+    ``<tool_call>`` / ``<tool_response>`` tags, ``[f(a=1)]`` bracket calls,
+    and function specs written into the system turn (see
     :mod:`convmerge.adapters.tool_formats`)."""
     msgs = with_system(msgs, record)
     tools = record.get("tools")
@@ -320,6 +330,10 @@ def build_example(
         msgs = rewrite_hermes(msgs)
         if tools is None:
             tools = hermes_tools(msgs)
+    if tools is None and looks_like_bracket_calls(msgs):
+        msgs, tools = rewrite_bracket_calls(msgs)
+    if tools is None and any(m.tool_calls for m in msgs):
+        msgs, tools = system_tool_specs(msgs)
     msgs, issues = attach_media(msgs, record)
     return TrainingExample(
         messages=msgs,

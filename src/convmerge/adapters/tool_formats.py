@@ -17,6 +17,14 @@ sees ordinary tool calls:
   ``<functioncall> {...}``.
 - **xLAM** (``Salesforce/xlam-function-calling-60k``): ``query``, ``answers``
   (the calls, as a JSON string) and ``tools`` (JSON string).
+- **Bracket calls** (``Team-ACE/ToolACE``): assistant turns that are only
+  ``[Func Name(key="value", n=1), Other()]``, with the functions listed as a
+  JSON array in the system prompt. A turn is rewritten only when every name
+  is one of those functions; the system prompt is kept as it is.
+- **Function-call turns** (``Locutusque/function-calling-chatml``):
+  ``function-call`` turns holding Glaive-style ``{"name": ..., "arguments":
+  '...'}`` and ``function-response`` turns; the function specs written into
+  the system turn move to ``tools``.
 
 Tool calls get no invented ids (like LLaMA-Factory ``function_call`` turns);
 ``tool`` turns carry the function ``name`` when the source gives it.
@@ -24,6 +32,7 @@ Tool calls get no invented ids (like LLaMA-Factory ``function_call`` turns);
 
 from __future__ import annotations
 
+import ast
 import json
 import re
 from dataclasses import replace
@@ -184,11 +193,154 @@ def _glaive_call(text: str) -> ToolCall | None:
         return None
     from convmerge.adapters._common import function_call_value
 
-    match = _GLAIVE_CALL.match(text)
-    if match:  # arguments quoted as a JSON string inside single quotes
-        return ToolCall.from_any(match.group(1), match.group(2))
     calls = function_call_value(text[len("<functioncall>") :].strip())
     return calls[0] if calls else None
+
+
+def glaive_call_object(text: str) -> ToolCall | None:
+    """``{"name": "f", "arguments": '{...}'}``: JSON except for the single quotes."""
+    match = _GLAIVE_CALL.match("<functioncall>" + text.strip())
+    return ToolCall.from_any(match.group(1), match.group(2)) if match else None
+
+
+def system_tool_specs(messages: list[ChatMessage]) -> tuple[list[ChatMessage], list[Any] | None]:
+    """Move function specs written into the system turn (Glaive style) to ``tools``."""
+    for i, m in enumerate(messages):
+        if m.role == "system" and isinstance(m.content, str) and "{" in m.content:
+            text, tools = _glaive_system(m.content)
+            if tools:
+                return [*messages[:i], replace(m, content=text), *messages[i + 1 :]], tools
+    return messages, None
+
+
+# --- Bracket calls (ToolACE) --------------------------------------------------
+
+
+def looks_like_bracket_calls(messages: list[ChatMessage]) -> bool:
+    """Cheap test: an assistant turn that is only ``[...(...)]``."""
+    for m in messages:
+        if m.role == "assistant" and isinstance(m.content, str):
+            text = m.content.strip()
+            if text.startswith("[") and text.endswith(")]"):
+                return True
+    return False
+
+
+def rewrite_bracket_calls(
+    messages: list[ChatMessage],
+) -> tuple[list[ChatMessage], list[Any] | None]:
+    """Turn ``[f(a=1), g()]`` assistant turns into tool calls.
+
+    The functions come from a JSON array of ``{"name": ...}`` objects in the
+    system prompt; without one, or when a name or argument does not parse,
+    the turn is left as text.
+    """
+    tools = _system_function_list(messages)
+    if not tools:
+        return messages, None
+    names = {t["name"] for t in tools}
+    out: list[ChatMessage] = []
+    for m in messages:
+        calls = None
+        if m.role == "assistant" and isinstance(m.content, str) and not m.tool_calls:
+            calls = parse_bracket_calls(m.content, names)
+        out.append(replace(m, content=None, tool_calls=tuple(calls)) if calls else m)
+    return out, tools
+
+
+def _system_function_list(messages: list[ChatMessage]) -> list[dict[str, Any]] | None:
+    decoder = json.JSONDecoder()
+    for m in messages:
+        if m.role != "system" or not isinstance(m.content, str):
+            continue
+        text = m.content
+        pos = text.find("[{")
+        while pos >= 0:
+            try:
+                value, _ = decoder.raw_decode(text, pos)
+            except ValueError:
+                value = None
+            if (
+                isinstance(value, list)
+                and value
+                and all(isinstance(t, dict) and isinstance(t.get("name"), str) for t in value)
+            ):
+                return value
+            pos = text.find("[{", pos + 2)
+    return None
+
+
+def parse_bracket_calls(text: str, names: set[str]) -> list[ToolCall] | None:
+    """``[Name(k=v, ...), ...]`` with every name in ``names``, else ``None``."""
+    s = text.strip()
+    if not (s.startswith("[") and s.endswith("]")):
+        return None
+    body, pos, calls = s[1:-1], 0, []
+    while pos < len(body):
+        while pos < len(body) and body[pos] in " \n\t,":
+            pos += 1
+        if pos >= len(body):
+            break
+        paren = body.find("(", pos)
+        if paren < 0:
+            return None
+        name = body[pos:paren].strip()
+        end = _closing_paren(body, paren)
+        if name not in names or end is None:
+            return None
+        kwargs = _keyword_arguments(body[paren + 1 : end])
+        if kwargs is None:
+            return None
+        calls.append(ToolCall.from_any(name, kwargs))
+        pos = end + 1
+    return calls or None
+
+
+def _closing_paren(text: str, start: int) -> int | None:
+    depth, quote, i = 0, "", start
+    while i < len(text):
+        c = text[i]
+        if quote:
+            if c == "\\":
+                i += 1
+            elif c == quote:
+                quote = ""
+        elif c in "\"'":
+            quote = c
+        elif c in "([{":
+            depth += 1
+        elif c in ")]}":
+            depth -= 1
+            if depth == 0:
+                return i if c == ")" else None
+        i += 1
+    return None
+
+
+_JSON_NAMES = {"true": True, "false": False, "null": None}
+
+
+def _keyword_arguments(args: str) -> dict[str, Any] | None:
+    """``a=1, b="x"`` as a dict of literals (parsed, never evaluated)."""
+    try:
+        call = ast.parse(f"f({args})", mode="eval").body
+    except (SyntaxError, ValueError, RecursionError, MemoryError):
+        return None
+    if not isinstance(call, ast.Call) or call.args:
+        return None
+    out: dict[str, Any] = {}
+    for kw in call.keywords:
+        if kw.arg is None:
+            return None
+        node = kw.value
+        if isinstance(node, ast.Name) and node.id in _JSON_NAMES:
+            out[kw.arg] = _JSON_NAMES[node.id]
+            continue
+        try:
+            out[kw.arg] = ast.literal_eval(node)
+        except (ValueError, TypeError, SyntaxError, RecursionError, MemoryError):
+            return None
+    return out
 
 
 # --- xLAM --------------------------------------------------------------------

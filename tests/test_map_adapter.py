@@ -168,3 +168,68 @@ def test_map_without_spec_is_a_config_error(tmp_path: Path, capsys) -> None:
               "--from", "map", "--format", "messages"])  # fmt: skip
     assert e.value.code == 2
     assert "needs a field mapping" in capsys.readouterr().err
+
+
+# --- preference pairs picked by a label -------------------------------------
+
+PKU = {"prompt": "P", "response_0": "R0", "response_1": "R1", "better_response_id": 1}
+PKU_MAP = {"user": "prompt", "responses": ["response_0", "response_1"],
+           "preferred": "better_response_id"}  # fmt: skip
+SHP_MAP = {"user": "history", "responses": ["human_ref_A", "human_ref_B"],
+           "preferred": "labels", "preferred_values": {"1": 0, "0": 1}}  # fmt: skip
+HS3_MAP = {"turns": "context", "responses": ["response1", "response2"],
+           "preferred": "overall_preference",
+           "preferred_values": {"-3": 0, "-2": 0, "-1": 0, "1": 1, "2": 1, "3": 1}}  # fmt: skip
+
+
+def test_label_picks_the_winner() -> None:
+    ex = _one(PKU, PKU_MAP)
+    assert ex.messages[-1].content == "R1" and ex.rejected[-1].content == "R0"
+    assert _one({**PKU, "better_response_id": 0}, PKU_MAP).messages[-1].content == "R0"
+
+    shp = {"history": "H", "human_ref_A": "A", "human_ref_B": "B", "labels": 1}
+    assert _one(shp, SHP_MAP).messages[-1].content == "A"
+    assert _one({**shp, "labels": 0}, SHP_MAP).messages[-1].content == "B"
+
+
+def test_label_pair_after_a_conversation_and_ties() -> None:
+    record = {
+        "context": [{"role": "user", "content": "q"}, {"role": "assistant", "content": "a"},
+                    {"role": "user", "content": "q2"}],
+        "response1": "r1", "response2": "r2", "overall_preference": 2,
+    }  # fmt: skip
+    ex = _one(record, HS3_MAP)
+    assert [m.content for m in ex.messages] == ["q", "a", "q2", "r2"]
+    assert ex.rejected[-1].content == "r1"
+    assert _one(record, HS3_MAP, preference="chosen").rejected is None
+    tie = _one({**record, "overall_preference": 0}, HS3_MAP)
+    assert tie.issues == ["no_preference"]
+    assert _one({"prompt": "P", "response_0": "a", "response_1": "b"}, PKU_MAP).issues == [
+        "map_path_missing"
+    ]
+
+
+@pytest.mark.parametrize(
+    ("mapping", "error"),
+    [
+        ({"user": "p", "responses": ["a"], "preferred": "l"}, "two paths"),
+        ({"user": "p", "responses": ["a", "b"]}, "go together"),
+        ({**PKU_MAP, "preferred_values": {"1": 2}}, "0 or 1"),
+        ({**PKU_MAP, "chosen": "a", "rejected": "b"}, "not both"),
+        ({**PKU_MAP, "assistant": "x"}, "cannot be combined"),
+    ],
+)
+def test_label_pair_spec_errors(mapping: dict, error: str) -> None:
+    with pytest.raises(ValueError, match=error):
+        MapSpec.from_mapping(mapping)
+
+
+def test_label_pair_round_trips_and_converts(tmp_path: Path) -> None:
+    assert MapSpec.from_mapping(SHP_MAP).to_mapping() == SHP_MAP
+    src = tmp_path / "in.jsonl"
+    src.write_text(json.dumps(PKU) + "\n", encoding="utf-8")
+    out = tmp_path / "out.jsonl"
+    main(["convert", "-i", str(src), "-o", str(out), "--from", "map", "-f", "preference",
+          "--adapter-kwargs", json.dumps({"map": PKU_MAP})])  # fmt: skip
+    row = json.loads(out.read_text(encoding="utf-8"))
+    assert (row["chosen"][0]["content"], row["rejected"][0]["content"]) == ("R1", "R0")
