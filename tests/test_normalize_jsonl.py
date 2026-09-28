@@ -11,7 +11,6 @@ from convmerge.lfs import LfsPointerError
 from convmerge.normalize.jsonl import (
     detect_jsonl_shape,
     iter_json_records,
-    load_jsonl,
     normalize_to_jsonl,
 )
 
@@ -52,7 +51,7 @@ def test_lfs_pointer_is_rejected_before_jsonl_parsing(tmp_path: Path) -> None:
     with pytest.raises(LfsPointerError, match="mode: clone and lfs: true"):
         detect_jsonl_shape(p)
     with pytest.raises(LfsPointerError, match="mode: clone and lfs: true"):
-        load_jsonl(p)
+        normalize_to_jsonl(p, tmp_path / "out.jsonl")
     with pytest.raises(LfsPointerError, match="mode: clone and lfs: true"):
         list(iter_json_records(p))
 
@@ -79,12 +78,6 @@ def test_normalize_valid_jsonl_passthrough(tmp_path: Path) -> None:
     dst = tmp_path / "out.jsonl"
     n = normalize_to_jsonl(src, dst)
     assert n == 2
-
-
-def test_load_jsonl_skips_blank_lines(tmp_path: Path) -> None:
-    p = _write(tmp_path / "a.jsonl", '{"a":1}\n\n{"a":2}\n')
-    rows = load_jsonl(p)
-    assert rows == [{"a": 1}, {"a": 2}]
 
 
 def test_iter_json_records_handles_json_single_object(tmp_path: Path) -> None:
@@ -118,26 +111,6 @@ def test_normalize_jsonl_rejects_trailing_comma_with_file_and_line(tmp_path: Pat
     assert "bad.jsonl" in message
     assert "line 1" in message
     assert "trailing comma" in message
-
-
-# --- issue #15: load_jsonl on_error ---------------------------------------
-
-
-def test_load_jsonl_default_discards_file_on_bad_line(tmp_path: Path) -> None:
-    p = _write(tmp_path / "a.jsonl", '{"a":1}\nnot json\n{"a":2}\n')
-    # Default behavior is preserved (one bad line discards the whole file), but deprecated.
-    with pytest.warns(DeprecationWarning, match="load_jsonl"):
-        assert load_jsonl(p) == []
-
-
-def test_load_jsonl_skip_keeps_valid_rows(tmp_path: Path) -> None:
-    p = _write(tmp_path / "a.jsonl", '{"a":1}\nnot json\n{"a":2}\n')
-    assert load_jsonl(p, on_error="skip") == [{"a": 1}, {"a": 2}]
-
-
-def test_load_jsonl_skip_with_all_valid_lines(tmp_path: Path) -> None:
-    p = _write(tmp_path / "a.jsonl", '{"a":1}\n{"a":2}\n')
-    assert load_jsonl(p, on_error="skip") == [{"a": 1}, {"a": 2}]
 
 
 # --- issue #16: pretty-printed JSON array detection ------------------------

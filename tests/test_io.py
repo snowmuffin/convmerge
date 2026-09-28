@@ -59,19 +59,6 @@ def test_convert_accepts_bom_prefixed_file(tmp_path: Path) -> None:
     assert (stats.written, stats.invalid_json) == (1, 0)
 
 
-def test_load_jsonl_logs_to_logger_not_stdout(tmp_path: Path, capsys, caplog) -> None:
-    from convmerge.normalize.jsonl import load_jsonl
-
-    p = _write(tmp_path / "a.jsonl", '{"a": 1}\n{bad\n{"b": 2}\n')
-    assert load_jsonl(p, on_error="skip") == [{"a": 1}, {"b": 2}]
-    with pytest.warns(DeprecationWarning, match="iter_jsonl"):
-        assert load_jsonl(p) == []
-    assert capsys.readouterr().out == ""
-    messages = [r.getMessage() for r in caplog.records]
-    assert any("[JSONL SKIP]" in m and "line 2" in m for m in messages)
-    assert any("[JSONL ERROR]" in m and "line 2" in m for m in messages)
-
-
 def test_turns_reports_invalid_line_number(tmp_path: Path) -> None:
     from convmerge.normalize.turns import analyze_turn_distribution
 

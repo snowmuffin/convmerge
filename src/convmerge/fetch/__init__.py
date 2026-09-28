@@ -14,7 +14,6 @@ need one HF dataset, call ``datasets.load_dataset`` directly.
 
 from __future__ import annotations
 
-from convmerge._deprecation import deprecated_names
 from convmerge.fetch.auth import AuthConfig, TokenSpec
 from convmerge.fetch.manifest import DatasetEntry, Defaults, Manifest, load_manifest
 from convmerge.fetch.runner import FetchResult, run_manifest
@@ -29,15 +28,3 @@ __all__ = [
     "load_manifest",
     "run_manifest",
 ]
-
-_INTERNAL = "it is an internal helper"
-
-__getattr__ = deprecated_names(
-    __name__,
-    {
-        "classify_entry": ("convmerge.fetch.manifest:classify_entry", _INTERNAL),
-        "sanitize_name": ("convmerge.fetch.manifest:sanitize_name", _INTERNAL),
-        "redact_url": ("convmerge.fetch.auth:redact_url", _INTERNAL),
-        "resolve_token": ("convmerge.fetch.auth:resolve_token", _INTERNAL),
-    },
-)

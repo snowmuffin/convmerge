@@ -9,7 +9,6 @@ from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, TextIO
 
-from convmerge._deprecation import deprecated_names
 from convmerge.adapter_resolve import resolve_adapter
 from convmerge.config import AdapterOptions, ConvertConfig
 from convmerge.emitters import (
@@ -541,35 +540,3 @@ def convert_with_config(
             transform_options if transform_options is not None else cfg.transform_options
         ),
     )
-
-
-def _iter_converted_lines(
-    lines: Iterator[str],
-    *,
-    adapter_name: str,
-    output_format: str,
-    adapter_options: AdapterOptions | None = None,
-) -> Iterator[str]:
-    """In-memory conversion (for tests); no validation."""
-    adapter = resolve_adapter(adapter_name, adapter_options)
-    emitter = get_emitter(output_format)
-    for raw in lines:
-        raw = raw.strip()
-        if not raw:
-            continue
-        obj = json.loads(raw)
-        if not isinstance(obj, dict):
-            continue
-        for example in adapter(obj):
-            yield json.dumps(emitter(example), ensure_ascii=False)
-
-
-__getattr__ = deprecated_names(
-    __name__,
-    {
-        "iter_converted_lines": (
-            "convmerge.convert:_iter_converted_lines",
-            "use convert_file() or an adapter plus emitter directly",
-        )
-    },
-)

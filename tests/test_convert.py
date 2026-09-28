@@ -3,10 +3,29 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterator
 from pathlib import Path
 
+from convmerge.adapter_resolve import resolve_adapter
 from convmerge.config import AdapterOptions, ChatAdapterOptions
-from convmerge.convert import _iter_converted_lines, convert_file
+from convmerge.convert import convert_file
+from convmerge.emitters import get_emitter
+
+
+def _iter_converted_lines(
+    lines: Iterator[str],
+    *,
+    adapter_name: str,
+    output_format: str,
+    adapter_options: AdapterOptions | None = None,
+) -> Iterator[str]:
+    """Adapter then emitter on in-memory lines, without validation."""
+    adapter = resolve_adapter(adapter_name, adapter_options)
+    emitter = get_emitter(output_format)
+    for raw in lines:
+        obj = json.loads(raw)
+        for example in adapter(obj):
+            yield json.dumps(emitter(example), ensure_ascii=False)
 
 
 def test_iter_chat_pairwise_both() -> None:
