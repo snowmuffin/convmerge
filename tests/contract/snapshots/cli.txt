@@ -116,6 +116,7 @@
   --lfs (switch)
   --split
   --config
+  --revision
 [convmerge preset]
 [convmerge preset init]
   -o, --output

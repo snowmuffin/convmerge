@@ -7,6 +7,76 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-09-28
+
+Fixes from an evaluation of 0.14 against community pain points, 34
+uncatalogued Hub datasets, a 1M-row benchmark, and fuzzing: bad input no
+longer stops a run, `convert` explains itself, and more real layouts convert.
+
+### Added
+
+- `--from map` picks the winner of a preference pair from a label:
+  `responses` (two answer paths), `preferred` (the label path), and
+  `preferred_values` (label value → winner index). This covers
+  PKU-SafeRLHF, SHP, and HelpSteer3; ties are dropped as `no_preference`.
+  `chosen` / `rejected` and the new keys also work after a list of `turns`.
+- The auto adapter reads:
+  - ToolACE bracket calls (`[Func Name(key="v"), Other()]`), when every name
+    is a function listed in the system prompt; the functions become `tools`.
+  - `function-call` / `function-response` turns with Glaive-style
+    arguments (`Locutusque/function-calling-chatml`); function specs in the
+    system turn move to `tools`.
+  - `messages` stored as a JSON string (`microsoft/orca-agentinstruct-1M-v1`).
+  - `generation` (distilabel) and `generated_solution` (OpenMathInstruct)
+    answers.
+- `convert` prints a hint when it writes nothing: run `normalize` first,
+  use `--from auto`, or map the listed keys with `--from map`.
+- `tokens` says which `--tool-arguments` encoding a template needs
+  (`string` for DeepSeek-V3, `object` for GLM-4).
+- Hugging Face fetches take a `revision` (commit sha, tag, or branch): in
+  manifests, recipe `fetch` sources, and `fetch hf://... --revision`. It is
+  recorded in the resume marker.
+- Eight datasets join the tested catalog (52 in all), including the three
+  `--from map` preference sets; catalog entries can name an adapter.
+- `scripts/eval/`: the evaluation harness (pain-point scenarios, benchmark,
+  fuzzing, docs check, end-to-end training, uncatalogued-dataset coverage).
+
+### Changed
+
+- `--format` defaults to `messages`, as in recipes.
+- An unknown `--from` or `--format` name is a usage error (exit code 2) that
+  suggests the closest name, instead of a traceback.
+- Lines with bytes invalid in `--encoding`, unpaired surrogate escapes
+  (`"\ud800"`), or nesting too deep to parse are skipped and counted as
+  `invalid_json` by every command that reads JSONL, instead of stopping the
+  run. Reading costs about 10% more parse time for this check (about 1% of a
+  `convert` run).
+- `normalize` accepts a BOM on single-line files, reports undecodable or
+  truncated input with the file name instead of a traceback, and keeps
+  unpaired surrogates as `\uXXXX` escapes. `turns` prints read errors
+  instead of a traceback.
+
+### Fixed
+
+- `turns` no longer crashes on rows whose `messages` is not a list.
+- The `dedupe` MD5 digest is marked `usedforsecurity=False`, so it works
+  on FIPS-mode Python.
+- The fetch User-Agent carries the installed version (it said 0.7).
+
+### Docs
+
+- `docs/quality.md` gives measured `dedupe --near` memory: about 3.5 KB per
+  row with the default 128 permutations, 2 KB with `--num-perm 64`.
+- Python 3.13 is tested in CI and listed in the classifiers.
+
+### Stability
+
+- Additive only. `JsonlDecodeError` accepts a message string as `error`,
+  `MapSpec` gains `responses`, `preferred`, and `preferred_values`,
+  `DatasetEntry` gains `revision`, `download_hf_dataset` gains `revision`,
+  and `fetch` gains `--revision`. Recipe lock fingerprints are unchanged
+  unless a `revision` is set.
+
 ## [0.14.0] - 2026-09-28
 
 Quality checks before training: rule-based filtering, benchmark

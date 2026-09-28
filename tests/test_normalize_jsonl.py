@@ -187,8 +187,8 @@ def test_normalize_single_line_with_bom_and_crlf(tmp_path: Path) -> None:
     ("data", "match"),
     [
         (b'{"a": "\xff"}\n{"a": 1}\n', "invalid utf-8 bytes"),
-        (b'{"a": 1}\n' + b"[" * 5000 + b"]" * 5000 + b"\n", "nested too deeply"),
-        (b"[" * 5000 + b"]" * 5000, "nested too deeply"),
+        (b'{"a": 1}\n' + b"[" * 100_000 + b"]" * 100_000 + b"\n", "nested too deeply"),
+        (b"[" * 100_000 + b"]" * 100_000, "nested too deeply"),
         (b'[{"a": "\xff"}]', "can't decode"),
         (b'{"messages": [{"role": "user", "content": "q"}, {"role": "assis', "not JSON"),
     ],

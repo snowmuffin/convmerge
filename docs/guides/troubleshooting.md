@@ -16,6 +16,8 @@ convmerge tokens -i train.jsonl --tokenizer <model> --max-tokens <trainer max le
 | `System role not supported` (Gemma 2) | `template_errors` | `--system fold` (or `--system drop`) |
 | `argument of type 'NoneType' is not iterable`, `can only concatenate str (not "NoneType")`, `unsupported operand ... 'NoneType'` on tool-call rows | `template_errors` | `--tool-content empty`, the default since 0.12; files converted with 0.11 or earlier have `"content": null` |
 | Tool arguments show up as `"{\"city\": ...}"` in the prompt | `double_encoded_arguments` | `--tool-arguments object` |
+| `can only concatenate str (not "dict") to str` on tool-call rows (DeepSeek-V3) | `template_errors` | `--tool-arguments string` |
+| `'str object' has no attribute 'items'` on tool-call rows (GLM-4) | `template_errors` | `--tool-arguments object` |
 | The model never stops generating | `missing_eos`, `stop_tokens` | Make the tokenizer's `eos_token` (or `generation_config.json` `eos_token_id`) the template's end-of-turn token. A classic case is a base model whose eos is `<\|endoftext\|>` trained with a ChatML template that ends turns with `<\|im_end\|>`. |
 | Loss is 0 or does not move with TRL `assistant_only_loss` | `generation_tags: false` | Use a chat template with `{% generation %}` markers; see also `answer_beyond_limit` |
 | Rows train on nothing after truncation | `answer_beyond_limit` (with `--max-tokens`) | Filter with `tokens --max-tokens N -o fit.jsonl`, or raise the trainer's max length |
