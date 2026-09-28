@@ -492,6 +492,56 @@
   }
  },
  {
+  "id": "microsoft/orca-agentinstruct-1M-v1",
+  "kind": "sft",
+  "shape": "messages as a JSON string",
+  "config": null,
+  "split": "creative_content",
+  "format": "messages",
+  "record": {
+   "messages": "[{\"role\": \"system\", \"content\": \"\"}, {\"role\": \"user\", \"content\": \"Write a short poem about tides.\"}, {\"role\": \"assistant\", \"content\": \"The sea breathes in, the sea breathes out.\"}]"
+  }
+ },
+ {
+  "id": "nvidia/OpenMathInstruct-2",
+  "kind": "sft",
+  "shape": "problem / generated_solution",
+  "config": null,
+  "split": "train_1M",
+  "format": "messages",
+  "record": {
+   "problem": "What is 7 times 8?",
+   "generated_solution": "7 times 8 is \\boxed{56}.",
+   "expected_answer": "56",
+   "problem_source": "augmented_gsm8k"
+  }
+ },
+ {
+  "id": "facebook/natural_reasoning",
+  "kind": "sft",
+  "shape": "question + responses[] list",
+  "config": null,
+  "split": "train",
+  "format": "messages",
+  "adapter": "map",
+  "adapter_kwargs": {
+   "map": {
+    "user": "question",
+    "assistant": "responses[0].response"
+   }
+  },
+  "record": {
+   "question": "Why does ice float on water?",
+   "reference_answer": "It is less dense.",
+   "responses": [
+    {
+     "response_model": "Llama-3.3-70B-Instruct",
+     "response": "Ice is less dense than liquid water, so it floats."
+    }
+   ]
+  }
+ },
+ {
   "id": "open-thoughts/OpenThoughts3-1.2M",
   "kind": "reasoning",
   "shape": "ShareGPT, inline `<think>`",
@@ -735,6 +785,69 @@
   }
  },
  {
+  "id": "Team-ACE/ToolACE",
+  "kind": "tools",
+  "shape": "[Func(k=v)] calls, functions in the system prompt",
+  "config": null,
+  "split": "train",
+  "format": "messages",
+  "record": {
+   "system": "You are an expert in composing functions. You are given a question and a set of possible functions. Here is a list of functions in JSON format that you can invoke: [{\"name\": \"Market Trends API\", \"description\": \"Get the latest market trends.\", \"parameters\": {\"type\": \"dict\", \"properties\": {\"trend_type\": {\"description\": \"Trend type.\", \"type\": \"string\"}, \"country\": {\"description\": \"Country code.\", \"type\": \"string\", \"default\": \"us\"}}, \"required\": [\"trend_type\"]}, \"required\": null}].  Should you decide to return the function call(s).  Put it in the format of [func1(params_name=params_value, params_name2=params_value2...), func2(params)]  NO other text MUST be included. ",
+   "conversations": [
+    {
+     "from": "user",
+     "value": "What are the market trends in the US?"
+    },
+    {
+     "from": "assistant",
+     "value": "[Market Trends API(trend_type=\"MARKET_INDEXES\", country=\"us\")]"
+    },
+    {
+     "from": "tool",
+     "value": "[{\"name\": \"Market Trends API\", \"results\": {\"trends\": []}}]"
+    },
+    {
+     "from": "assistant",
+     "value": "No notable trends right now."
+    }
+   ]
+  }
+ },
+ {
+  "id": "Locutusque/function-calling-chatml",
+  "kind": "tools",
+  "shape": "function-call / function-response turns",
+  "config": null,
+  "split": "train",
+  "format": "messages",
+  "record": {
+   "system_message": "You are a helpful assistant with access to the following functions. Use them if required -",
+   "function_description": "{\n    \"name\": \"get_news_headlines\",\n    \"description\": \"Get the latest news headlines\",\n    \"parameters\": {\n        \"type\": \"object\",\n        \"properties\": {\n            \"country\": {\n                \"type\": \"string\",\n                \"description\": \"The country for which to fetch news\"\n            }\n        },\n        \"required\": [\n            \"country\"\n        ]\n    }\n}",
+   "conversations": [
+    {
+     "from": "system",
+     "value": "You are a helpful assistant with access to the following functions. Use them if required -{\n    \"name\": \"get_news_headlines\",\n    \"description\": \"Get the latest news headlines\",\n    \"parameters\": {\n        \"type\": \"object\",\n        \"properties\": {\n            \"country\": {\n                \"type\": \"string\",\n                \"description\": \"The country for which to fetch news\"\n            }\n        },\n        \"required\": [\n            \"country\"\n        ]\n    }\n}"
+    },
+    {
+     "from": "human",
+     "value": "Latest news for France?"
+    },
+    {
+     "from": "function-call",
+     "value": "{\"name\": \"get_news_headlines\", \"arguments\": '{\"country\": \"France\"}'}"
+    },
+    {
+     "from": "function-response",
+     "value": "{\"headlines\": [\"Louvre to reopen\"]}"
+    },
+    {
+     "from": "gpt",
+     "value": "Top headline: Louvre to reopen."
+    }
+   ]
+  }
+ },
+ {
   "id": "HuggingFaceH4/ultrafeedback_binarized",
   "kind": "preference",
   "shape": "prompt + chosen/rejected lists",
@@ -967,6 +1080,126 @@
    "question": "사과 3개에 2개를 더하면?",
    "chosen": "3 + 2 = 5, 답은 5개입니다.",
    "rejected": "6개입니다."
+  }
+ },
+ {
+  "id": "PKU-Alignment/PKU-SafeRLHF",
+  "kind": "preference",
+  "shape": "response_0/1 + better_response_id",
+  "config": null,
+  "split": "train",
+  "format": "preference",
+  "adapter": "map",
+  "adapter_kwargs": {
+   "map": {
+    "user": "prompt",
+    "responses": [
+     "response_0",
+     "response_1"
+    ],
+    "preferred": "better_response_id"
+   }
+  },
+  "record": {
+   "prompt": "How do I set up a webcam?",
+   "response_0": "Plug it in.",
+   "response_1": "Connect it over USB, then test it in your video app.",
+   "prompt_source": "Alpaca3-70B",
+   "response_0_source": "Alpaca-7B",
+   "response_1_source": "Alpaca-7B",
+   "is_response_0_safe": true,
+   "is_response_1_safe": true,
+   "better_response_id": 1,
+   "safer_response_id": 1
+  }
+ },
+ {
+  "id": "stanfordnlp/SHP",
+  "kind": "preference",
+  "shape": "human_ref_A/B + labels",
+  "config": null,
+  "split": "train",
+  "format": "preference",
+  "adapter": "map",
+  "adapter_kwargs": {
+   "map": {
+    "user": "history",
+    "responses": [
+     "human_ref_A",
+     "human_ref_B"
+    ],
+    "preferred": "labels",
+    "preferred_values": {
+     "1": 0,
+     "0": 1
+    }
+   }
+  },
+  "record": {
+   "post_id": "abc123",
+   "domain": "askculinary_train",
+   "upvote_ratio": 0.98,
+   "history": "How do I keep basil fresh?",
+   "c_root_id_A": "a1",
+   "c_root_id_B": "b1",
+   "created_at_utc_A": 1636822112,
+   "created_at_utc_B": 1636822110,
+   "score_A": 34,
+   "score_B": 16,
+   "human_ref_A": "Keep it in water like cut flowers.",
+   "human_ref_B": "Freeze it.",
+   "labels": 1,
+   "seconds_difference": 2.0,
+   "score_ratio": 2.1
+  }
+ },
+ {
+  "id": "nvidia/HelpSteer3",
+  "kind": "preference",
+  "lang": "multi",
+  "shape": "context turns + response1/2 + overall_preference",
+  "config": "preference",
+  "split": "train",
+  "format": "preference",
+  "adapter": "map",
+  "adapter_kwargs": {
+   "map": {
+    "turns": "context",
+    "responses": [
+     "response1",
+     "response2"
+    ],
+    "preferred": "overall_preference",
+    "preferred_values": {
+     "-3": 0,
+     "-2": 0,
+     "-1": 0,
+     "1": 1,
+     "2": 1,
+     "3": 1
+    }
+   }
+  },
+  "record": {
+   "domain": "code",
+   "language": "python",
+   "context": [
+    {
+     "role": "user",
+     "content": "Reverse a list in Python."
+    }
+   ],
+   "response1": "Use lst[::-1] or lst.reverse().",
+   "response2": "Loop over it.",
+   "overall_preference": -2,
+   "individual_preference": [
+    {
+     "score": -2,
+     "reasoning": "@Response 1 is better.",
+     "feedback1": "Helpful.",
+     "feedback2": "Vague."
+    }
+   ]
   }
  }
 ]

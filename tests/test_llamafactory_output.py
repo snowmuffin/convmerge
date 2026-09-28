@@ -16,14 +16,23 @@ CATALOG = {e["id"]: e for e in json.loads(
 
 
 def _convert(
-    tmp_path: Path, records: list[dict], fmt: str, **kw
+    tmp_path: Path, records: list[dict], fmt: str, adapter: str = "auto", **kw
 ) -> tuple[list[dict], ConvertStats]:
     src, dst = tmp_path / "in.jsonl", tmp_path / f"{fmt}.jsonl"
     src.write_text("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in records), "utf-8")
     stats = ConvertStats()
-    convert_with_config(src, dst, build_convert_config(adapter="auto", output_format=fmt, **kw),
+    convert_with_config(src, dst, build_convert_config(adapter=adapter, output_format=fmt, **kw),
                         stats=stats)  # fmt: skip
     return [json.loads(x) for x in dst.read_text(encoding="utf-8").splitlines()], stats
+
+
+def _catalog(entry: dict) -> dict:
+    """``_convert`` keywords for a catalog entry's adapter and adapter kwargs."""
+    kwargs = entry.get("adapter_kwargs")
+    return {
+        "adapter": entry.get("adapter", "auto"),
+        "adapter_kwargs_json": json.dumps(kwargs) if kwargs else None,
+    }
 
 
 def M(*turns: tuple[str, str]) -> list[dict]:
@@ -108,7 +117,7 @@ def test_every_sft_and_tool_catalog_dataset_fits_sharegpt(tmp_path: Path) -> Non
     for e in CATALOG.values():
         if e["kind"] == "preference":
             continue
-        _, stats = _convert(tmp_path, [e["record"]], "sharegpt")
+        _, stats = _convert(tmp_path, [e["record"]], "sharegpt", **_catalog(e))
         assert stats.written == 1, (e["id"], stats.drop_reasons)
 
 
@@ -116,7 +125,7 @@ def test_every_sft_and_tool_catalog_dataset_fits_sharegpt(tmp_path: Path) -> Non
     "entry", [e for e in CATALOG.values() if e["kind"] == "preference"], ids=lambda e: e["id"]
 )
 def test_catalog_preference_datasets_as_ranking(tmp_path: Path, entry: dict) -> None:
-    rows, stats = _convert(tmp_path, [entry["record"]], "sharegpt-preference")
+    rows, stats = _convert(tmp_path, [entry["record"]], "sharegpt-preference", **_catalog(entry))
     assert stats.written == 1, stats.drop_reasons
     row = rows[0]
     assert row["conversations"][-1]["from"] == "human"

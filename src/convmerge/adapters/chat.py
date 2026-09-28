@@ -32,6 +32,7 @@ without writing a new adapter from scratch.
 
 from __future__ import annotations
 
+import json
 import logging
 from collections.abc import Iterator
 from typing import Any
@@ -62,6 +63,7 @@ DEFAULT_ROLE_MAP: dict[str, str] = {
     "system": "system",
     "tool": "tool",
     "function": "tool",
+    "function-response": "tool",
     "observation": "tool",
 }
 
@@ -75,8 +77,9 @@ DEFAULT_ROLE_KEYS: tuple[str, ...] = ("role", "from")
 DEFAULT_CONTENT_KEYS: tuple[str, ...] = ("content", "value", "text")
 
 # Flat question/answer records (Alpaca, MATH/NuminaMath ``problem``, MetaMathQA
-# ``query``, prompt/completion). Output keys are in priority order: a full
-# ``solution`` beats a short final ``answer`` when a record has both.
+# ``query``, prompt/completion, distilabel instruction/generation). Output keys
+# are in priority order: a full ``solution`` beats a short final ``answer`` when
+# a record has both.
 DEFAULT_INSTRUCTION_KEYS: tuple[str, ...] = (
     "instruction",
     "question",
@@ -84,7 +87,15 @@ DEFAULT_INSTRUCTION_KEYS: tuple[str, ...] = (
     "problem",
     "query",
 )
-DEFAULT_OUTPUT_KEYS: tuple[str, ...] = ("output", "response", "completion", "solution", "answer")
+DEFAULT_OUTPUT_KEYS: tuple[str, ...] = (
+    "output",
+    "response",
+    "completion",
+    "solution",
+    "answer",
+    "generated_solution",  # nvidia OpenMathInstruct
+    "generation",  # distilabel text generation
+)
 DEFAULT_INPUT_KEYS: tuple[str, ...] = ("input", "context")
 
 
@@ -132,6 +143,8 @@ def iter_from_chat_line(
 
     for key in conversation_keys:
         convs = record.get(key)
+        if isinstance(convs, str):
+            convs = _json_list(convs)  # orca-agentinstruct: the turns as a JSON string
         if isinstance(convs, list) and convs:
             msgs = coerce_messages(
                 convs,
@@ -290,3 +303,14 @@ def _first_string(record: dict[str, Any], keys: tuple[str, ...]) -> str | None:
         if isinstance(v, str) and v.strip():
             return v
     return None
+
+
+def _json_list(text: str) -> list[Any] | None:
+    stripped = text.lstrip()
+    if not stripped.startswith("["):
+        return None
+    try:
+        value = json.loads(stripped)
+    except ValueError:
+        return None
+    return value if isinstance(value, list) else None

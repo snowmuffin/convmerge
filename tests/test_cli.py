@@ -187,8 +187,7 @@ def test_cli_convert_format_defaults_to_messages(tmp_path: Path) -> None:
          "1 of the first 1 rows convert with --from auto"),
         ('[{"instruction": "q", "output": "a"},\n{"instruction": "q", "output": "a"}]\n',
          ["--from", "auto"], "convmerge normalize"),
-        ('{"problem": "q", "generated_solution": "a"}\n', ["--from", "auto"],
-         "keys: problem, generated_solution"),
+        ('{"task": "q", "reply_text": "a"}\n', ["--from", "auto"], "keys: task, reply_text"),
     ],
 )  # fmt: skip
 def test_cli_convert_explains_empty_output(

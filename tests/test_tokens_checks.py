@@ -162,3 +162,16 @@ def test_cli_prints_hints_without_failing(tmp_path: Path, tok_dir: Path, capsys)
     report = json.loads(captured.out)
     assert report["generation_tags"] is False and report["hints"]
     assert "hint: the template has no {% generation %}" in captured.err
+
+
+def test_hints_name_the_tool_argument_encoding_a_template_wants() -> None:
+    from convmerge.tokens import TokenStats
+
+    wants_string = TokenStats(
+        template_errors={'TypeError: can only concatenate str (not "dict") to str': 3}
+    )
+    assert any("--tool-arguments string" in h for h in wants_string.hints())
+    wants_object = TokenStats(
+        template_errors={"UndefinedError: 'str object' has no attribute 'items'": 1}
+    )
+    assert any("--tool-arguments object" in h for h in wants_object.hints())
