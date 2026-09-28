@@ -256,7 +256,8 @@ def build_convert_config(
     preset's ``output_options``. ``preference`` (``--preference``) overrides
     ``adapter_options.preference`` from the preset or ``--adapter-kwargs``.
     ``transform_overrides`` (keys of :class:`TransformOptions`) override the
-    preset's ``transforms``.
+    preset's ``transforms``. The output format defaults to ``messages``;
+    an unknown adapter or format name raises ``ValueError``.
     """
     from convmerge.preset import load_convert_preset
 
@@ -326,10 +327,13 @@ def build_convert_config(
     if encoding is not None:
         cfg_encoding = encoding
 
-    if not cfg_adapter or not cfg_format:
+    if not cfg_adapter:
         raise ValueError(
-            "adapter and output format are required (via --preset or --from / --format)."
+            "a source adapter is required: --from auto (or alpaca, sharegpt, map, ...) "
+            "or a preset that sets it"
         )
+    cfg_format = cfg_format or "messages"
+    _check_names(cfg_adapter, cfg_format)
 
     if cfg_adapter == "map" and cfg_map is None:
         raise ValueError(
@@ -378,6 +382,15 @@ def build_convert_config(
 
 # Built-in formats that have no place for a reasoning trace but inline text.
 _INLINE_REASONING_FORMATS = frozenset({"alpaca", "sharegpt", "sharegpt-preference"})
+
+
+def _check_names(adapter: str, output_format: str) -> None:
+    """Fail early (a usage error) on an unknown adapter or format name."""
+    from convmerge.adapters import get_adapter
+    from convmerge.emitters import get_emitter
+
+    get_adapter(adapter)
+    get_emitter(output_format)
 
 
 def _check_reasoning_format(reasoning: str, output_format: str) -> None:
