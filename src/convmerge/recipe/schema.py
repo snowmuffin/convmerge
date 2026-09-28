@@ -385,12 +385,13 @@ def _convert(raw: Any, base: Path, where: str) -> ConvertSpec:
         emit=emit,
         transforms=transforms,
     )
+    if convert.adapter is not None and convert.output_format is not None:
+        _check_names(convert.adapter, convert.output_format, where)
     # Resolve once now so bad names, presets, or options fail before any work.
     try:
-        cfg = build_convert_config(**convert_config_kwargs(convert))
+        build_convert_config(**convert_config_kwargs(convert))
     except (ValueError, OSError, ImportError) as e:
         raise RecipeError(f"{where}: {e}") from e
-    _check_names(cfg.adapter, cfg.output_format, where)
     return convert
 
 

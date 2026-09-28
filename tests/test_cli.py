@@ -148,3 +148,51 @@ def test_positive_int_options(capsys) -> None:
             main(argv)
         assert exc.value.code == 2
         assert "positive integer" in capsys.readouterr().err
+
+
+def _convert(tmp_path: Path, text: str, *args: str) -> Path:
+    src = tmp_path / "in.jsonl"
+    src.write_text(text, encoding="utf-8")
+    out = tmp_path / "out.jsonl"
+    main(["convert", "-i", str(src), "-o", str(out), *args])
+    return out
+
+
+@pytest.mark.parametrize(
+    ("args", "expected"),
+    [
+        (["--from", "sharegtp"], "Did you mean 'sharegpt'?"),
+        (["--from", "auto", "-f", "mesages"], "Did you mean 'messages'?"),
+        ([], "--from auto"),
+    ],
+)
+def test_cli_convert_bad_names_are_usage_errors(
+    tmp_path: Path, capsys, args: list[str], expected: str
+) -> None:
+    with pytest.raises(SystemExit) as info:
+        _convert(tmp_path, '{"instruction": "q", "output": "a"}\n', *args)
+    assert info.value.code == 2
+    assert expected in capsys.readouterr().err
+
+
+def test_cli_convert_format_defaults_to_messages(tmp_path: Path) -> None:
+    out = _convert(tmp_path, '{"instruction": "q", "output": "a"}\n', "--from", "alpaca")
+    assert json.loads(out.read_text(encoding="utf-8"))["messages"][1]["content"] == "a"
+
+
+@pytest.mark.parametrize(
+    ("text", "args", "expected"),
+    [
+        ('{"instruction": "q", "output": "a"}\n', ["--from", "sharegpt"],
+         "1 of the first 1 rows convert with --from auto"),
+        ('[{"instruction": "q", "output": "a"},\n{"instruction": "q", "output": "a"}]\n',
+         ["--from", "auto"], "convmerge normalize"),
+        ('{"problem": "q", "generated_solution": "a"}\n', ["--from", "auto"],
+         "keys: problem, generated_solution"),
+    ],
+)  # fmt: skip
+def test_cli_convert_explains_empty_output(
+    tmp_path: Path, capsys, text: str, args: list[str], expected: str
+) -> None:
+    _convert(tmp_path, text, *args)
+    assert expected in capsys.readouterr().err
