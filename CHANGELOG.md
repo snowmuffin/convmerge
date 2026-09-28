@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0rc2] - 2026-09-28
+
+### Fixed
+
+- `convert` no longer crashes with a `RecursionError` when it writes nothing
+  and the input is nested too deeply to parse: the hint that explains an
+  empty result now treats such a file like any other unreadable input. The
+  bug was introduced with that hint in 0.15.0 and found by fuzzing 1.0.0rc1.
+
 ## [1.0.0rc1] - 2026-09-28
 
 The first stable release candidate. 1.0 removes what 0.9 deprecated and
