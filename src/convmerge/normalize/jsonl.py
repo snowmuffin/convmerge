@@ -159,7 +159,7 @@ def detect_jsonl_shape(path: str | Path) -> JSONLShape:
         head = f.read(_HEAD_PEEK_BYTES)
     if not head.strip():
         return "empty"
-    text = head.decode("utf-8", errors="ignore")
+    text = head.decode("utf-8", errors="ignore").removeprefix("\ufeff")
 
     # A leading '[' means a top-level JSON array. Pretty-printed arrays span
     # many lines, so detect this before the multi-line ``jsonl`` heuristic
@@ -221,46 +221,45 @@ def normalize_to_jsonl(
     dst_p = Path(dst)
     dst_p.parent.mkdir(parents=True, exist_ok=True)
 
-    shape = detect_jsonl_shape(src_p)
-    if shape == "empty":
-        dst_p.write_text("", encoding="utf-8")
-        return 0
-
-    if shape == "jsonl":
-        return _rewrite_jsonl(src_p, dst_p)
-    if shape == "jsonl_of_arrays":
-        return _rewrite_jsonl_of_arrays(src_p, dst_p, array_key)
-    if shape == "json_array":
-        return _rewrite_json_array(src_p, dst_p, array_key)
-    if shape == "single_line":
-        return _rewrite_single_line(src_p, dst_p)
-    raise ValueError(f"Cannot normalize {src_p}: shape detected as {shape!r}")
+    try:
+        shape = detect_jsonl_shape(src_p)
+        if shape == "empty":
+            dst_p.write_text("", encoding="utf-8")
+            return 0
+        if shape == "jsonl":
+            return _rewrite_jsonl(src_p, dst_p)
+        if shape == "jsonl_of_arrays":
+            return _rewrite_jsonl_of_arrays(src_p, dst_p, array_key)
+        if shape == "json_array":
+            return _rewrite_json_array(src_p, dst_p, array_key)
+        if shape == "single_line":
+            return _rewrite_single_line(src_p, dst_p)
+    except (UnicodeDecodeError, json.JSONDecodeError, JsonlDecodeError) as e:
+        raise ValueError(f"Cannot normalize {src_p}: {e}") from None
+    except RecursionError:
+        raise ValueError(f"Cannot normalize {src_p}: nested too deeply") from None
+    raise ValueError(
+        f"Cannot normalize {src_p}: not JSON, JSONL, or a JSON array "
+        "(check that the file is complete and UTF-8)"
+    )
 
 
 def _rewrite_jsonl(src: Path, dst: Path) -> int:
     n = 0
-    with src.open(encoding="utf-8") as fin, dst.open("w", encoding="utf-8") as fout:
-        for line_number, line in enumerate(fin, 1):
-            line = _sanitize_line(line, line_number=line_number)
-            if not line:
-                continue
-            if line.endswith(","):
+    with dst.open("w", encoding="utf-8") as fout:
+        try:
+            # Raise on the first bad line so the output is guaranteed to round-trip.
+            for line in iter_jsonl(src, on_error="raise"):
+                fout.write(line.raw + "\n")
+                n += 1
+        except JsonlDecodeError as err:
+            if err.raw.endswith(","):
                 raise ValueError(
-                    f"Cannot normalize {src}: trailing comma at line {line_number}; "
+                    f"Cannot normalize {src}: trailing comma at line {err.line_number}; "
                     "remove the comma or provide valid JSONL"
-                )
-            # Validate each line so the output is guaranteed to round-trip.
-            json.loads(line)
-            fout.write(line + "\n")
-            n += 1
+                ) from None
+            raise ValueError(f"Cannot normalize {src}: {err}") from None
     return n
-
-
-def _sanitize_line(line: str, *, line_number: int) -> str:
-    line = line.strip()
-    if line_number == 1:
-        line = line.removeprefix("\ufeff")
-    return line
 
 
 def _wrap_array(value: Any, array_key: str) -> Any:
@@ -271,9 +270,19 @@ def _rewrite_jsonl_of_arrays(src: Path, dst: Path, array_key: str) -> int:
     n = 0
     with dst.open("w", encoding="utf-8") as fout:
         for line in iter_jsonl(src, on_error="raise"):
-            fout.write(json.dumps(_wrap_array(line.value, array_key), ensure_ascii=False) + "\n")
+            fout.write(_dumps(_wrap_array(line.value, array_key)) + "\n")
             n += 1
     return n
+
+
+def _dumps(value: Any) -> str:
+    """One JSONL line; unpaired surrogates are kept as ``\\uXXXX`` escapes."""
+    text = json.dumps(value, ensure_ascii=False)
+    try:
+        text.encode("utf-8")
+    except UnicodeEncodeError:
+        return json.dumps(value)
+    return text
 
 
 def _rewrite_json_array(src: Path, dst: Path, array_key: str = DEFAULT_ARRAY_KEY) -> int:
@@ -284,18 +293,18 @@ def _rewrite_json_array(src: Path, dst: Path, array_key: str = DEFAULT_ARRAY_KEY
     n = 0
     with dst.open("w", encoding="utf-8") as fout:
         for obj in data:
-            fout.write(json.dumps(_wrap_array(obj, array_key), ensure_ascii=False) + "\n")
+            fout.write(_dumps(_wrap_array(obj, array_key)) + "\n")
             n += 1
     return n
 
 
 def _rewrite_single_line(src: Path, dst: Path) -> int:
-    text = src.read_text(encoding="utf-8").strip()
+    text = src.read_text(encoding="utf-8-sig").strip()
     records = _split_concatenated_objects(text)
     n = 0
     with dst.open("w", encoding="utf-8") as fout:
         for obj in records:
-            fout.write(json.dumps(obj, ensure_ascii=False) + "\n")
+            fout.write(_dumps(obj) + "\n")
             n += 1
     return n
 
