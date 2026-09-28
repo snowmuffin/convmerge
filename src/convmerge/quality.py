@@ -8,7 +8,9 @@ byte-for-byte as read. The rules are deterministic and need no model:
 - ``empty_answer`` (on): the final answer is empty or shorter than
   ``min_answer_chars``.
 - ``refusal`` (on): an answer is a refusal or an "as an AI language model"
-  disclaimer (built-in English and Korean phrases, plus your own).
+  disclaimer (built-in English and Korean phrases, plus your own). In a
+  conversation with a system prompt or tools, only disclaimers count: such
+  an assistant declines out-of-scope requests on purpose.
 - ``repetition`` (on): an answer or reasoning trace loops: at least
   ``repetition_max`` of its word ``repetition_ngram``-grams repeat an earlier
   one.
@@ -423,13 +425,17 @@ class _Checker:
             ):
                 hits["empty_answer"] = excerpt(final.text) if final else ""
         if "refusal" in rules:
-            found = self._refusal(texts)
+            # An assistant scoped by a system prompt or tools declines requests
+            # outside that scope on purpose; only disclaimers count there.
+            scoped = bool(ex.tools) or any(m.role == "system" for m in ex.messages)
+            found = self._refusal(texts, openings=not scoped)
             if found is not None:
                 hits["refusal"] = found
         if "repetition" in rules:
             for text in (*texts, *(m.reasoning or "" for m in answers)):
-                if self._loops(text):
-                    hits["repetition"] = excerpt(text)
+                share = self._repeated_share(text)
+                if share >= self.spec.repetition_max:
+                    hits["repetition"] = f"{share:.0%} repeated: {excerpt(text)}"
                     break
         if "length" in rules:
             n = sum(len(t) for t in texts)
@@ -456,11 +462,11 @@ class _Checker:
                     break
         return hits
 
-    def _refusal(self, texts: Iterable[str]) -> str | None:
+    def _refusal(self, texts: Iterable[str], *, openings: bool = True) -> str | None:
         for text in texts:
             folded = fold(text)
             at = next((i for i in (folded.find(p) for p in self.anywhere) if i >= 0), -1)
-            if at < 0 and self.start is not None:
+            if at < 0 and openings and self.start is not None:
                 m = self.start.search(folded[:_START_CHARS])
                 at = m.start(1) if m else -1
             if at >= 0:
@@ -469,14 +475,13 @@ class _Checker:
                 return excerpt(shown if len(shown) == len(folded) else folded, at)
         return None
 
-    def _loops(self, text: str) -> bool:
+    def _repeated_share(self, text: str) -> float:
+        """Share of the word n-grams of ``text`` that repeat an earlier one."""
         tokens = words(text)
         if len(tokens) < max(_MIN_REPETITION_TOKENS, 2 * self.spec.repetition_ngram):
-            return False
+            return 0.0
         grams = list(ngrams(tokens, self.spec.repetition_ngram))
-        total = len(grams)
-        repeated = total - len(set(grams))
-        return total > 0 and repeated / total >= self.spec.repetition_max
+        return (len(grams) - len(set(grams))) / len(grams)
 
 
 def _split(

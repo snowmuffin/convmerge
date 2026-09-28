@@ -100,3 +100,12 @@ def test_recipe(tmp_path: Path) -> None:
         parse_recipe({**raw, "dedupe": {"near": True, "threshold": 0}}, path=tmp_path / "r.yaml")
     with pytest.raises(RecipeError, match="dedupe.near"):
         parse_recipe({**raw, "dedupe": {"near": "yes"}}, path=tmp_path / "r.yaml")
+
+
+def test_shared_system_prompts_do_not_count(tmp_path: Path) -> None:
+    system = {"role": "system", "content": BASE}
+    rows = [{"messages": [system, {"role": "user", "content": q},
+                          {"role": "assistant", "content": a}]}
+            for q, a in (("What is 2+2?", "4"), ("Name a color.", "Blue"))]  # fmt: skip
+    _, kept = deduplicate_near_jsonl(_write(tmp_path / "in.jsonl", rows), tmp_path / "o.jsonl")
+    assert kept == 2

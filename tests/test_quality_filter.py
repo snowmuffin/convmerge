@@ -202,3 +202,18 @@ def test_recipe_step(tmp_path: Path) -> None:
     ):
         with pytest.raises(RecipeError, match=match):
             parse_recipe({**raw, "filter": bad}, path=tmp_path / "r.yaml")
+
+
+def test_scoped_assistants_may_decline(tmp_path: Path) -> None:
+    decline = "I'm sorry, but I can't assist with that. I can only look up movies."
+    system = {"messages": [{"role": "system", "content": "You look up movies."},
+                           {"role": "user", "content": "Book a table"},
+                           {"role": "assistant", "content": decline}]}  # fmt: skip
+    disclaimer = {"messages": [
+        {"role": "system", "content": "You look up movies."},
+        {"role": "user", "content": "Opinion?"},
+        {"role": "assistant", "content": "As an AI language model, no."},
+    ]}  # fmt: skip
+    assert _rules(tmp_path, [system, disclaimer, _chat(decline)]) == {"refusal": 2}
+    st = filter_jsonl(_write(tmp_path / "loop.jsonl", [_chat(LOOP)]))
+    assert st.samples["repetition"][0]["text"].startswith("91% repeated: ")

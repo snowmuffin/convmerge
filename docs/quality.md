@@ -35,7 +35,7 @@ convmerge filter -i ko.jsonl -o clean.jsonl --enable slop --min-script hangul=0.
 | Rule | Default | A row is dropped when |
 |---|---|---|
 | `empty_answer` | on | Its final assistant answer is empty or shorter than `--min-answer-chars` (default 1). An answer that is a tool call is not empty. |
-| `refusal` | on | An answer refuses, or carries an "as an AI language model" disclaimer. The list covers English and Korean. Disclaimers count anywhere in the answer. Refusal openings ("I'm sorry, but I can't…", "죄송하지만…", "도와드릴 수 없습니다") count only when they start the answer or a sentence within its first 200 characters, so an answer that *talks about* declining is kept. |
+| `refusal` | on | An answer refuses, or carries an "as an AI language model" disclaimer. The list covers English and Korean. Disclaimers count anywhere in the answer. Refusal openings ("I'm sorry, but I can't…", "죄송하지만…", "도와드릴 수 없습니다") count only when they start the answer or a sentence within its first 200 characters, so an answer that *talks about* declining is kept. In a conversation with a system prompt or tools, only disclaimers count: an assistant scoped to a task (a tool-calling model, a support persona) declines out-of-scope requests on purpose, and that is worth training. |
 | `repetition` | on | An answer or a reasoning trace loops: at least `--repetition-max` (default 0.5) of its word 10-grams repeat an earlier 10-gram. Texts under 50 words are not checked. |
 | `near_identical_pair` | on | (Pairs) The chosen and rejected answers are the same once case and whitespace are ignored. |
 | `rejected_empty` | on | (Pairs) The rejected answer is empty. |
@@ -80,7 +80,8 @@ answer.
 
 - `rules` counts the rows each rule matched. A row can match several rules,
   and `rejected` counts it once.
-- `samples` holds up to three examples per rule. Read them before you trust
+- `samples` holds up to three examples per rule; `repetition` examples start
+  with the share of repeated n-grams they measured. Read them before you trust
   a rule on a new dataset.
 - `unreadable` counts rows in no layout convmerge knows. They are dropped.
 - `preference` appears when the file has pairs. It holds `pairs`,
@@ -139,9 +140,11 @@ convmerge dedupe -i mixed.jsonl -o deduped.jsonl --near            # threshold 0
 convmerge dedupe -i mixed.jsonl -o deduped.jsonl --near --threshold 0.7
 ```
 
-- Each row's text is every turn of the conversation, or both sides of a
-  pair; with `--keys`, the values of those keys instead. The text is cut
-  into word 5-grams.
+- Each row's text is every turn of the conversation except the system
+  prompt, or both sides of a pair; with `--keys`, the values of those keys
+  instead. The text is cut into word 5-grams. System prompts are left out
+  because they are often shared templates (tool definitions, personas) that
+  would make unrelated rows look alike.
 - Rows whose estimated Jaccard similarity to an earlier kept row reaches
   `--threshold` are dropped, so the first row of a group of near-copies
   stays.
