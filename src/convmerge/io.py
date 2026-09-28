@@ -1,6 +1,6 @@
 """Shared line-by-line JSONL reader.
 
-Every command that streams JSONL (convert, dedupe, mix, turns, load_jsonl)
+Every command that streams JSONL (convert, dedupe, mix, turns, filter, ...)
 reads through :func:`iter_jsonl`, so blank lines, a UTF-8 BOM, and
 unparseable lines are handled — and counted — the same way everywhere.
 A line with bytes that are not valid in the file's encoding, an unpaired

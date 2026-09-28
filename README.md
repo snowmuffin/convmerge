@@ -23,7 +23,8 @@ loading, no inference, no labeling, no training orchestration. See
 [Out of scope](#out-of-scope) below.
 
 **Repository:** [github.com/snowmuffin/convmerge](https://github.com/snowmuffin/convmerge)  
-**Status:** pre-1.0; APIs and CLI may change between minor versions until 1.0.
+**Status:** stable since 1.0: the CLI, the Python API, and the file formats
+change incompatibly only in a new major version ([stability.md](docs/stability.md)).
 
 ## Install
 
@@ -450,7 +451,7 @@ GitHub Actions secret.
 
 ## Changelog
 
-[CHANGELOG.md](CHANGELOG.md) · upgrading: [to 1.0 (check on 0.9)](docs/migration-1.0.md), [from 0.6](docs/migration-0.7.md), [from 0.5](docs/migration-0.6.md)
+[CHANGELOG.md](CHANGELOG.md) · upgrading: [to 1.0](docs/migration-1.0.md), [from 0.6](docs/migration-0.7.md), [from 0.5](docs/migration-0.6.md)
 
 ## License
 

@@ -7,6 +7,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-09-28
+
+The first stable release. 1.0 removes what 0.9 deprecated and
+otherwise changes nothing: code that runs on 0.15 without
+`DeprecationWarning`s runs unchanged, and the command line, output formats,
+and recipe / manifest / preset files have no removals. From 1.0 the CLI,
+the Python API, and the file formats change incompatibly only in a new
+major version ([docs/stability.md](docs/stability.md)).
+
+Validated as 1.0.0rc1 and 1.0.0rc2 from PyPI: the test suite against the
+installed wheel, the real-row catalog and quality checks, fuzzing (0 crashes
+in 1,155 runs on rc2), and a recipe feeding TRL training.
+
+### Removed
+
+- The names deprecated in 0.9 ([migration-1.0.md](docs/migration-1.0.md)):
+  - `convmerge.normalize`: `count_turns`, `is_single_turn`,
+    `detect_jsonl_shape`, `iter_json_records`, `load_jsonl`,
+    `is_uniform_schema`, `key_frequency`,
+    `single_turn_to_multi_turn_record`, `multi_turn_to_single_turn_record`.
+  - `convmerge.fetch`: `classify_entry`, `sanitize_name`, `redact_url`,
+    `resolve_token`.
+  - `convmerge.cli`: `FETCH_FILE_EXTENSIONS`, `SIDECAR_SUFFIXES`.
+  - `convmerge.convert.iter_converted_lines`.
+- `load_jsonl` itself, including its mode that returned `[]` for a file with
+  one bad line. Use `convmerge.iter_jsonl`.
+
+### Changed
+
+- `convert_file`, `convert_with_config`, `validate_file`, and `mix_files`
+  accept `str` paths as well as `Path`, like the other file functions
+  (`convert_file` used to fail on a `str`).
+- Classifier: Development Status 5 (Production/Stable).
+- New deprecations made during 1.x announce removal in 2.0.
+
+### Fixed
+
+- `convert` no longer crashes with a `RecursionError` when it writes nothing
+  and the input is nested too deeply to parse: the hint that explains an
+  empty result now treats such a file like any other unreadable input. The
+  bug was introduced with that hint in 0.15.0 and found by fuzzing
+  1.0.0rc1.
+
 ## [0.15.0] - 2026-09-28
 
 Fixes from an evaluation of 0.14 against community pain points, 34

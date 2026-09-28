@@ -3,10 +3,29 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterator
 from pathlib import Path
 
+from convmerge.adapter_resolve import resolve_adapter
 from convmerge.config import AdapterOptions, ChatAdapterOptions
-from convmerge.convert import _iter_converted_lines, convert_file
+from convmerge.convert import convert_file
+from convmerge.emitters import get_emitter
+
+
+def _iter_converted_lines(
+    lines: Iterator[str],
+    *,
+    adapter_name: str,
+    output_format: str,
+    adapter_options: AdapterOptions | None = None,
+) -> Iterator[str]:
+    """Adapter then emitter on in-memory lines, without validation."""
+    adapter = resolve_adapter(adapter_name, adapter_options)
+    emitter = get_emitter(output_format)
+    for raw in lines:
+        obj = json.loads(raw)
+        for example in adapter(obj):
+            yield json.dumps(emitter(example), ensure_ascii=False)
 
 
 def test_iter_chat_pairwise_both() -> None:
@@ -137,3 +156,22 @@ def test_convert_with_config_passes_progress(tmp_path: Path, capsys) -> None:
         src, tmp_path / "out.jsonl", ConvertConfig("alpaca", "messages"), progress=True
     )
     assert "[done] convert in.jsonl" in capsys.readouterr().err
+
+
+def test_file_functions_accept_str_paths(tmp_path: Path) -> None:
+    import convmerge
+
+    src = str(tmp_path / "in.jsonl")
+    Path(src).write_text('{"instruction": "q", "output": "a"}\n', encoding="utf-8")
+    out = str(tmp_path / "out.jsonl")
+    assert convmerge.convert_file(src, out, adapter_name="alpaca", output_format="messages") == (
+        1,
+        1,
+    )
+    cfg = convmerge.build_convert_config(adapter="auto")
+    assert convmerge.convert_with_config(src, str(tmp_path / "o2.jsonl"), cfg) == (1, 1)
+    assert convmerge.validate_file(out).written == 1
+    mixed = convmerge.mix_files(
+        [convmerge.MixSource(path=src, weight=1.0)], str(tmp_path / "m.jsonl"), total=1
+    )  # type: ignore[arg-type]
+    assert mixed.total_written == 1

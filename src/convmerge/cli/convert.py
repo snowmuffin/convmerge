@@ -251,7 +251,7 @@ def _explain_empty(path: Path, adapter: str, encoding: str, stats: ConvertStats)
     if stats.invalid_json or stats.non_object:
         try:
             shape = detect_jsonl_shape(path)
-        except (OSError, ValueError):
+        except (OSError, ValueError, RecursionError):
             shape = "invalid"
         if shape in ("json_array", "single_line", "jsonl_of_arrays"):
             return [

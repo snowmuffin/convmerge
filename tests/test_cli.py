@@ -195,3 +195,9 @@ def test_cli_convert_explains_empty_output(
 ) -> None:
     _convert(tmp_path, text, *args)
     assert expected in capsys.readouterr().err
+
+
+def test_cli_convert_explains_empty_output_of_too_deep_input(tmp_path: Path, capsys) -> None:
+    deep = '{"messages":' + "[" * 100_000 + "]" * 100_000 + "}\n"
+    _convert(tmp_path, deep, "--from", "auto")
+    assert "read 1 lines, wrote 0 examples" in capsys.readouterr().err
