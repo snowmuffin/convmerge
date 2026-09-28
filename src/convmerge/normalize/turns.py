@@ -11,7 +11,9 @@ from convmerge.io import iter_jsonl
 
 def count_turns(sample: dict[str, Any]) -> int:
     """Return the number of assistant turns in a messages-style sample."""
-    msgs = sample.get("messages") or []
+    msgs = sample.get("messages")
+    if not isinstance(msgs, list):
+        return 0
     return sum(1 for m in msgs if isinstance(m, dict) and m.get("role") == "assistant")
 
 

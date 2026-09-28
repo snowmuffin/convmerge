@@ -88,7 +88,11 @@ def _cmd_normalize(args: argparse.Namespace) -> None:
         print(f"error: input not found: {src}", file=sys.stderr)
         sys.exit(1)
     if src.is_file():
-        n = normalize_path(src, dst, array_key=args.array_key).records
+        try:
+            n = normalize_path(src, dst, array_key=args.array_key).records
+        except ValueError as e:
+            print(f"error: {e}", file=sys.stderr)
+            sys.exit(1)
         print(f"{src} -> {dst}: {n} records", file=sys.stderr)
         return
 
@@ -444,6 +448,7 @@ def _add_turns(sub: argparse._SubParsersAction) -> None:
 
 
 def _cmd_turns(args: argparse.Namespace) -> None:
+    from convmerge.io import JsonlDecodeError
     from convmerge.normalize.turns import analyze_turn_distribution, split_by_turns
 
     if bool(args.single_out) != bool(args.multi_out):
@@ -452,14 +457,18 @@ def _cmd_turns(args: argparse.Namespace) -> None:
     if not args.input.is_file():
         print(f"error: input file not found: {args.input}", file=sys.stderr)
         sys.exit(1)
-    report = analyze_turn_distribution(args.input)
-    print(json.dumps(report, ensure_ascii=False, indent=2))
-
-    if args.single_out and args.multi_out:
+    try:
+        report = analyze_turn_distribution(args.input)
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+        if not (args.single_out and args.multi_out):
+            return
         s, m = split_by_turns(
             args.input,
             single_out=args.single_out,
             multi_out=args.multi_out,
         )
-        print(f"split: single={s:,} -> {args.single_out}", file=sys.stderr)
-        print(f"split: multi ={m:,} -> {args.multi_out}", file=sys.stderr)
+    except JsonlDecodeError as e:
+        print(f"error: {e}", file=sys.stderr)
+        sys.exit(1)
+    print(f"split: single={s:,} -> {args.single_out}", file=sys.stderr)
+    print(f"split: multi ={m:,} -> {args.multi_out}", file=sys.stderr)

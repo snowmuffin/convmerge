@@ -120,3 +120,70 @@ def test_cli_prints_library_warnings_to_stderr(tmp_path: Path, capsys, monkeypat
     err = capsys.readouterr().err
     assert "warning: chat adapter: routing record to the 'text' branch" in err
     assert any(isinstance(h, _StderrHandler) for h in lib_logger.handlers)
+
+
+def _write_bytes(p: Path, data: bytes) -> Path:
+    p.write_bytes(data)
+    return p
+
+
+def test_iter_jsonl_skips_undecodable_bytes(tmp_path: Path) -> None:
+    p = _write_bytes(tmp_path / "a.jsonl", b'{"a": "\xff\xfe"}\n{"a": "ok"}\n')
+    seen: list[JsonlDecodeError] = []
+    stats = ReadStats()
+    lines = list(iter_jsonl(p, stats=stats, on_invalid=seen.append))
+    assert [x.value for x in lines] == [{"a": "ok"}]
+    assert (stats.invalid_json, stats.first_invalid_line) == (1, 1)
+    assert "invalid utf-8 bytes" in str(seen[0])
+
+
+def test_iter_jsonl_skips_unpaired_surrogate_but_keeps_pairs(tmp_path: Path) -> None:
+    p = _write(
+        tmp_path / "a.jsonl",
+        '{"a": "\\ud800"}\n{"a": "\\ud83d\\ude00"}\n{"a": "\\\\ud800"}\n',
+    )
+    seen: list[JsonlDecodeError] = []
+    lines = list(iter_jsonl(p, on_invalid=seen.append))
+    assert [x.value for x in lines] == [{"a": "\U0001f600"}, {"a": "\\ud800"}]
+    assert "unpaired surrogate" in str(seen[0])
+    for line in lines:
+        line.raw.encode("utf-8")
+
+
+def test_iter_jsonl_skips_too_deep_nesting(tmp_path: Path) -> None:
+    p = _write(tmp_path / "a.jsonl", "[" * 5000 + "]" * 5000 + '\n{"a": 1}\n')
+    stats = ReadStats()
+    assert [x.value for x in iter_jsonl(p, stats=stats)] == [{"a": 1}]
+    assert stats.invalid_json == 1
+    with pytest.raises(JsonlDecodeError, match="nested too deeply"):
+        list(iter_jsonl(p, on_error="raise"))
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [b'{"instruction": "\xff", "output": "a"}\n', b'{"instruction": "\\ud800", "output": "a"}\n'],
+)
+def test_commands_skip_bad_encoding_lines(tmp_path: Path, bad: bytes) -> None:
+    from convmerge.convert import ConvertStats, convert_file
+    from convmerge.normalize.dedup import deduplicate_jsonl
+    from convmerge.split import split_jsonl
+
+    good = b'{"instruction": "q", "output": "a"}\n'
+    src = _write_bytes(tmp_path / "in.jsonl", bad + good)
+    stats = ConvertStats()
+    convert_file(src, tmp_path / "c.jsonl", adapter_name="alpaca", output_format="messages",
+                 stats=stats)  # fmt: skip
+    assert (stats.written, stats.invalid_json) == (1, 1)
+    assert deduplicate_jsonl(src, tmp_path / "d.jsonl")[1] == 1
+    split_jsonl(src, train_out=tmp_path / "t.jsonl", val_out=tmp_path / "v.jsonl", val=0.5)
+    out = (tmp_path / "t.jsonl").read_bytes() + (tmp_path / "v.jsonl").read_bytes()
+    assert out == good
+
+
+def test_mix_skips_bad_encoding_lines(tmp_path: Path) -> None:
+    from convmerge.mix import MixSource, mix_files
+
+    src = _write_bytes(tmp_path / "in.jsonl", b'{"a": "\xff"}\n{"a": 1}\n{"a": 2}\n')
+    out = tmp_path / "o.jsonl"
+    mix_files([MixSource(path=src, weight=1.0)], out, total=2, seed=0)
+    assert sorted(out.read_text(encoding="utf-8").splitlines()) == ['{"a": 1}', '{"a": 2}']
