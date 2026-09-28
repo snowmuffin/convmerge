@@ -2,10 +2,14 @@ name: Eval
 
 # Evaluation harness (scripts/eval): zero-config coverage of popular Hub
 # datasets that are not in the tested catalog. Informational only; run it
-# by hand from the Actions tab.
+# by hand from the Actions tab (it also runs on pull requests that change it).
 
 on:
   workflow_dispatch:
+  pull_request:
+    paths:
+      - scripts/eval/coverage.py
+      - .github/workflows/eval.yml
 
 permissions:
   contents: read

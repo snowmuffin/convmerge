@@ -109,6 +109,51 @@ def check(dataset: str, kind: str, config: str | None, n: int) -> dict[str, Any]
     return result
 
 
+def _isolated(dataset: str, kind: str, config: str | None, args: argparse.Namespace) -> dict:
+    """``check`` in a child process with a time and resident-memory cap.
+
+    A dataset whose loader hangs or exhausts memory (one took the whole runner
+    down) is recorded as a load error instead of ending the run.
+    """
+    import subprocess
+    import time
+
+    cmd = [sys.executable, __file__, "--rows", str(args.rows),
+           "--one", dataset, kind, config or "-"]  # fmt: skip
+    base: dict[str, Any] = {"id": dataset, "kind": kind, "config": config}
+    limit_kb = int(args.max_memory_gb * 2**20)
+    deadline = time.monotonic() + args.timeout
+    with subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True) as proc:
+        reason = None
+        while proc.poll() is None:
+            if time.monotonic() > deadline:
+                reason = f"timed out after {args.timeout}s"
+            elif _rss_kb(proc.pid) > limit_kb:
+                reason = f"used more than {args.max_memory_gb:g} GB of memory"
+            if reason:
+                proc.kill()
+                proc.wait()
+                return {**base, "status": "load_error", "note": reason}
+            time.sleep(0.5)
+        out, err = proc.communicate()
+    lines = out.strip().splitlines()
+    if proc.returncode == 0 and lines:
+        return json.loads(lines[-1])
+    tail = err.strip().splitlines()[-1:] or [f"exit code {proc.returncode}"]
+    return {**base, "status": "load_error", "note": f"child failed: {tail[0]}"[:300]}
+
+
+def _rss_kb(pid: int) -> int:
+    try:
+        with open(f"/proc/{pid}/status", encoding="ascii") as f:
+            for line in f:
+                if line.startswith("VmRSS:"):
+                    return int(line.split()[1])
+    except OSError:
+        pass
+    return 0
+
+
 def _shape(value: Any) -> str:
     if isinstance(value, list):
         inner = _shape(value[0]) if value else "?"
@@ -145,11 +190,19 @@ def main() -> int:
     parser.add_argument("--rows", type=int, default=200)
     parser.add_argument("--summary", type=Path)
     parser.add_argument("--json", type=Path)
+    parser.add_argument("--one", nargs=3, metavar=("DATASET", "KIND", "CONFIG"),
+                        help=argparse.SUPPRESS)  # fmt: skip
+    parser.add_argument("--timeout", type=int, default=300, help="seconds per dataset")
+    parser.add_argument("--max-memory-gb", type=float, default=4.0)
     args = parser.parse_args()
+    if args.one:
+        dataset, kind, config = args.one
+        print(json.dumps(check(dataset, kind, None if config == "-" else config, args.rows)))
+        return 0
     results = []
     for dataset, kind, config in DATASETS:
         print(f"[check] {dataset}", file=sys.stderr, flush=True)
-        results.append(check(dataset, kind, config, args.rows))
+        results.append(_isolated(dataset, kind, config, args))
     text = render(results, args.rows)
     print(text)
     if args.summary:
