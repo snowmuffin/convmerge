@@ -36,7 +36,7 @@ convmerge filter -i ko.jsonl -o clean.jsonl --enable slop --min-script hangul=0.
 |---|---|---|
 | `empty_answer` | on | Its final assistant answer is empty or shorter than `--min-answer-chars` (default 1). An answer that is a tool call is not empty. |
 | `refusal` | on | An answer refuses, or carries an "as an AI language model" disclaimer. The list covers English and Korean. Disclaimers count anywhere in the answer. Refusal openings ("I'm sorry, but I can't…", "죄송하지만…", "도와드릴 수 없습니다") count only when they start the answer or a sentence within its first 200 characters, so an answer that *talks about* declining is kept. In a conversation with a system prompt or tools, only disclaimers count: an assistant scoped to a task (a tool-calling model, a support persona) declines out-of-scope requests on purpose, and that is worth training. |
-| `repetition` | on | An answer or a reasoning trace loops: at least `--repetition-max` (default 0.5) of its word 10-grams repeat an earlier 10-gram. Texts under 50 words are not checked. |
+| `repetition` | on | An answer or a reasoning trace loops: at least `--repetition-max` (default 0.7) of its word 10-grams repeat an earlier 10-gram. Texts under 50 words are not checked. Real loops measured 75–100%; song choruses, repeated prompt templates, and SCAN-style action lists measured 53–65%. |
 | `near_identical_pair` | on | (Pairs) The chosen and rejected answers are the same once case and whitespace are ignored. |
 | `rejected_empty` | on | (Pairs) The rejected answer is empty. |
 | `length` | off | The answer text is shorter than `--min-chars` or longer than `--max-chars`. Either flag turns the rule on. |
@@ -166,6 +166,30 @@ catalog](../README.md#tested-datasets) and runs every rule, `decontam`
 against GSM8K, MMLU, KMMLU, and KoBEST, and `dedupe --near`. It lists
 example rows per rule, which are the data for judging false positives. The
 **Quality** GitHub workflow runs it on pull requests that change the rules.
+
+The measurement for 0.14 used the first 1,000 rows of each of 43 catalog
+datasets:
+
+- **`refusal`:** It matched 0–3% of rows. Nearly all matches were "as an AI
+  language model" disclaimers (guanaco, HelpSteer2, UltraFeedback, sharegpt-korean)
+  or plain refusals (KULLM v2 "죄송하지만 …"). Tool-calling and
+  system-prompted data (glaive, Multilingual-Thinking) first matched 2–3%
+  on purposeful out-of-scope declines. Since then, only disclaimers count
+  in those conversations, and they match 0%.
+- **`repetition`:** Loops measured 75–100% repeated, for example a
+  translation stuck on one phrase (16 of 1,000 rows of
+  ko_Ultrafeedback_binarized) and a response pasting the same prompt five
+  times (rated helpfulness 0 in HelpSteer2 itself). Legitimate repetition
+  measured 53–65%, so the default is 0.7.
+- **`decontam`:** Every match was a verbatim benchmark question: MMLU
+  questions in Open-Platypus (7 rows), MetaMathQA (5), Dolly (1), and a
+  Capybara DPO set (1). No false positives were found.
+- **`dedupe --near`:** It dropped 5–6% of the glaive tool-calling sets,
+  which are highly templated, and 1.5% of Multilingual-Thinking, which
+  repeats each prompt with answers in several languages. Elsewhere it
+  dropped at most 0.4%.
+- **`script` (`hangul=0.3`, opt-in):** It matched 0–4% of Korean datasets,
+  mostly rows left largely in English.
 
 The built-in phrase lists and the ways `repetition` and `script` measure
 text may be tuned in minor releases to cut false positives. The changelog

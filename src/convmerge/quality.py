@@ -178,7 +178,7 @@ class FilterSpec:
     min_chars: int | None = None
     max_chars: int | None = None
     repetition_ngram: int = 10
-    repetition_max: float = 0.5
+    repetition_max: float = 0.7
     slop_max: int = 3
     min_script: Mapping[str, float] | None = None
     refusal_phrases: tuple[str, ...] = ()

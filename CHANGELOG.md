@@ -47,6 +47,15 @@ CPU-only, and call no model ([docs/quality.md](docs/quality.md)).
 - `scripts/quality.py` and the `Quality` workflow run every rule, `decontam`,
   and `dedupe --near` on real rows of the catalog datasets, with example rows
   per rule. It runs on pull requests that change the rules and on demand.
+  The defaults were set from its results on 1,000 rows of each of 43
+  datasets:
+  - `repetition` is 0.7: real loops measured 75–100%, song choruses and
+    templates 53–65%.
+  - Scoped assistants (a system prompt or tools) are checked for disclaimers
+    only.
+  - `dedupe --near` ignores system prompts.
+
+  See [docs/quality.md](docs/quality.md#how-the-defaults-were-chosen).
 
 ### Stability
 
