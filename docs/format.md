@@ -560,8 +560,8 @@ cleanup step:
   for an unfamiliar dataset.
 
 The other helpers `convmerge.normalize` used to re-export
-(`single_turn_to_multi_turn_record`, `key_frequency`, `load_jsonl`, …) are
-deprecated since 0.9; see [migration-1.0.md](migration-1.0.md).
+(`single_turn_to_multi_turn_record`, `key_frequency`, `load_jsonl`, …) were
+removed in 1.0; see [migration-1.0.md](migration-1.0.md).
 
 ### Progress reporting
 
