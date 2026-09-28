@@ -174,3 +174,36 @@ def test_iter_json_records_json_suffix_with_jsonl_content(tmp_path: Path) -> Non
     p = _write(tmp_path / "rows.json", '{"a": 1}\n{"a": 2}\n')
     assert list(iter_json_records(p)) == [{"a": 1}, {"a": 2}]
     assert list(iter_json_records(p, max_rows=1)) == [{"a": 1}]
+
+
+def test_normalize_single_line_with_bom_and_crlf(tmp_path: Path) -> None:
+    src = tmp_path / "a.jsonl"
+    src.write_bytes('\ufeff{"instruction":"q","output":"a"}\r\n'.encode())
+    assert detect_jsonl_shape(src) == "single_line"
+    assert normalize_to_jsonl(src, tmp_path / "o.jsonl") == 1
+
+
+@pytest.mark.parametrize(
+    ("data", "match"),
+    [
+        (b'{"a": "\xff"}\n{"a": 1}\n', "invalid utf-8 bytes"),
+        (b'{"a": 1}\n' + b"[" * 100_000 + b"]" * 100_000 + b"\n", "nested too deeply"),
+        (b"[" * 100_000 + b"]" * 100_000, "nested too deeply"),
+        (b'[{"a": "\xff"}]', "can't decode"),
+        (b'{"messages": [{"role": "user", "content": "q"}, {"role": "assis', "not JSON"),
+    ],
+)
+def test_normalize_reports_bad_input_with_file_name(
+    tmp_path: Path, data: bytes, match: str
+) -> None:
+    src = tmp_path / "a.jsonl"
+    src.write_bytes(data)
+    with pytest.raises(ValueError, match=match) as info:
+        normalize_to_jsonl(src, tmp_path / "o.jsonl")
+    assert str(src) in str(info.value)
+
+
+def test_normalize_keeps_unpaired_surrogate_as_escape(tmp_path: Path) -> None:
+    src = _write(tmp_path / "a.json", '[{"a": "\\ud800"}]')
+    assert normalize_to_jsonl(src, tmp_path / "o.jsonl") == 1
+    assert (tmp_path / "o.jsonl").read_text(encoding="utf-8") == '{"a": "\\ud800"}\n'

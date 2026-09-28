@@ -45,3 +45,12 @@ def load_entry_points(group: str, registry: MutableMapping[str, Any]) -> None:
 
 def reset_for_tests() -> None:
     _loaded.clear()
+
+
+def unknown_name_message(kind: str, name: str, known: list[str]) -> str:
+    """``Unknown <kind> 'x'. Did you mean 'y'? Choose one of: ...``"""
+    import difflib
+
+    close = difflib.get_close_matches(name, known, n=1)
+    hint = f" Did you mean {close[0]!r}?" if close else ""
+    return f"Unknown {kind} {name!r}.{hint} Choose one of: {', '.join(sorted(known))}"

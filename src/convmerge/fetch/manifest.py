@@ -36,6 +36,10 @@ class DatasetEntry:
     # Optional output override (directory relative to manifest or absolute).
     output: str | None = None
 
+    # HuggingFace only: a commit sha, tag, or branch to pin the dataset to
+    # (last, so positional construction from 0.14 still works).
+    revision: str | None = None
+
 
 @dataclass(frozen=True)
 class Defaults:
@@ -140,6 +144,12 @@ def _entry_from_dict(item: dict[str, Any], *, index: int) -> DatasetEntry:
         ext_raw = (ext_raw,)
     ext = tuple(str(e).lower() for e in ext_raw)
 
+    revision = item.get("revision")
+    if revision is not None and (not isinstance(revision, str) or not revision.strip()):
+        raise ValueError(f"datasets[{index}] ({name!r}) revision must be a non-empty string")
+    if revision is not None and not hf:
+        raise ValueError(f"datasets[{index}] ({name!r}) revision only applies to 'hf' entries")
+
     mode = item.get("mode")
     if mode not in (None, "tree", "clone"):
         raise ValueError(
@@ -152,6 +162,7 @@ def _entry_from_dict(item: dict[str, Any], *, index: int) -> DatasetEntry:
         url=str(url).strip() if url else None,
         config=item.get("config"),
         split=item.get("split"),
+        revision=revision.strip() if revision else None,
         ext=ext,
         mode=mode,
         lfs=bool(item.get("lfs", False)),

@@ -10,7 +10,7 @@ from functools import partial
 from typing import Any, Literal
 
 from convmerge.models import ChatMessage, ContentPart, ToolCall, TrainingExample
-from convmerge.plugins import EMITTER_GROUP, load_entry_points
+from convmerge.plugins import EMITTER_GROUP, load_entry_points, unknown_name_message
 from convmerge.reasoning import REASONING_MODES, ReasoningMode, strip_reasoning, to_field, to_inline
 
 EmitterFn = Callable[[TrainingExample], dict[str, Any]]
@@ -531,8 +531,7 @@ def get_emitter(
     if name not in EMITTERS:
         load_entry_points(EMITTER_GROUP, EMITTERS)
     if name not in EMITTERS:
-        known = ", ".join(sorted(EMITTERS))
-        raise ValueError(f"Unknown output format {name!r}. Choose one of: {known}")
+        raise ValueError(unknown_name_message("output format", name, list(EMITTERS)))
     if tool_arguments is not None:
         options = replace(options or EmitOptions(), tool_arguments=tool_arguments)
     fn = EMITTERS[name]

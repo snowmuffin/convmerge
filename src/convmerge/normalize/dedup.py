@@ -16,7 +16,7 @@ HashFn = Callable[[bytes], str]
 
 
 def _md5_hex(data: bytes) -> str:
-    return hashlib.md5(data).hexdigest()
+    return hashlib.md5(data, usedforsecurity=False).hexdigest()
 
 
 def _sha256_hex(data: bytes) -> str:

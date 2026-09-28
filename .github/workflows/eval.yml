@@ -1,0 +1,46 @@
+name: Eval
+
+# Evaluation harness (scripts/eval): zero-config coverage of popular Hub
+# datasets that are not in the tested catalog. Informational only; run it
+# by hand from the Actions tab (it also runs on pull requests that change it).
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - scripts/eval/coverage.py
+      - .github/workflows/eval.yml
+
+permissions:
+  contents: read
+
+# PyPI timeouts made pip backtrack to decade-old numpy / pandas sources that
+# no longer build; retry longer and never build those three from source.
+env:
+  PIP_DEFAULT_TIMEOUT: "60"
+  PIP_RETRIES: "10"
+  PIP_ONLY_BINARY: "numpy,pandas,pyarrow"
+
+jobs:
+  coverage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - name: Install
+        run: python -m pip install -e ".[fetch-all]"
+      - name: Coverage
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: python scripts/eval/coverage.py --rows 200 --summary "$GITHUB_STEP_SUMMARY" --json coverage.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage
+          path: coverage.json
+          if-no-files-found: ignore

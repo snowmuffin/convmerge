@@ -122,6 +122,9 @@ convmerge convert -i raw/HuggingFaceH4_ultrafeedback_binarized.jsonl -o dpo.json
 | [maywell/koVast](https://huggingface.co/datasets/maywell/koVast) | SFT | ko | ShareGPT (multi-turn) | `--from auto --format messages` |
 | [heegyu/open-korean-instructions](https://huggingface.co/datasets/heegyu/open-korean-instructions) | SFT | ko | `text` with `<usr>` / `<bot>` / `<sys>` | `--from auto --format messages` |
 | [FreedomIntelligence/sharegpt-korean](https://huggingface.co/datasets/FreedomIntelligence/sharegpt-korean) | SFT | ko | ShareGPT (JSON array) | `--from auto --format messages` |
+| [microsoft/orca-agentinstruct-1M-v1](https://huggingface.co/datasets/microsoft/orca-agentinstruct-1M-v1) | SFT | en | messages as a JSON string | `--from auto --format messages` |
+| [nvidia/OpenMathInstruct-2](https://huggingface.co/datasets/nvidia/OpenMathInstruct-2) | SFT | en | problem / generated_solution | `--from auto --format messages` |
+| [facebook/natural_reasoning](https://huggingface.co/datasets/facebook/natural_reasoning) | SFT | en | question + responses[] list | `--from map --format messages --adapter-kwargs '{"map":{"user":"question","assistant":"responses[0].response"}}'` |
 | [open-r1/OpenR1-Math-220k](https://huggingface.co/datasets/open-r1/OpenR1-Math-220k) | Reasoning | en | messages, inline `<think>` | `--from auto --format messages` |
 | [open-thoughts/OpenThoughts3-1.2M](https://huggingface.co/datasets/open-thoughts/OpenThoughts3-1.2M) | Reasoning | en | ShareGPT, inline `<think>` | `--from auto --format messages` |
 | [simplescaling/s1K-1.1](https://huggingface.co/datasets/simplescaling/s1K-1.1) | Reasoning | en | question / trace / attempt columns | `--from auto --format messages --adapter-kwargs '{"chat":{"output_keys":["deepseek_attempt"],"record_reasoning_keys":["deepseek_thinking_trajectory"]}}'` |
@@ -132,6 +135,8 @@ convmerge convert -i raw/HuggingFaceH4_ultrafeedback_binarized.jsonl -o dpo.json
 | [NousResearch/hermes-function-calling-v1](https://huggingface.co/datasets/NousResearch/hermes-function-calling-v1) | Tool calling | en | Hermes <tool_call> tags | `--from auto --format messages` |
 | [Salesforce/xlam-function-calling-60k](https://huggingface.co/datasets/Salesforce/xlam-function-calling-60k) (gated) | Tool calling | en | xLAM query/answers/tools | `--from auto --format messages` |
 | [llamafactory/glaive_toolcall_en](https://huggingface.co/datasets/llamafactory/glaive_toolcall_en) | Tool calling | en | LLaMA-Factory function_call | `--from auto --format messages` |
+| [Team-ACE/ToolACE](https://huggingface.co/datasets/Team-ACE/ToolACE) | Tool calling | en | [Func(k=v)] calls, functions in the system prompt | `--from auto --format messages` |
+| [Locutusque/function-calling-chatml](https://huggingface.co/datasets/Locutusque/function-calling-chatml) | Tool calling | en | function-call / function-response turns | `--from auto --format messages` |
 | [HuggingFaceH4/ultrafeedback_binarized](https://huggingface.co/datasets/HuggingFaceH4/ultrafeedback_binarized) | Preference | en | prompt + chosen/rejected lists | `--from auto --format preference` |
 | [trl-lib/ultrafeedback_binarized](https://huggingface.co/datasets/trl-lib/ultrafeedback_binarized) | Preference | en | chosen/rejected lists | `--from auto --format preference` |
 | [Anthropic/hh-rlhf](https://huggingface.co/datasets/Anthropic/hh-rlhf) | Preference | en | Human:/Assistant: transcripts | `--from auto --format preference` |
@@ -141,6 +146,9 @@ convmerge convert -i raw/HuggingFaceH4_ultrafeedback_binarized.jsonl -o dpo.json
 | [lmsys/chatbot_arena_conversations](https://huggingface.co/datasets/lmsys/chatbot_arena_conversations) (gated) | Preference | en | Arena conversation_a/b + winner | `--from auto --format preference` |
 | [maywell/ko_Ultrafeedback_binarized](https://huggingface.co/datasets/maywell/ko_Ultrafeedback_binarized) | Preference | ko | prompt / chosen / rejected strings | `--from auto --format preference` |
 | [kuotient/orca-math-korean-dpo-pairs](https://huggingface.co/datasets/kuotient/orca-math-korean-dpo-pairs) | Preference | ko | system / question / chosen / rejected | `--from auto --format preference` |
+| [PKU-Alignment/PKU-SafeRLHF](https://huggingface.co/datasets/PKU-Alignment/PKU-SafeRLHF) | Preference | en | response_0/1 + better_response_id | `--from map --format preference --adapter-kwargs '{"map":{"user":"prompt","responses":["response_0","response_1"],"preferred":"better_response_id"}}'` |
+| [stanfordnlp/SHP](https://huggingface.co/datasets/stanfordnlp/SHP) | Preference | en | human_ref_A/B + labels | `--from map --format preference --adapter-kwargs '{"map":{"user":"history","responses":["human_ref_A","human_ref_B"],"preferred":"labels","preferred_values":{"1":0,"0":1}}}'` |
+| [nvidia/HelpSteer3](https://huggingface.co/datasets/nvidia/HelpSteer3) | Preference | multi | context turns + response1/2 + overall_preference | `--from map --format preference --adapter-kwargs '{"map":{"turns":"context","responses":["response1","response2"],"preferred":"overall_preference","preferred_values":{"-3":0,"-2":0,"-1":0,"1":1,"2":1,"3":1}}}'` |
 <!-- datasets:end -->
 
 A preference dataset can also feed SFT: `--format messages --preference chosen`

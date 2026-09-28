@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
 
-from convmerge.io import iter_jsonl
+from convmerge.io import iter_jsonl, iter_raw_lines
 
 
 @dataclass(frozen=True)
@@ -262,13 +262,9 @@ def _valid_raw_lines(path: Path, encoding: str, invalid: frozenset[int]):
     Mirrors its blank-line and BOM handling; ``invalid`` holds the line numbers
     :func:`_scan` found unparseable.
     """
-    with path.open(encoding=encoding) as f:
-        for number, line in enumerate(f, 1):
-            raw = line.strip()
-            if number == 1:
-                raw = raw.removeprefix("\ufeff").strip()
-            if raw and number not in invalid:
-                yield raw
+    for number, raw in iter_raw_lines(path, encoding=encoding):
+        if raw and number not in invalid:
+            yield raw
 
 
 def write_mix_recipe(result: MixResult, *, encoding: str = "utf-8") -> Path:

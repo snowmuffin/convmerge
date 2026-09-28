@@ -97,7 +97,7 @@ def run_manifest(
             _record_error(result, entry.name, full, on_error=manifest.defaults.on_error, log=log)
             continue
         try:
-            _write_completion_marker(output, max_rows=entry.max_rows)
+            _write_completion_marker(output, max_rows=entry.max_rows, revision=entry.revision)
         except OSError as e:
             # The download itself succeeded.  A marker failure only means the
             # next resume will conservatively fetch again.
@@ -185,7 +185,9 @@ def _completion_snapshot(output: Path) -> dict[str, object] | None:
     return {"type": "directory", "files": files}
 
 
-def _write_completion_marker(output: Path, *, max_rows: int | None = None) -> None:
+def _write_completion_marker(
+    output: Path, *, max_rows: int | None = None, revision: str | None = None
+) -> None:
     snapshot = _completion_snapshot(output)
     if snapshot is None:
         raise OSError(f"output does not exist after fetch: {output}")
@@ -195,6 +197,9 @@ def _write_completion_marker(output: Path, *, max_rows: int | None = None) -> No
     if max_rows is not None:
         # A sample must never satisfy a later full fetch (or a different sample).
         payload["max_rows"] = max_rows
+    if revision is not None:
+        # A pinned revision must not be satisfied by a fetch of another one.
+        payload["revision"] = revision
     fd, temporary = tempfile.mkstemp(prefix=f".{marker.name}.", suffix=".tmp", dir=marker.parent)
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as handle:
@@ -221,6 +226,8 @@ def _already_fetched(dst: Path, kind: EntryKind, entry: DatasetEntry) -> bool:
     if payload.get("version") != _COMPLETION_MARKER_VERSION:
         return False
     if payload.get("max_rows") != entry.max_rows:
+        return False
+    if payload.get("revision") != entry.revision:
         return False
     return payload.get("snapshot") == _completion_snapshot(output)
 
@@ -257,6 +264,7 @@ def _run_hf(entry: DatasetEntry, dst: Path, *, token: str | None) -> Path:
         split=entry.split,
         token=token,
         max_rows=entry.max_rows,
+        **({"revision": entry.revision} if entry.revision else {}),
     )
 
 
