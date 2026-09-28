@@ -119,6 +119,9 @@ convmerge decontam -i train.jsonl --against hf:openai/gsm8k:main \
   pair's prompt. `--check all` also looks at answers, which catches copied
   solutions.
 
+Rows in no layout convmerge reads are kept (there is nothing to compare)
+and counted as `unreadable`.
+
 The report lists every evaluation set with the rows it read, the passages
 it indexed, the passages too short to index, and the training rows it
 `matched`. It also shows up to five examples, each naming the evaluation
