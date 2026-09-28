@@ -156,3 +156,22 @@ def test_convert_with_config_passes_progress(tmp_path: Path, capsys) -> None:
         src, tmp_path / "out.jsonl", ConvertConfig("alpaca", "messages"), progress=True
     )
     assert "[done] convert in.jsonl" in capsys.readouterr().err
+
+
+def test_file_functions_accept_str_paths(tmp_path: Path) -> None:
+    import convmerge
+
+    src = str(tmp_path / "in.jsonl")
+    Path(src).write_text('{"instruction": "q", "output": "a"}\n', encoding="utf-8")
+    out = str(tmp_path / "out.jsonl")
+    assert convmerge.convert_file(src, out, adapter_name="alpaca", output_format="messages") == (
+        1,
+        1,
+    )
+    cfg = convmerge.build_convert_config(adapter="auto")
+    assert convmerge.convert_with_config(src, str(tmp_path / "o2.jsonl"), cfg) == (1, 1)
+    assert convmerge.validate_file(out).written == 1
+    mixed = convmerge.mix_files(
+        [convmerge.MixSource(path=src, weight=1.0)], str(tmp_path / "m.jsonl"), total=1
+    )  # type: ignore[arg-type]
+    assert mixed.total_written == 1

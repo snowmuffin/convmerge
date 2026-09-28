@@ -56,7 +56,7 @@ _EXPORTS: dict[str, str] = {
     "SplitStats": "convmerge.split",
     "check_tokens": "convmerge.tokens",
     "TokenStats": "convmerge.tokens",
-    # quality (experimental until 1.0)
+    # quality
     "filter_jsonl": "convmerge.quality",
     "FilterSpec": "convmerge.quality",
     "FilterStats": "convmerge.quality",

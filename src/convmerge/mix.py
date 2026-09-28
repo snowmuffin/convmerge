@@ -49,7 +49,7 @@ _BUCKET_LINES = 25_000
 
 def mix_files(
     sources: list[MixSource],
-    output_path: Path,
+    output_path: str | Path,
     *,
     total: int | None = None,
     seed: int = 42,
@@ -87,7 +87,8 @@ def mix_files(
     if total_weight <= 0:
         raise ValueError("Weights must be positive")
 
-    normalized = [MixSource(s.path, s.weight / total_weight) for s in sources]
+    output_path = Path(output_path)
+    normalized = [MixSource(Path(s.path), s.weight / total_weight) for s in sources]
     for src in normalized:
         if not src.path.is_file():
             raise FileNotFoundError(f"Source not found: {src.path}")

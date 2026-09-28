@@ -163,8 +163,8 @@ def _describe_extra(reason: str) -> str:
 
 
 def convert_file(
-    input_path: Path,
-    output_path: Path,
+    input_path: str | Path,
+    output_path: str | Path,
     *,
     adapter_name: str,
     output_format: str,
@@ -210,6 +210,7 @@ def convert_file(
     """
     from convmerge.progress import ProgressReporter
 
+    input_path, output_path = Path(input_path), Path(output_path)
     if on_invalid not in ("drop", "keep", "fail"):
         raise ValueError(f"on_invalid must be 'drop', 'keep', or 'fail', got {on_invalid!r}")
     notes: list[str] = []
@@ -284,7 +285,7 @@ def _apply(
 
 
 def validate_file(
-    input_path: Path,
+    input_path: str | Path,
     *,
     adapter_name: str = "chat",
     adapter_options: AdapterOptions | None = None,
@@ -298,6 +299,7 @@ def validate_file(
     rows must also form a usable chosen/rejected pair. Invalid examples are counted
     in ``dropped`` / ``drop_reasons`` / ``drop_lines`` of the returned stats.
     """
+    input_path = Path(input_path)
     st = ConvertStats()
     # Preference rows (prompt / chosen / rejected) are read as pairs and must
     # also form a usable pair; other rows are checked as before.
@@ -508,8 +510,8 @@ def _run_parallel(
 
 
 def convert_with_config(
-    input_path: Path,
-    output_path: Path,
+    input_path: str | Path,
+    output_path: str | Path,
     cfg: ConvertConfig,
     *,
     progress: bool = False,
