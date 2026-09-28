@@ -151,7 +151,7 @@ def test_iter_jsonl_skips_unpaired_surrogate_but_keeps_pairs(tmp_path: Path) -> 
 
 
 def test_iter_jsonl_skips_too_deep_nesting(tmp_path: Path) -> None:
-    p = _write(tmp_path / "a.jsonl", "[" * 5000 + "]" * 5000 + '\n{"a": 1}\n')
+    p = _write(tmp_path / "a.jsonl", "[" * 100_000 + "]" * 100_000 + '\n{"a": 1}\n')
     stats = ReadStats()
     assert [x.value for x in iter_jsonl(p, stats=stats)] == [{"a": 1}]
     assert stats.invalid_json == 1

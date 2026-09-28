@@ -24,8 +24,6 @@ class DatasetEntry:
     # HuggingFace only
     config: str | None = None
     split: str | None = None
-    revision: str | None = None
-    """A commit sha, tag, or branch to pin the dataset to (the Hub default: main)."""
 
     # GitHub repo only
     ext: tuple[str, ...] = ()
@@ -37,6 +35,10 @@ class DatasetEntry:
 
     # Optional output override (directory relative to manifest or absolute).
     output: str | None = None
+
+    # HuggingFace only: a commit sha, tag, or branch to pin the dataset to
+    # (last, so positional construction from 0.14 still works).
+    revision: str | None = None
 
 
 @dataclass(frozen=True)

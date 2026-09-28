@@ -93,6 +93,8 @@ def check_recipes() -> tuple[int, list[str]]:
             except yaml.YAMLError as e:
                 problems.append(f"{path.relative_to(ROOT)}: invalid YAML: {e}"[:160])
                 continue
+            if not isinstance(raw, dict) or not isinstance(raw.get("sources"), dict):
+                continue  # a mix config lists its sources; a recipe names them
             checked += 1
             try:
                 parse_recipe(raw, path=ROOT / "recipe.yaml")
