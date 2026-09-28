@@ -8,7 +8,6 @@ from collections.abc import Iterator
 from pathlib import Path
 from typing import Any, Literal
 
-from convmerge._deprecation import warn_deprecated
 from convmerge.io import JsonlDecodeError, iter_jsonl
 from convmerge.lfs import ensure_not_lfs_pointer
 
@@ -23,56 +22,6 @@ DEFAULT_ARRAY_KEY = "conversation"
 
 # Bytes scanned from the head of a file to decide its shape without loading everything.
 _HEAD_PEEK_BYTES = 65536
-
-
-def load_jsonl(
-    path: str | Path,
-    *,
-    max_rows: int | None = None,
-    on_error: Literal["fail", "skip"] = "fail",
-) -> list[dict[str, Any]]:
-    """Load a well-formed JSONL file into a list of dicts.
-
-    Empty lines are always skipped. ``on_error`` controls what happens when a
-    line fails to parse:
-
-    - ``"fail"`` (default): log the failing location and return an empty
-      list, so a partially corrupt input is never silently half-loaded.
-      Deprecated: this warns, and in 1.0 ``load_jsonl`` leaves the public
-      namespace — use :func:`convmerge.iter_jsonl`, which raises.
-    - ``"skip"``: log the failing line number and skip just that line, keeping
-      every row that did parse. Use this for large files where one bad line
-      should not lose all the good data.
-
-    Messages go to the ``convmerge`` logger (stderr by default).
-    """
-    ensure_not_lfs_pointer(path)
-    out: list[dict[str, Any]] = []
-
-    def log_skip(err: JsonlDecodeError) -> None:
-        # The location is logged so the user can repair the source if desired.
-        logger.warning("[JSONL SKIP] %s", err)
-
-    try:
-        for line in iter_jsonl(
-            path,
-            on_error="skip" if on_error == "skip" else "raise",
-            on_invalid=log_skip,
-        ):
-            if max_rows is not None and len(out) >= max_rows:
-                break
-            if isinstance(line.value, dict):
-                out.append(line.value)
-    except JsonlDecodeError as err:
-        # Caller gets an empty list; the failing location is still logged so
-        # the user can fix the source file.
-        logger.warning("[JSONL ERROR] %s", err)
-        warn_deprecated(
-            "load_jsonl() returning [] on a malformed line",
-            instead="use convmerge.iter_jsonl(), which raises JsonlDecodeError",
-        )
-        return []
-    return out
 
 
 def iter_json_records(
