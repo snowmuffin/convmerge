@@ -62,7 +62,9 @@ All paths are relative to the recipe file.
 | `auth` | — | Token sources, same fields as a fetch manifest's `auth` block. |
 | `sources` | *(required)* | Name → source. Names become directory names (letters, digits, `_ - .`). |
 | `mix` | — | How to combine sources (see below). |
-| `dedupe` | — | `true`, or `{keys: [...], algorithm: md5 \| sha256}`. |
+| `dedupe` | — | `true`, or `{keys: [...], algorithm: md5 \| sha256}`; `near: true` removes near-duplicates instead (see below). |
+| `filter` | — | `true` (default rules), or rule options: drop refusals, empty answers, loops, bad pairs (see below). |
+| `decontam` | — | Drop rows that overlap evaluation sets (see below). |
 | `tokens` | — | Keep rows that render with a model's chat template and fit a length (see below). Needs `convmerge[tokens]`. |
 | `split` | — | Write a validation set next to the output (see below). |
 
@@ -109,13 +111,46 @@ by path) and concatenated.
 | `mix.oversample` | `false` | Repeat records of sources smaller than their share. |
 | `mix.sampler` | `v2` | `v1` reproduces pre-0.7 mixes. |
 
+| `dedupe.near` | `false` | Drop rows whose text is a near-copy of an earlier row (MinHash LSH over word 5-grams). Needs `convmerge[quality]`. |
+| `dedupe.threshold` | `0.8` | `near`: estimated Jaccard similarity that makes a duplicate (below 1). |
+| `dedupe.num_perm` | `128` | `near`: MinHash permutations. |
+
 With several sources and no `mix` block, every record of every source is
 merged and shuffled (seed 42). With one source and no `mix`, the converted
 file goes straight to `dedupe` or `output`.
 
+### Filter and decontam
+
+These run the `filter` and `decontam` commands ([quality.md](quality.md))
+on the mixed file.
+
+| Key | Default | Meaning |
+|-----|---------|---------|
+| `filter.enable` / `filter.disable` | — | Rule names to turn on or off (defaults: `empty_answer`, `refusal`, `repetition`, `near_identical_pair`, `rejected_empty`). |
+| `filter.min_answer_chars` | `1` | `empty_answer`: shortest final answer kept. |
+| `filter.min_chars` / `filter.max_chars` | — | Turn on `length`: bounds on the answer text. |
+| `filter.repetition_max` | `0.5` | `repetition`: share of repeated word 10-grams that marks a loop. |
+| `filter.slop_max` | `3` | `slop`: stock phrases per row that drop it. |
+| `filter.min_script` | — | Turn on `script`, e.g. `{hangul: 0.3}`. |
+| `filter.rules_file` | — | Extra phrases and regex rules (a step input). |
+| `decontam.against` | *(required)* | Evaluation sets: JSONL files (relative to the recipe; step inputs) or `hf:REPO[:CONFIG[:SPLIT]]` (split defaults to `test`). |
+| `decontam.ngram` | `13` | Words per n-gram. |
+| `decontam.min_tokens` | `8` | Shorter evaluation passages must appear whole; shorter still are skipped. |
+| `decontam.check` | `prompts` | `prompts` (system and user turns) or `all`. |
+| `decontam.fields` | every string field | Evaluation fields to read. |
+
+```yaml
+filter:
+  enable: [slop]
+  min_script: {hangul: 0.3}      # Korean mixes: drop half-translated rows
+decontam:
+  against: [hf:openai/gsm8k:main, hf:cais/mmlu:all, evals/internal.jsonl]
+```
+
 ### Tokens and split
 
-Stages run in this order: sources → `mix` → `dedupe` → `tokens` → `split`.
+Stages run in this order: sources → `mix` → `dedupe` → `filter` →
+`decontam` → `tokens` → `split`.
 
 | Key | Default | Meaning |
 |-----|---------|---------|
@@ -137,7 +172,7 @@ as two steps, `split.train` and `split.val`, that re-run independently.
 ## How re-runs are decided
 
 Steps run in order — per source `fetch`/`normalize`/`convert`, then `mix`,
-`dedupe`, and `output` (a copy, when no other step writes the final file).
+`dedupe`, `filter`, `decontam`, `tokens`, `split`, and `output` (a copy, when no other step writes the final file).
 The lock file records, per step, the options, the convmerge version, the
 SHA-256 of every input, and the SHA-256 of the output. A step runs when:
 
@@ -153,7 +188,9 @@ modification time, so unchanged multi-GB files are not re-hashed.
 
 Remote data is not re-downloaded just because a run starts: a `fetch` step
 re-runs when its options change. Use `--force fetch` to refresh remote
-sources — if the download is identical, nothing downstream re-runs.
+sources — if the download is identical, nothing downstream re-runs. The
+same holds for `decontam`'s `hf:` evaluation sets: they are downloaded when
+the step runs, and `--force decontam` picks up a changed Hub dataset.
 
 `--force` accepts step names (`tools.convert`), source names (`tools` — all
 of its steps), or kinds (`fetch`, `normalize`, `convert`, `mix`, `dedupe`);

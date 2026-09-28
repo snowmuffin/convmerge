@@ -8,7 +8,7 @@
 [![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-2.1-4baaaa.svg)](CODE_OF_CONDUCT.md)
 
 > **Convert Alpaca, ShareGPT, tool-calling, preference, and mixed chat datasets into one training-ready JSONL.**  
-> Fetch from HuggingFace or GitHub, normalize messy Parquet / JSON / JSONL, convert [30+ popular dataset layouts](#tested-datasets) into `messages` (SFT) or `{prompt, chosen, rejected}` (DPO) rows, weighted-mix multiple domain sources, and deduplicate — one command each, or the whole pipeline from a reproducible recipe.
+> Fetch from HuggingFace or GitHub, normalize messy Parquet / JSON / JSONL, convert [30+ popular dataset layouts](#tested-datasets) into `messages` (SFT) or `{prompt, chosen, rejected}` (DPO) rows, weighted-mix multiple domain sources, deduplicate, filter, and decontaminate — one command each, or the whole pipeline from a reproducible recipe.
 
 `convmerge` is a **data-preparation CLI and library** for LLM supervised fine-tuning (SFT).
 It takes heterogeneous instruction-tuning datasets — **Alpaca**, **ShareGPT**, raw chat JSONL,
@@ -293,10 +293,23 @@ merging multi-GB sources (`--sampler v1` reproduces mixes made before 0.7). A si
 the output recording the exact seed, weights, and per-source counts for full
 reproducibility. Omit `--total` to merge all records from every source.
 
-### 5. `dedupe` / `tokens` / `split` — ready for training
+### 5. `dedupe` / `filter` / `decontam` / `tokens` / `split` — ready for training
 
 ```bash
 convmerge dedupe -i ./train/mixed.jsonl -o ./train/mixed.dedup.jsonl
+# --near also drops near-copies (MinHash LSH; needs convmerge[quality])
+
+# Rule-based quality filter: refusals and "as an AI language model" disclaimers
+# (English, Korean), empty answers, looping answers or reasoning traces, and
+# preference pairs whose answers are the same or whose rejected side is empty.
+# Optional: --enable slop, --min-chars/--max-chars, --min-script hangul=0.3.
+# Prints a JSON report with example rows per rule; -o keeps the rows that pass.
+convmerge filter -i ./train/mixed.dedup.jsonl -o ./train/clean.jsonl --rejects rejected.jsonl
+
+# Drop rows that share a 13-word n-gram with a benchmark (prompts; --check all
+# for answers too). hf: sources need convmerge[fetch-all].
+convmerge decontam -i ./train/clean.jsonl --against hf:openai/gsm8k:main \
+  --against hf:cais/mmlu:all -o ./train/decontam.jsonl
 
 # Render every row with the model's chat template: length percentiles, rows the
 # template rejects (with line numbers), double-encoded tool arguments, answers
@@ -304,7 +317,7 @@ convmerge dedupe -i ./train/mixed.jsonl -o ./train/mixed.dedup.jsonl
 # the template drops, and {% generation %} support -- with the convert flag that
 # fixes each ("hints"). -o keeps the rows that render and fit.
 # Needs convmerge[tokens] (transformers, no PyTorch).
-convmerge tokens -i ./train/mixed.dedup.jsonl --tokenizer Qwen/Qwen2.5-7B-Instruct \
+convmerge tokens -i ./train/decontam.jsonl --tokenizer Qwen/Qwen2.5-7B-Instruct \
   --max-tokens 4096 -o ./train/fit.jsonl
 
 # Train/validation split by content hash: reproducible, order-independent,
@@ -321,7 +334,8 @@ convmerge axolotl-config -i ./train/train.jsonl --val ./train/train.val.jsonl
 convmerge turns -i ./train/train.jsonl --single-out single.jsonl --multi-out multi.jsonl
 ```
 
-See [docs/format.md](docs/format.md) for adapter / emitter schemas,
+See [docs/quality.md](docs/quality.md) for the `filter` rules, `decontam`, and
+near dedupe, [docs/format.md](docs/format.md) for adapter / emitter schemas,
 [docs/fetch.md](docs/fetch.md) for manifest details, and
 [docs/api.md](docs/api.md) for the Python API and writing plugins
 (custom adapters / output formats via entry points).
@@ -341,13 +355,15 @@ sources:
     convert: { from: sharegpt }
 mix: { total: 100000, seed: 42, weights: { alpaca: 0.7, tools: 0.3 } }
 dedupe: true
+filter: true                                                         # optional
+decontam: { against: [hf:openai/gsm8k:main] }                        # optional
 tokens: { tokenizer: Qwen/Qwen2.5-7B-Instruct, max_tokens: 4096 }   # optional
 split: { val: 0.02 }                                                 # optional
 ```
 
 ```bash
 convmerge run recipe.yaml --plan     # what would run, and why
-convmerge run recipe.yaml            # fetch → normalize → convert → mix → dedupe → tokens → split
+convmerge run recipe.yaml            # fetch → normalize → convert → mix → dedupe → filter → decontam → tokens → split
 convmerge run recipe.yaml --frozen   # CI: fail unless the lock file is current
 ```
 
@@ -363,9 +379,10 @@ To keep the package lean and dependency-free at its core, `convmerge` does
 
 - **Model loading / inference / training.** No PyTorch, Transformers, vLLM,
   or similar runtime is imported by the core or any shipped extra.
-- **Automatic labeling or classification of samples** (e.g. topic tagging,
-  quality scoring, safety classification). These are left to upstream tools
-  or private pipelines.
+- **Model-based labeling or classification of samples** (e.g. topic tagging,
+  LLM-as-judge or classifier quality scores, safety classification). These
+  are left to upstream tools or private pipelines; `filter` covers the
+  deterministic, rule-based checks.
 - **RLHF / DPO / preference-dataset construction** beyond passing through
   existing pairwise rows via the `chat` adapter's `pairwise_mode`.
 - **Training-job orchestration** (SkyPilot, RunPod, Modal, K8s operators).
