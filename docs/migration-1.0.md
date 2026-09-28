@@ -1,6 +1,7 @@
 # Migrating to 1.0
 
-1.0 removes what 0.9 deprecated and otherwise changes nothing. Code that
+1.0 removes what 0.9 deprecated and otherwise changes nothing: everything
+added in 0.10 to 0.15 carries over as it is. Code that
 runs on **0.9 without `DeprecationWarning`s** runs unchanged on 1.0, so the
 simplest path is:
 

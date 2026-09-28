@@ -124,9 +124,9 @@ When a snapshot test fails, the change touched the public surface:
 - **Removing or renaming**: keep the old name working and warn instead —
   `convmerge._deprecation.deprecated_names()` builds a module `__getattr__`
   for moved names, `warn_deprecated()` covers anything else — list it under
-  "Deprecated" in the changelog and in `docs/migration-1.0.md`, and test it
-  in `tests/test_deprecations.py`. The removal itself waits for the next
-  major version.
+  "Deprecated" in the changelog (and, when 2.0 approaches, in a
+  `docs/migration-2.0.md`), and test it. The removal itself waits for the
+  next major version.
 
 pytest turns a `DeprecationWarning` raised from inside `convmerge` into an
 error, so the package itself never uses its deprecated API.

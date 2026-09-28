@@ -4,8 +4,7 @@ Everything below is importable from the top-level package
 (`from convmerge import convert_file`), plus the `convmerge.recipe` and
 `convmerge.fetch` modules, and is the **public API**. What exactly is
 promised, and how anything is deprecated before it goes, is in
-[stability.md](stability.md); from 1.0 this list only grows within a major
-version. Modules and names not listed here, or that start with `_`, are
+[stability.md](stability.md); within 1.x this list only grows. Modules and names not listed here, or that start with `_`, are
 internal and may change without notice.
 
 ## Convert pipeline

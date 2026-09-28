@@ -12,7 +12,7 @@ import warnings
 from collections.abc import Callable, Mapping
 from typing import Any
 
-REMOVED_IN = "1.0"
+REMOVED_IN = "2.0"
 
 
 def warn_deprecated(

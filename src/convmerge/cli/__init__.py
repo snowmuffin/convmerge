@@ -13,7 +13,6 @@ import sys
 from collections.abc import Callable
 
 from convmerge import __version__
-from convmerge._deprecation import deprecated_names
 from convmerge.cli import convert as _convert
 from convmerge.cli import data as _data
 from convmerge.cli import fetch as _fetch
@@ -22,20 +21,6 @@ from convmerge.cli import quality as _quality
 from convmerge.cli import run as _run
 
 __all__ = ["main"]
-
-__getattr__ = deprecated_names(
-    __name__,
-    {
-        "FETCH_FILE_EXTENSIONS": (
-            "convmerge.normalize.files:NORMALIZE_EXTENSIONS",
-            "the CLI module exports only main()",
-        ),
-        "SIDECAR_SUFFIXES": (
-            "convmerge.normalize.files:SIDECAR_SUFFIXES",
-            "the CLI module exports only main()",
-        ),
-    },
-)
 
 _INSTALL_EXTRAS_EPILOG = """
 optional dependencies (pip install "convmerge[EXTRA]"):

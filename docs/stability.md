@@ -1,11 +1,10 @@
 # Stability and deprecation policy
 
 This page says what convmerge promises to keep working, and how anything
-that has to change is phased out. From **1.0** the package follows
+that has to change is phased out. Since **1.0** the package follows
 [semantic versioning](https://semver.org): what is listed here changes
-incompatibly only in a new major version. **0.9** is the last 0.x release
-and already follows the deprecation rules below, so code that runs on 0.9
-without `DeprecationWarning`s runs on 1.0.
+incompatibly only in a new major version. 1.0 removed what 0.9 deprecated
+and changed nothing else ([migration-1.0.md](migration-1.0.md)).
 
 ## What is covered
 
@@ -94,9 +93,9 @@ change only with a deprecation notice, like any other default.
 1. The release that deprecates something keeps it working, makes it emit a
    `DeprecationWarning` naming the replacement, and lists it under
    **Deprecated** in the [changelog](../CHANGELOG.md).
-2. It is removed no earlier than the next **major** version (for 0.9
-   deprecations: 1.0). Removals are listed under **Removed** with a
-   migration note ([migration-1.0.md](migration-1.0.md)).
+2. It is removed no earlier than the next **major** version (for 1.x
+   deprecations: 2.0). Removals are listed under **Removed** with a
+   migration note, as [migration-1.0.md](migration-1.0.md) did for 1.0.
 3. Behaviour that the CLI user would notice (a changed default) is announced
    the same way, with a `FutureWarning` on stderr when the old default is
    relied on.
