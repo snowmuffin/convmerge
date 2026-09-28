@@ -42,7 +42,11 @@ trainer = SFTTrainer(model=AutoModelForCausalLM.from_pretrained(model_dir), proc
                    assistant_only_loss=True, report_to=[], use_cpu=True, logging_steps=5,
                    save_strategy="no"),
     train_dataset=ds)
-masks = [sum(r["assistant_masks"]) for r in trainer.train_dataset]
+def answer_tokens(r):
+    if "assistant_masks" in r:
+        return sum(r["assistant_masks"])
+    return sum(1 for x in r["labels"] if x != -100)
+masks = [answer_tokens(r) for r in trainer.train_dataset]
 res = trainer.train()
 print(json.dumps({"rows": len(masks), "rows_without_answer_tokens": sum(m == 0 for m in masks),
                   "min_answer_tokens": min(masks), "loss": round(res.training_loss, 4)}))
