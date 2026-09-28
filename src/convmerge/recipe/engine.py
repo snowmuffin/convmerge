@@ -142,7 +142,8 @@ def _fetch_step(
     options = {
         k: (list(v) if isinstance(v, tuple) else v)
         for k, v in dataclasses.asdict(entry).items()
-        if k not in ("name", "output")
+        # An unset revision stays out so steps recorded before it existed stay fresh.
+        if k not in ("name", "output") and not (k == "revision" and v is None)
     }
     return Step(f"{src.name}.fetch", "fetch", [], raw, options, run, src.name)
 
