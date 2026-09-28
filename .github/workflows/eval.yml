@@ -8,7 +8,7 @@ on:
   push:
     branches: ["claude/**"]
     paths:
-      - scripts/eval/**
+      - scripts/eval/coverage.py
       - .github/workflows/eval.yml
 
 permissions:
