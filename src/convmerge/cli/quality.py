@@ -68,8 +68,8 @@ def _add_filter(sub: argparse._SubParsersAction) -> None:
     p.add_argument("--max-chars", type=_non_negative, default=None,
                    help="length: longest answer text kept (turns the rule on)")  # fmt: skip
     p.add_argument(
-        "--repetition-max", type=_fraction, default=0.5,
-        help="repetition: share of repeated word 10-grams that marks a loop (default 0.5)",
+        "--repetition-max", type=_fraction, default=0.7,
+        help="repetition: share of repeated word 10-grams that marks a loop (default 0.7)",
     )  # fmt: skip
     p.add_argument("--slop-max", type=_positive_int, default=3,
                    help="slop: stock phrases per row that drop it (default 3)")  # fmt: skip

@@ -129,7 +129,7 @@ on the mixed file.
 | `filter.enable` / `filter.disable` | — | Rule names to turn on or off (defaults: `empty_answer`, `refusal`, `repetition`, `near_identical_pair`, `rejected_empty`). |
 | `filter.min_answer_chars` | `1` | `empty_answer`: shortest final answer kept. |
 | `filter.min_chars` / `filter.max_chars` | — | Turn on `length`: bounds on the answer text. |
-| `filter.repetition_max` | `0.5` | `repetition`: share of repeated word 10-grams that marks a loop. |
+| `filter.repetition_max` | `0.7` | `repetition`: share of repeated word 10-grams that marks a loop. |
 | `filter.slop_max` | `3` | `slop`: stock phrases per row that drop it. |
 | `filter.min_script` | — | Turn on `script`, e.g. `{hangul: 0.3}`. |
 | `filter.rules_file` | — | Extra phrases and regex rules (a step input). |

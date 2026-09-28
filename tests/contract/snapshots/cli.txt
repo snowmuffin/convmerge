@@ -69,7 +69,7 @@
   --min-answer-chars default=1
   --min-chars
   --max-chars
-  --repetition-max default=0.5
+  --repetition-max default=0.7
   --slop-max default=3
   --min-script default=[]
   --rules-file
