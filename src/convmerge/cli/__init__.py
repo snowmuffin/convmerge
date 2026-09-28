@@ -18,6 +18,7 @@ from convmerge.cli import convert as _convert
 from convmerge.cli import data as _data
 from convmerge.cli import fetch as _fetch
 from convmerge.cli import mix as _mix
+from convmerge.cli import quality as _quality
 from convmerge.cli import run as _run
 
 __all__ = ["main"]
@@ -38,13 +39,14 @@ __getattr__ = deprecated_names(
 
 _INSTALL_EXTRAS_EPILOG = """
 optional dependencies (pip install "convmerge[EXTRA]"):
-  (none)     convert, dedupe, turns on JSONL; normalize on .json/.jsonl only
+  (none)     convert, dedupe, filter, decontam, turns on JSONL; normalize on .json/.jsonl only
   [fetch]      YAML manifests and GitHub sources (PyYAML)
   [fetch-all]  above + HuggingFace (datasets); same packages as fetch-hf
   [parquet]    .parquet input for normalize
   [preset]     YAML presets (convert --preset, preset validate)
   [tokens]     token lengths and chat-template checks (transformers + jinja2, no PyTorch)
-  [all]        fetch-all + parquet + preset + tokens (full CLI feature set)
+  [quality]    near-duplicate removal, dedupe --near (datasketch)
+  [all]        fetch-all + parquet + preset + tokens + quality (full CLI feature set)
 """.strip()
 
 
@@ -58,6 +60,8 @@ _COMMANDS: dict[str, tuple[Callable, Callable]] = {
     "dedupe": (_data._add_dedupe, _data._cmd_dedupe),
     "turns": (_data._add_turns, _data._cmd_turns),
     "split": (_data._add_split, _data._cmd_split),
+    "filter": (_quality._add_filter, _quality._cmd_filter),
+    "decontam": (_quality._add_decontam, _quality._cmd_decontam),
     "tokens": (_data._add_tokens, _data._cmd_tokens),
     "llamafactory-info": (_data._add_llamafactory_info, _data._cmd_llamafactory_info),
     "axolotl-config": (_data._add_axolotl_config, _data._cmd_axolotl_config),

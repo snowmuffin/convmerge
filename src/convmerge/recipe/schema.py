@@ -102,6 +102,26 @@ class MixSpec:
 class DedupeSpec:
     keys: tuple[str, ...] | None = None
     algorithm: str = "md5"
+    near: bool = False
+    threshold: float = 0.8
+    num_perm: int = 128
+
+
+@dataclass(frozen=True)
+class FilterStep:
+    options: dict[str, Any]
+    """Keyword arguments for :meth:`convmerge.quality.FilterSpec.from_options`."""
+    rules_file: Path | None = None
+
+
+@dataclass(frozen=True)
+class DecontamStep:
+    against: tuple[str, ...]
+    """Evaluation sets: ``hf:`` specs as written, local files resolved against the recipe."""
+    ngram: int = 13
+    min_tokens: int = 8
+    check: str = "prompts"
+    fields: tuple[str, ...] | None = None
 
 
 @dataclass(frozen=True)
@@ -138,6 +158,8 @@ class Recipe:
     auth: AuthConfig
     split: SplitSpec | None = None
     tokens: TokensSpec | None = None
+    filter: FilterStep | None = None
+    decontam: DecontamStep | None = None
 
 
 def load_recipe(path: str | Path) -> Recipe:
@@ -176,6 +198,8 @@ def parse_recipe(raw: Any, *, path: Path) -> Recipe:
             "sources",
             "mix",
             "dedupe",
+            "filter",
+            "decontam",
             "tokens",
             "split",
         },  # fmt: skip
@@ -216,6 +240,8 @@ def parse_recipe(raw: Any, *, path: Path) -> Recipe:
         auth=auth,
         split=_split(top.get("split"), base, output),
         tokens=_tokens(top.get("tokens"), base),
+        filter=_filter(top.get("filter"), base),
+        decontam=_decontam(top.get("decontam"), base),
     )
 
 
@@ -438,14 +464,109 @@ def _dedupe(raw: Any) -> DedupeSpec | None:
     if raw is True:
         return DedupeSpec()
     spec = _mapping(raw, "dedupe")
-    _only(spec, {"keys", "algorithm"}, "dedupe")
+    _only(spec, {"keys", "algorithm", "near", "threshold", "num_perm"}, "dedupe")
     keys = spec.get("keys")
     if keys is not None and not (isinstance(keys, list) and all(isinstance(k, str) for k in keys)):
         raise RecipeError("dedupe.keys: expected a list of top-level keys")
     algorithm = spec.get("algorithm", "md5")
     if algorithm not in ("md5", "sha256"):
         raise RecipeError("dedupe.algorithm: expected md5 or sha256")
-    return DedupeSpec(keys=tuple(keys) if keys else None, algorithm=algorithm)
+    near = spec.get("near", False)
+    if not isinstance(near, bool):
+        raise RecipeError("dedupe.near: expected true or false")
+    threshold = spec.get("threshold", 0.8)
+    if (
+        isinstance(threshold, bool)
+        or not isinstance(threshold, (int, float))
+        or not (0 < threshold < 1)
+    ):
+        raise RecipeError("dedupe.threshold: expected a fraction between 0 and 1")
+    num_perm = spec.get("num_perm", 128)
+    if isinstance(num_perm, bool) or not isinstance(num_perm, int) or num_perm < 16:
+        raise RecipeError("dedupe.num_perm: expected an integer of at least 16")
+    return DedupeSpec(keys=tuple(keys) if keys else None, algorithm=algorithm, near=near,
+                      threshold=float(threshold), num_perm=num_perm)  # fmt: skip
+
+
+_FILTER_KEYS = {
+    "enable": list,
+    "disable": list,
+    "min_answer_chars": int,
+    "min_chars": int,
+    "max_chars": int,
+    "repetition_max": float,
+    "slop_max": int,
+    "min_script": dict,
+    "rules_file": str,
+}
+
+
+def _filter(raw: Any, base: Path) -> FilterStep | None:
+    from convmerge.quality import FilterSpec
+
+    if raw is None or raw is False:
+        return None
+    spec = {} if raw is True else _mapping(raw, "filter")
+    _only(spec, set(_FILTER_KEYS), "filter")
+    options: dict[str, Any] = {}
+    for key, value in spec.items():
+        kind = _FILTER_KEYS[key]
+        ok = isinstance(value, kind) and not isinstance(value, bool)
+        if kind is float:
+            ok = isinstance(value, (int, float)) and not isinstance(value, bool)
+        if not ok:
+            raise RecipeError(f"filter.{key}: expected {kind.__name__}")
+        if key != "rules_file":
+            options[key] = value
+    rules_file = base / spec["rules_file"] if "rules_file" in spec else None
+    try:
+        for key in ("enable", "disable"):
+            if not all(isinstance(r, str) for r in options.get(key, [])):
+                raise ValueError(f"{key}: expected a list of rule names")
+        # Validate now (the rules file is read when the step runs).
+        FilterSpec.from_options(**options)
+    except ValueError as e:
+        raise RecipeError(f"filter: {e}") from None
+    return FilterStep(options=options, rules_file=rules_file)
+
+
+def _decontam(raw: Any, base: Path) -> DecontamStep | None:
+    from convmerge.decontam import EvalSource
+
+    if raw is None or raw is False:
+        return None
+    spec = _mapping(raw, "decontam")
+    _only(spec, {"against", "ngram", "min_tokens", "check", "fields"}, "decontam")
+    against = spec.get("against")
+    if isinstance(against, str):
+        against = [against]
+    if not (isinstance(against, list) and against and all(isinstance(a, str) and a
+                                                           for a in against)):  # fmt: skip
+        raise RecipeError("decontam.against: expected a list of JSONL files or hf:REPO specs")
+    resolved: list[str] = []
+    for item in against:
+        try:
+            hub = EvalSource(item).hub
+        except ValueError as e:
+            raise RecipeError(f"decontam.against: {e}") from None
+        resolved.append(item if hub is not None else str(base / item))
+    for key in ("ngram", "min_tokens"):
+        value = spec.get(key, 13 if key == "ngram" else 8)
+        if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+            raise RecipeError(f"decontam.{key}: expected a positive integer")
+    check = spec.get("check", "prompts")
+    if check not in ("prompts", "all"):
+        raise RecipeError("decontam.check: expected 'prompts' or 'all'")
+    fields = spec.get("fields")
+    if fields is not None and not (
+        isinstance(fields, list) and fields and all(isinstance(f, str) for f in fields)
+    ):
+        raise RecipeError("decontam.fields: expected a list of field names")
+    return DecontamStep(
+        against=tuple(resolved), ngram=spec.get("ngram", 13),
+        min_tokens=spec.get("min_tokens", 8), check=check,
+        fields=tuple(fields) if fields else None,
+    )  # fmt: skip
 
 
 def _tokens(raw: Any, base: Path) -> TokensSpec | None:

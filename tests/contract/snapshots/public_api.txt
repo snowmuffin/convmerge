@@ -12,8 +12,20 @@ class ConvertStats(lines_read: 'int' = 0, written: 'int' = 0, blank: 'int' = 0, 
     def note(self, reasons: 'list[str]', line_number: 'int') -> 'None'
     skipped: property -> int
     def to_report(self) -> 'dict[str, object]'
+class DecontamStats(rows: 'int' = 0, kept: 'int' = 0, contaminated: 'int' = 0, unreadable: 'int' = 0, invalid_json: 'int' = 0, first_invalid_line: 'int | None' = None, ngram: 'int' = 13, check: 'str' = 'prompts', eval_sets: 'dict[str, dict[str, int]]' = <factory>, samples: 'list[dict[str, Any]]' = <factory>) -> None
+    def to_report(self) -> 'dict[str, Any]'
 class DedupeStats(total: 'int' = 0, kept: 'int' = 0, duplicates: 'int' = 0, invalid_json: 'int' = 0, first_invalid_line: 'int | None' = None) -> None
 class EmitOptions(tool_arguments: 'ToolArguments' = 'string', keep_meta: 'bool | Sequence[str]' = False, meta_key: 'str' = 'meta', alpaca_multiturn: 'AlpacaMultiturn' = 'flatten', reasoning: 'ReasoningMode' = 'keep', tool_content: 'ToolContent' = 'empty', meta_values: 'Mapping[str, str] | None' = None) -> None
+class EvalSource(spec: 'str', fields: 'tuple[str, ...] | None' = None) -> None
+    hub: property -> tuple[str, str | None, str] | None
+    name: property -> str
+class FilterSpec(rules: 'tuple[str, ...]' = ('empty_answer', 'refusal', 'repetition', 'near_identical_pair', 'rejected_empty'), min_answer_chars: 'int' = 1, min_chars: 'int | None' = None, max_chars: 'int | None' = None, repetition_ngram: 'int' = 10, repetition_max: 'float' = 0.7, slop_max: 'int' = 3, min_script: 'Mapping[str, float] | None' = None, refusal_phrases: 'tuple[str, ...]' = (), slop_phrases: 'tuple[str, ...]' = (), builtin_phrases: 'bool' = True, patterns: 'Mapping[str, str] | None' = None) -> None
+    active: property -> tuple[str, ...]
+    @classmethod from_options(cls, *, enable: 'Iterable[str]' = (), disable: 'Iterable[str]' = (), min_chars: 'int | None' = None, max_chars: 'int | None' = None, min_script: 'Mapping[str, float] | None' = None, rules_file: 'str | Path | None' = None, **options: 'Any') -> 'FilterSpec'
+class FilterStats(rows: 'int' = 0, kept: 'int' = 0, rejected: 'int' = 0, unreadable: 'int' = 0, invalid_json: 'int' = 0, first_invalid_line: 'int | None' = None, rules: 'dict[str, int]' = <factory>, samples: 'dict[str, list[dict[str, Any]]]' = <factory>, pairs: 'int' = 0, chosen_longer: 'int' = 0, length_ratios: 'list[float]' = <factory>) -> None
+    def preference_report(self) -> 'dict[str, Any]'
+    def to_report(self) -> 'dict[str, Any]'
+    def warnings(self) -> 'list[str]'
 class InvalidExampleError(ValueError)(line_number: 'int', reasons: 'list[str]')
 class JsonlDecodeError(ValueError)(path: 'str | Path', line_number: 'int', error: 'json.JSONDecodeError', raw: 'str')
 class JsonlLine(number: 'int', raw: 'str', value: 'Any') -> None
@@ -22,6 +34,7 @@ class MapSpec(turns: 'Path | None' = None, role: 'Path | None' = None, content: 
     def to_mapping(self) -> 'dict[str, Any]'
 class MixResult(total_written: 'int', seed: 'int', output: 'Path', sources: 'list[SourceStats]' = <factory>, sampler: 'str' = 'v2') -> None
 class MixSource(path: 'Path', weight: 'float') -> None
+class NearDedupeStats(total: 'int' = 0, kept: 'int' = 0, near_duplicates: 'int' = 0, invalid_json: 'int' = 0, first_invalid_line: 'int | None' = None, threshold: 'float' = 0.8) -> None
 class ReadStats(lines_read: 'int' = 0, blank: 'int' = 0, invalid_json: 'int' = 0, first_invalid_line: 'int | None' = None) -> None
 class SharegptAdapterOptions(turn_mode: 'str | None' = None) -> None
 class SplitStats(total: 'int' = 0, train: 'int' = 0, val: 'int' = 0, invalid_json: 'int' = 0, first_invalid_line: 'int | None' = None) -> None
@@ -40,10 +53,14 @@ def analyze_turn_distribution(path: 'str | Path') -> 'dict[str, Any]'
 def available_adapters() -> 'list[str]'
 def available_formats() -> 'list[str]'
 def build_convert_config(*, preset_path: 'Path | None' = None, adapter: 'str | None' = None, output_format: 'str | None' = None, encoding: 'str | None' = None, adapter_options: 'AdapterOptions | None' = None, adapter_kwargs_json: 'str | None' = None, emit_overrides: 'dict[str, Any] | None' = None, preference: 'str | None' = None, transform_overrides: 'dict[str, Any] | None' = None) -> 'ConvertConfig'
+def build_index(sources: 'Iterable[EvalSource]', *, ngram: 'int' = 13, min_tokens: 'int' = 8, token: 'str | None' = None, cache_dir: 'str | Path | None' = None) -> 'EvalIndex'
 def check_tokens(path: 'str | Path', *, tokenizer: 'Any', max_tokens: 'int | None' = None, output: 'str | Path | None' = None, rejects: 'str | Path | None' = None, chat_template: 'str | None' = None, encoding: 'str' = 'utf-8', stats: 'TokenStats | None' = None) -> 'TokenStats'
 def convert_file(input_path: 'Path', output_path: 'Path', *, adapter_name: 'str', output_format: 'str', encoding: 'str' = 'utf-8', adapter_options: 'AdapterOptions | None' = None, progress: 'bool' = False, stats: 'ConvertStats | None' = None, on_invalid: 'OnInvalid' = 'drop', emit_options: 'EmitOptions | None' = None, workers: 'int' = 1, transform_options: 'TransformOptions | None' = None) -> 'tuple[int, int]'
 def convert_with_config(input_path: 'Path', output_path: 'Path', cfg: 'ConvertConfig', *, progress: 'bool' = False, stats: 'ConvertStats | None' = None, on_invalid: 'OnInvalid' = 'drop', emit_options: 'EmitOptions | None' = None, workers: 'int' = 1, transform_options: 'TransformOptions | None' = None) -> 'tuple[int, int]'
+def decontaminate_jsonl(path: 'str | Path', index: 'EvalIndex', *, check: 'Check' = 'prompts', output: 'str | Path | None' = None, rejects: 'str | Path | None' = None, encoding: 'str' = 'utf-8', stats: 'DecontamStats | None' = None) -> 'DecontamStats'
 def deduplicate_jsonl(src: 'str | Path', dst: 'str | Path', *, keys: 'Iterable[str] | None' = None, algorithm: 'str | HashFn' = 'md5', progress: 'bool' = False, seen_store: 'str' = 'memory', seen_db: 'str | Path | None' = None, stats: 'DedupeStats | None' = None) -> 'tuple[int, int]'
+def deduplicate_near_jsonl(src: 'str | Path', dst: 'str | Path', *, threshold: 'float' = 0.8, num_perm: 'int' = 128, shingle: 'int' = 5, keys: 'Iterable[str] | None' = None, rejects: 'str | Path | None' = None, encoding: 'str' = 'utf-8', stats: 'NearDedupeStats | None' = None) -> 'tuple[int, int]'
+def filter_jsonl(path: 'str | Path', *, spec: 'FilterSpec | None' = None, output: 'str | Path | None' = None, rejects: 'str | Path | None' = None, encoding: 'str' = 'utf-8', stats: 'FilterStats | None' = None) -> 'FilterStats'
 def iter_jsonl(path: 'str | Path', *, encoding: 'str' = 'utf-8', on_error: 'OnError' = 'skip', stats: 'ReadStats | None' = None, on_invalid: 'Callable[[JsonlDecodeError], None] | None' = None) -> 'Iterator[JsonlLine]'
 def mix_files(sources: 'list[MixSource]', output_path: 'Path', *, total: 'int | None' = None, seed: 'int' = 42, oversample: 'bool' = False, encoding: 'str' = 'utf-8', sampler: 'Sampler' = 'v2') -> 'MixResult'
 def normalize_to_jsonl(src: 'str | Path', dst: 'str | Path', *, array_key: 'str' = 'conversation') -> 'int'
@@ -58,7 +75,7 @@ def validate_file(input_path: 'Path', *, adapter_name: 'str' = 'chat', adapter_o
 [convmerge.recipe]
 class PlannedStep(step: 'Step', action: 'str', reason: 'str') -> None
 RECIPE_TEMPLATE: str
-class Recipe(path: 'Path', base_dir: 'Path', workdir: 'Path', output: 'Path', lock_path: 'Path', report_path: 'Path', sources: 'dict[str, SourceSpec]', mix: 'MixSpec | None', dedupe: 'DedupeSpec | None', auth: 'AuthConfig', split: 'SplitSpec | None' = None, tokens: 'TokensSpec | None' = None) -> None
+class Recipe(path: 'Path', base_dir: 'Path', workdir: 'Path', output: 'Path', lock_path: 'Path', report_path: 'Path', sources: 'dict[str, SourceSpec]', mix: 'MixSpec | None', dedupe: 'DedupeSpec | None', auth: 'AuthConfig', split: 'SplitSpec | None' = None, tokens: 'TokensSpec | None' = None, filter: 'FilterStep | None' = None, decontam: 'DecontamStep | None' = None) -> None
 class RecipeError(ValueError)
 class RecipeRunError(RuntimeError)
 class RunResult(ran: 'list[str]' = <factory>, skipped: 'list[str]' = <factory>, report: 'dict[str, Any]' = <factory>) -> None
