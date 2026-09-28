@@ -7,6 +7,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-09-28
+
+Quality checks before training: rule-based filtering, benchmark
+decontamination, and near-duplicate removal. They are deterministic,
+CPU-only, and call no model ([docs/quality.md](docs/quality.md)).
+
+### Added
+
+- `convmerge filter` (`filter_jsonl`, `FilterSpec`, `FilterStats`) checks
+  each row against quality rules. It prints a JSON report with example rows
+  per rule, and `-o` / `--rejects` write the kept and dropped rows
+  byte-for-byte.
+  - Rules on by default: `empty_answer`, `refusal` (English and Korean
+    refusals and "as an AI language model" disclaimers), `repetition` (looping
+    answers or reasoning traces), and, for preference pairs,
+    `near_identical_pair` and `rejected_empty`.
+  - Optional rules: `slop`, `length`, `script` (e.g. `--min-script
+    hangul=0.3` for half-translated rows), and regex `patterns` from
+    `--rules-file`.
+  - For pairs, the rules read the chosen answer. The report adds length-bias
+    statistics and warns when the chosen answer is usually the longer one.
+- `convmerge decontam` (`build_index`, `decontaminate_jsonl`, `EvalSource`,
+  `DecontamStats`) drops rows that share a word 13-gram with an evaluation
+  set: a JSONL file or `hf:REPO[:CONFIG[:SPLIT]]`.
+  - Each evaluation row is one passage, so a question with its options
+    matches as a whole. Short passages must appear whole.
+  - Single-letter option labels are ignored.
+  - Han and kana characters count as one word each.
+  - Only prompts are checked by default; `--check all` checks answers too.
+- `convmerge dedupe --near` (`deduplicate_near_jsonl`, `NearDedupeStats`)
+  removes near-duplicates with MinHash LSH over word 5-grams (`--threshold`,
+  `--num-perm`). It needs the new `[quality]` extra (datasketch), which is
+  also part of `[all]`.
+- Recipes:
+  - New `filter` and `decontam` steps, which run after `dedupe` and before
+    `tokens`.
+  - `dedupe` takes `near`, `threshold`, and `num_perm`.
+- `scripts/quality.py` and the `Quality` workflow run every rule, `decontam`,
+  and `dedupe --near` on real rows of the catalog datasets, with example rows
+  per rule. It runs on pull requests that change the rules and on demand.
+
+### Stability
+
+- The new commands, flags, rule names, report keys, recipe keys, and API
+  names are covered by the stability policy. The built-in phrase lists and
+  how `repetition` and `script` measure text are not: they may be tuned in
+  minor releases to cut false positives ([docs/stability.md](docs/stability.md#quality-rules)).
+
 ## [0.13.0] - 2026-09-27
 
 Any layout without code, every major trainer, and a record of what each

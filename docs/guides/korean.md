@@ -43,7 +43,11 @@ sources:
     convert: {from: auto, meta: {dataset: open-korean-instructions}}
 mix:
   weights: {kullm: 0.4, kovast: 0.4, oki: 0.2}
-dedupe: true
+dedupe: {near: true}             # 번역만 조금 다른 중복까지 제거 (convmerge[quality])
+filter:
+  min_script: {hangul: 0.3}      # 번역이 덜 되어 영어가 남은 행 제거
+decontam:
+  against: [hf:HAERAE-HUB/KMMLU:Law, hf:skt/kobest_v1:boolq]
 tokens:
   tokenizer: Qwen/Qwen3-0.6B     # 학습할 모델의 토크나이저
   max_tokens: 4096
@@ -52,12 +56,19 @@ split:
 ```
 
 ```bash
-pip install "convmerge[all]"
+pip install "convmerge[all]"      # quality(근사 중복 제거) 포함
 convmerge run recipe.yaml
 ```
 
 - `meta: {dataset: ...}`: 모든 행의 `meta`에 출처를 남겨서, 섞은 뒤에도 어느
   데이터셋에서 온 행인지 알 수 있게 합니다.
+- `filter`: 거절 응답("죄송하지만…", "도와드릴 수 없습니다", "AI 언어 모델로서"),
+  빈 답, 같은 문장이 반복되는 답을 기본으로 거릅니다. `min_script`는 한글 비율이
+  낮은 행을 거릅니다(코드는 계산에서 빠집니다). 자세한 내용은
+  [quality.md](../quality.md)에 있습니다.
+- `decontam`: 평가셋과 13단어 이상 겹치는 행을 뺍니다. 문제와 보기를 한 덩어리로
+  비교하므로, 보기까지 그대로 베낀 행이 걸립니다. 번역된 벤치마크(예: 영어 GSM8K의
+  한국어 번역)는 단어가 겹치지 않아 잡지 못합니다.
 - `tokens`: 한국어는 토크나이저마다 토큰 수 차이가 큽니다. 같은 문장이라도 모델에 따라
   몇 배까지 차이가 날 수 있으니, 반드시 **학습할 모델의 토크나이저**로 길이를 재세요.
   `max_tokens`를 넘는 행과 채팅 템플릿이 거부하는 행은 여기서 걸러집니다.
@@ -115,6 +126,8 @@ sources:
   어색하거나 영어 고유명사·단위가 그대로 남은 경우가 많습니다. 사람이 쓴 한국어
   데이터와 섞을 때는 `mix` 비율로 번역 데이터 비중을 조절하세요.
 - **중복:** 같은 원본(Alpaca, ShareGPT)을 서로 다른 팀이 번역한 데이터셋이 많습니다.
-  `dedupe: true`는 완전히 같은 행만 지우므로, 번역이 조금씩 다른 중복은 남습니다.
+  `dedupe: true`는 완전히 같은 행만 지웁니다. 번역이 조금씩 다른 중복은
+  `dedupe: {near: true}`(MinHash, 기본 유사도 0.8)로 지우세요. 번역기가 서로 달라
+  문장이 크게 다르면 남을 수 있습니다.
 - **선호도 데이터:** 번역 과정에서 chosen과 rejected가 같아진 행은 `--format preference`
   변환 때 `unrepresentable_identical_pair`로 걸러집니다.
