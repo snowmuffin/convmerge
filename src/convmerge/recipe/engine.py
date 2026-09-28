@@ -93,6 +93,10 @@ def build_steps(
         stages.append(("mixed", lambda src, out: _mix_step(recipe, converted, out)))
     if recipe.dedupe is not None:
         stages.append(("deduped", lambda src, out: _dedupe_step(recipe, src, out)))
+    if recipe.filter is not None:
+        stages.append(("quality", lambda src, out: _filter_step(recipe, src, out)))
+    if recipe.decontam is not None:
+        stages.append(("decontaminated", lambda src, out: _decontam_step(recipe, src, out)))
     if recipe.tokens is not None:
         stages.append(("filtered", lambda src, out: _tokens_step(recipe, src, out)))
     last = converted[names[0]]
@@ -251,12 +255,80 @@ def _dedupe_step(recipe: Recipe, src: Path, out: Path) -> Step:
     assert spec is not None
 
     def run(stage: Path) -> dict[str, Any]:
+        if spec.near:
+            from convmerge.normalize.near_dedup import NearDedupeStats, deduplicate_near_jsonl
+
+            near = NearDedupeStats()
+            deduplicate_near_jsonl(src, stage, threshold=spec.threshold, num_perm=spec.num_perm,
+                                   keys=spec.keys, stats=near)  # fmt: skip
+            return dataclasses.asdict(near)
         st = DedupeStats()
         deduplicate_jsonl(src, stage, keys=spec.keys, algorithm=spec.algorithm, stats=st)
         return dataclasses.asdict(st)
 
-    options = {"keys": list(spec.keys) if spec.keys else None, "algorithm": spec.algorithm}
+    options: dict[str, Any] = {
+        "keys": list(spec.keys) if spec.keys else None,
+        "algorithm": spec.algorithm,
+    }
+    if spec.near:
+        options.update(near=True, threshold=spec.threshold, num_perm=spec.num_perm)
     return Step("dedupe", "dedupe", [src], out, options, run)
+
+
+def _filter_step(recipe: Recipe, src: Path, out: Path) -> Step:
+    from convmerge.quality import FilterSpec, FilterStats, filter_jsonl
+
+    spec = recipe.filter
+    assert spec is not None
+    inputs = [src] if spec.rules_file is None else [src, spec.rules_file]
+
+    def run(stage: Path) -> dict[str, Any]:
+        options = FilterSpec.from_options(**spec.options, rules_file=spec.rules_file)
+        st = FilterStats()
+        filter_jsonl(src, spec=options, output=stage, stats=st)
+        return st.to_report()
+
+    options: dict[str, Any] = dict(spec.options)
+    if spec.rules_file is not None:
+        options["rules_file"] = _display(spec.rules_file, recipe.base_dir)
+    return Step("filter", "filter", inputs, out, options, run)
+
+
+def _decontam_step(recipe: Recipe, src: Path, out: Path) -> Step:
+    from convmerge.decontam import DecontamStats, EvalSource, build_index, decontaminate_jsonl
+    from convmerge.fetch.auth import resolve_token
+
+    spec = recipe.decontam
+    assert spec is not None
+    local = [Path(a) for a in spec.against if not a.startswith("hf:")]
+
+    def run(stage: Path) -> dict[str, Any]:
+        sources = [EvalSource(a, spec.fields) for a in spec.against]
+        token = resolve_token(recipe.auth.hf)
+        index = build_index(sources, ngram=spec.ngram, min_tokens=spec.min_tokens, token=token,
+                            cache_dir=stage.parent)  # fmt: skip
+        st = DecontamStats()
+        decontaminate_jsonl(src, index, check=spec.check, output=stage,  # type: ignore[arg-type]
+                            stats=st)  # fmt: skip
+        report = st.to_report()
+        report["eval_sets"] = {_eval_name(k, recipe.base_dir): v
+                               for k, v in report["eval_sets"].items()}  # fmt: skip
+        report["samples"] = [{**s, "eval": _eval_name(s["eval"], recipe.base_dir)}
+                             for s in report["samples"]]  # fmt: skip
+        return report
+
+    options = {
+        "against": [_eval_name(a, recipe.base_dir) for a in spec.against],
+        "ngram": spec.ngram,
+        "min_tokens": spec.min_tokens,
+        "check": spec.check,
+        "fields": list(spec.fields) if spec.fields else None,
+    }
+    return Step("decontam", "decontam", [src, *local], out, options, run)
+
+
+def _eval_name(spec: str, base: Path) -> str:
+    return spec if spec.startswith("hf:") else _display(Path(spec), base)
 
 
 def _tokens_step(recipe: Recipe, src: Path, out: Path) -> Step:

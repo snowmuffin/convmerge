@@ -36,13 +36,14 @@ exception messages (the exception *types* are covered).
     `-o`) finding rows that fail the chat template, exceed `--max-tokens`, or
     have double-encoded tool arguments, a failed fetch
     entry with `on_error: fail`, a failed recipe step, `run --frozen` with
-    steps out of date, or any unexpected error;
+    steps out of date, a `decontam` evaluation set that cannot be read or
+    downloaded, or any unexpected error;
   - `2` the invocation is invalid: bad flags or flag combinations, an
     unsupported fetch URL, or a missing or invalid preset, manifest, mix
     config, or recipe.
 - Output streams: data goes to files or stdout; progress, warnings, and
-  errors go to stderr only. `inspect`, `validate`, `turns`, `tokens`, `formats`, and
-  `run --plan` print their result to stdout, as do `preset init`,
+  errors go to stderr only. `inspect`, `validate`, `turns`, `tokens`, `filter`,
+  `decontam`, `formats`, and `run --plan` print their result to stdout, as do `preset init`,
   `run --init` without `-o`, `llamafactory-info` without `--info`, and
   `axolotl-config` without `-o`.
 
@@ -54,7 +55,7 @@ The wording of `--help` and of stderr messages is not covered.
 |------|--------------|---------|
 | Built-in output formats (`messages`, `alpaca`, `preference`, `sharegpt`, `sharegpt-preference`) | — | Keys and their meaning, as in [format.md](format.md) |
 | Drop / issue reason codes (`no_user`, `unresolved_image`, …) | — | Codes are never renamed or reused |
-| `convert --report`, `validate`, `tokens` JSON | `"version": 1` | Keys and meaning |
+| `convert --report`, `validate`, `tokens`, `filter`, `decontam` JSON | `"version": 1` | Keys and meaning |
 | Recipe (`recipe.yaml`) | `version: 1` | Schema ([recipes.md](recipes.md)) |
 | `recipe.lock.json`, `build/report.json` | `"version": 1` | Readable by every 1.x release |
 | Fetch manifest | `version: 1` | Schema ([fetch.md](fetch.md)) |
@@ -76,6 +77,17 @@ accepting the previous one for the rest of the major version.
   bug (for example a field that was read wrongly); the changelog says so
   under "Changed output". A recipe lock notices the new convmerge version
   and re-runs those steps.
+
+### Quality rules
+
+`filter`, `decontam`, and `dedupe --near` (added in 0.14) are covered like
+everything else: command and flag names, rule names, report keys, recipe
+keys, and the Python API. What is **not** covered is exactly which rows the
+rules catch: the built-in refusal and slop phrase lists, and how
+`repetition` and `script` measure text, may be tuned in a minor release to
+cut false positives. Such changes are listed in the changelog under
+"Changed output", and a recipe lock re-runs those steps. Default thresholds
+change only with a deprecation notice, like any other default.
 
 ## How things are deprecated
 

@@ -13,7 +13,7 @@ from __future__ import annotations
 import importlib
 from typing import TYPE_CHECKING, Any
 
-__version__ = "0.13.0"
+__version__ = "0.14.0"
 
 _EXPORTS: dict[str, str] = {
     # convert pipeline
@@ -56,6 +56,16 @@ _EXPORTS: dict[str, str] = {
     "SplitStats": "convmerge.split",
     "check_tokens": "convmerge.tokens",
     "TokenStats": "convmerge.tokens",
+    # quality (experimental until 1.0)
+    "filter_jsonl": "convmerge.quality",
+    "FilterSpec": "convmerge.quality",
+    "FilterStats": "convmerge.quality",
+    "decontaminate_jsonl": "convmerge.decontam",
+    "build_index": "convmerge.decontam",
+    "EvalSource": "convmerge.decontam",
+    "DecontamStats": "convmerge.decontam",
+    "deduplicate_near_jsonl": "convmerge.normalize.near_dedup",
+    "NearDedupeStats": "convmerge.normalize.near_dedup",
     "analyze_turn_distribution": "convmerge.normalize.turns",
     "iter_jsonl": "convmerge.io",
     "JsonlLine": "convmerge.io",
@@ -71,14 +81,19 @@ __all__ = [
     "ContentPart",
     "ConvertConfig",
     "ConvertStats",
+    "DecontamStats",
     "DedupeStats",
     "EmitOptions",
+    "EvalSource",
+    "FilterSpec",
+    "FilterStats",
     "InvalidExampleError",
     "JsonlDecodeError",
     "JsonlLine",
     "MapSpec",
     "MixResult",
     "MixSource",
+    "NearDedupeStats",
     "ReadStats",
     "SharegptAdapterOptions",
     "SplitStats",
@@ -91,10 +106,14 @@ __all__ = [
     "available_adapters",
     "available_formats",
     "build_convert_config",
+    "build_index",
     "check_tokens",
     "convert_file",
     "convert_with_config",
+    "decontaminate_jsonl",
     "deduplicate_jsonl",
+    "deduplicate_near_jsonl",
+    "filter_jsonl",
     "iter_jsonl",
     "mix_files",
     "normalize_to_jsonl",
@@ -138,6 +157,7 @@ if TYPE_CHECKING:  # pragma: no cover - for type checkers and IDEs only
         convert_with_config,
         validate_file,
     )
+    from convmerge.decontam import DecontamStats, EvalSource, build_index, decontaminate_jsonl
     from convmerge.emitters import (
         EmitOptions,
         UnrepresentableExample,
@@ -149,8 +169,10 @@ if TYPE_CHECKING:  # pragma: no cover - for type checkers and IDEs only
     from convmerge.models import ChatMessage, ContentPart, ToolCall, TrainingExample
     from convmerge.normalize.dedup import DedupeStats, deduplicate_jsonl
     from convmerge.normalize.jsonl import normalize_to_jsonl
+    from convmerge.normalize.near_dedup import NearDedupeStats, deduplicate_near_jsonl
     from convmerge.normalize.schema import profile_schema
     from convmerge.normalize.turns import analyze_turn_distribution, split_by_turns
+    from convmerge.quality import FilterSpec, FilterStats, filter_jsonl
     from convmerge.split import SplitStats, split_jsonl
     from convmerge.tokens import TokenStats, check_tokens
     from convmerge.transforms import TransformOptions
