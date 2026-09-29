@@ -141,6 +141,10 @@ def _add_dedupe(sub: argparse._SubParsersAction) -> None:
     )  # fmt: skip
     p.add_argument("--num-perm", type=_positive_int, default=128,
                    help="--near: MinHash permutations (128)")  # fmt: skip
+    p.add_argument(
+        "--workers", type=_positive_int, default=1, metavar="N",
+        help="--near: compute MinHashes with N processes (default 1); the output is identical",
+    )  # fmt: skip
     _add_progress_flag(p)
 
 
@@ -154,6 +158,9 @@ def _cmd_dedupe(args: argparse.Namespace) -> None:
     if args.near:
         _near_dedupe(args)
         return
+    if args.workers > 1:
+        print("error: --workers applies to --near (exact dedupe is single-pass)", file=sys.stderr)
+        sys.exit(2)
     stats = DedupeStats()
     total, kept = deduplicate_jsonl(
         args.input,
@@ -188,7 +195,7 @@ def _near_dedupe(args: argparse.Namespace) -> None:
     try:
         total, kept = deduplicate_near_jsonl(
             args.input, args.output, threshold=args.threshold, num_perm=args.num_perm,
-            keys=args.keys, stats=stats,
+            keys=args.keys, stats=stats, workers=args.workers,
         )  # fmt: skip
     except (ImportError, ValueError) as e:
         print(f"error: {e}", file=sys.stderr)

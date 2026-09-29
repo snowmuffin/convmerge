@@ -9,18 +9,25 @@ This catches the same source translated or reformatted slightly
 differently, which exact ``dedupe`` cannot.
 
 It is approximate (MinHash estimates similarity; LSH finds candidates) and
-keeps its index in memory, so it suits up to a few million rows; for larger
-corpora use a distributed tool such as datatrove. Needs
+keeps its index in memory (a 60-bit digest per LSH band, about 0.6 KB a row
+at the defaults), so it suits up to several million rows; for larger corpora
+use a distributed tool such as datatrove. Needs
 ``pip install "convmerge[quality]"`` (datasketch).
+
+The index uses datasketch's ``MinHashLSH`` band layout and band bytes, so a
+row is a near-duplicate exactly when ``MinHashLSH.query`` would find an
+earlier kept row (up to a 2**-60 chance of a digest collision per band).
 """
 
 from __future__ import annotations
 
+import hashlib
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from convmerge import _parallel
 from convmerge._text import ngrams, words
 from convmerge.io import ReadStats, iter_jsonl
 
@@ -62,53 +69,121 @@ def deduplicate_near_jsonl(
     rejects: str | Path | None = None,
     encoding: str = "utf-8",
     stats: NearDedupeStats | None = None,
+    workers: int = 1,
 ) -> tuple[int, int]:
     """Write the rows of ``src`` that are not near-copies of an earlier row to ``dst``.
 
     Returns ``(total, kept)`` like :func:`~convmerge.normalize.dedup.deduplicate_jsonl`.
     Rows are written byte-for-byte as read; invalid JSON lines are dropped.
+    ``workers`` > 1 computes MinHashes in that many processes; the output is
+    the same as with one.
     """
     if not 0 < threshold < 1:
         raise ValueError("threshold: expected a fraction between 0 and 1")
     if num_perm < 16 or shingle < 1:
         raise ValueError("num_perm must be at least 16 and shingle positive")
+    if workers < 1:
+        raise ValueError("workers: expected a positive integer")
     ds = _require_datasketch()
-    from convmerge.adapter_resolve import resolve_adapter
-
-    st = stats if stats is not None else NearDedupeStats()
-    st.threshold = threshold
-    key_list = list(keys) if keys else None
-    adapter = resolve_adapter("auto", None, pairs=True)
     try:
         lsh = ds.MinHashLSH(threshold=threshold, num_perm=num_perm)
     except ValueError as e:
         raise ValueError(f"threshold {threshold} with num_perm {num_perm}: {e}; "
                          "lower the threshold or raise num_perm") from None  # fmt: skip
-    read = ReadStats()
+    st = stats if stats is not None else NearDedupeStats()
+    st.threshold = threshold
+    signer = _Signer(num_perm, lsh.b, lsh.r, shingle, list(keys) if keys else None)
+    seen: set[int] = set()
     Path(dst).parent.mkdir(parents=True, exist_ok=True)
     rej = open(rejects, "w", encoding=encoding) if rejects is not None else None
+    invalid = ReadStats()
     try:
         with open(dst, "w", encoding=encoding) as out:
-            for line in iter_jsonl(src, encoding=encoding, stats=read):
+            for raw, bands in _signed_rows(src, encoding, signer, workers, invalid):
                 st.total += 1
-                text = _row_text(line.value, adapter, key_list)
-                mh = ds.MinHash(num_perm=num_perm)
-                mh.update_batch([s.encode("utf-8") for s in _shingles(text, shingle)])
-                if lsh.query(mh):
+                if not seen.isdisjoint(bands):
                     st.near_duplicates += 1
                     if rej is not None:
-                        rej.write(line.raw + "\n")
+                        rej.write(raw + "\n")
                     continue
-                lsh.insert(line.number, mh, check_duplication=False)
+                seen.update(bands)
                 st.kept += 1
-                out.write(line.raw + "\n")
+                out.write(raw + "\n")
     finally:
         if rej is not None:
             rej.close()
-        st.invalid_json = read.invalid_json
-        st.first_invalid_line = read.first_invalid_line
-        st.total += read.invalid_json
+        st.invalid_json = invalid.invalid_json
+        st.first_invalid_line = invalid.first_invalid_line
+        st.total += invalid.invalid_json
     return st.total, st.kept
+
+
+class _Signer:
+    """A row's LSH band keys: 60-bit digests of ``MinHashLSH``'s band bytes."""
+
+    def __init__(self, num_perm: int, b: int, r: int, shingle: int, keys: list[str] | None) -> None:
+        self.num_perm, self.b, self.r, self.shingle, self.keys = num_perm, b, r, shingle, keys
+        self._ds: Any = None
+        self._adapter: Any = None
+
+    def __getstate__(self) -> dict[str, Any]:
+        return {**self.__dict__, "_ds": None, "_adapter": None}
+
+    def bands(self, value: Any) -> list[int]:
+        if self._ds is None:
+            from convmerge.adapter_resolve import resolve_adapter
+
+            self._ds = _require_datasketch()
+            self._adapter = resolve_adapter("auto", None, pairs=True)
+        text = _row_text(value, self._adapter, self.keys)
+        mh = self._ds.MinHash(num_perm=self.num_perm)
+        mh.update_batch([s.encode("utf-8") for s in _shingles(text, self.shingle)])
+        hashes, r = mh.hashvalues, self.r
+        # MinHashLSH keys band i by bytes(hashvalues[i*r:(i+1)*r].byteswap().data).
+        return [
+            int.from_bytes(
+                hashlib.blake2b(
+                    bytes(hashes[i * r : (i + 1) * r].byteswap().data),
+                    digest_size=8, salt=i.to_bytes(8, "little"),
+                ).digest(), "little",
+            ) >> 4
+            for i in range(self.b)
+        ]  # fmt: skip
+
+
+def _signed_rows(
+    src: str | Path, encoding: str, signer: _Signer, workers: int, invalid: ReadStats
+) -> Iterator[tuple[str, list[int]]]:
+    """``(raw, band keys)`` for each parseable row, in order."""
+    if workers == 1:
+        for line in iter_jsonl(src, encoding=encoding, stats=invalid):
+            yield line.raw, signer.bands(line.value)
+        return
+    chunks = _parallel.raw_chunks(src, encoding, ReadStats())
+    parts = _parallel.ordered_map(
+        chunks, _sign_chunk, workers=workers, initializer=_worker_init,
+        initargs=(signer, encoding),
+    )  # fmt: skip
+    for rows, part in parts:
+        _parallel.merge_invalid(invalid, part)
+        yield from rows
+
+
+_WORKER: dict[str, Any] = {}
+
+
+def _worker_init(signer: _Signer, encoding: str) -> None:
+    _WORKER.update(signer=signer, encoding=encoding)
+
+
+def _sign_chunk(chunk: _parallel.Chunk) -> tuple[list[tuple[str, list[int]]], ReadStats]:
+    part = ReadStats()
+    signer: _Signer = _WORKER["signer"]
+    rows = [
+        (raw, signer.bands(value))
+        for _number, raw, value in _parallel.parse_chunk(chunk, _WORKER["encoding"], part)
+    ]
+    return rows, part
 
 
 def _row_text(value: Any, adapter: Any, keys: list[str] | None) -> str:

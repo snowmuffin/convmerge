@@ -80,6 +80,11 @@ def test_cli(tmp_path: Path, capsys) -> None:
     src = _write(tmp_path / "in.jsonl", ROWS)
     main(["dedupe", "-i", str(src), "-o", str(tmp_path / "o.jsonl"), "--near"])
     assert "near_duplicates=2" in capsys.readouterr().err
+    main(["dedupe", "-i", str(src), "-o", str(tmp_path / "w.jsonl"), "--near", "--workers", "2"])
+    assert (tmp_path / "w.jsonl").read_bytes() == (tmp_path / "o.jsonl").read_bytes()
+    with pytest.raises(SystemExit) as e:
+        main(["dedupe", "-i", str(src), "-o", str(tmp_path / "o.jsonl"), "--workers", "2"])
+    assert e.value.code == 2
     with pytest.raises(SystemExit) as e:
         main(["dedupe", "-i", str(src), "-o", str(tmp_path / "o.jsonl"), "--near",
               "--threshold", "2"])  # fmt: skip
@@ -100,6 +105,11 @@ def test_recipe(tmp_path: Path) -> None:
         parse_recipe({**raw, "dedupe": {"near": True, "threshold": 0}}, path=tmp_path / "r.yaml")
     with pytest.raises(RecipeError, match="dedupe.near"):
         parse_recipe({**raw, "dedupe": {"near": "yes"}}, path=tmp_path / "r.yaml")
+    for bad in ({"near": True, "workers": 0}, {"workers": 2}):
+        with pytest.raises(RecipeError, match="dedupe.workers"):
+            parse_recipe({**raw, "dedupe": bad}, path=tmp_path / "r.yaml")
+    two = {**raw, "dedupe": {**raw["dedupe"], "workers": 2}}
+    assert run(parse_recipe(two, path=tmp_path / "r.yaml"), log=lambda _m: None).ran == []
 
 
 def test_shared_system_prompts_do_not_count(tmp_path: Path) -> None:
@@ -109,3 +119,70 @@ def test_shared_system_prompts_do_not_count(tmp_path: Path) -> None:
             for q, a in (("What is 2+2?", "4"), ("Name a color.", "Blue"))]  # fmt: skip
     _, kept = deduplicate_near_jsonl(_write(tmp_path / "in.jsonl", rows), tmp_path / "o.jsonl")
     assert kept == 2
+
+
+def _variants(n: int) -> list:
+    """Rows in families of near-copies (random word edits), plus broken lines."""
+    import random
+
+    rng = random.Random(7)
+    vocab = [f"w{i}" for i in range(400)]
+    rows: list = []
+    for family in range(n):
+        base = [rng.choice(vocab) for _ in range(rng.randint(3, 80))]
+        for _ in range(rng.randint(1, 4)):
+            text = list(base)
+            for _ in range(rng.randint(0, 6)):
+                text[rng.randrange(len(text))] = rng.choice(vocab)
+            rows.append(_chat(f"q{family}", " ".join(text)))
+        if family % 25 == 0:
+            rows += ["{bad", ""]
+    return rows
+
+
+def _reference(rows: list, threshold: float, num_perm: int) -> list[str]:
+    """What 1.0 kept: datasketch's own MinHashLSH over the same row text."""
+    import datasketch as ds
+
+    from convmerge.adapter_resolve import resolve_adapter
+    from convmerge.normalize.near_dedup import _row_text, _shingles
+
+    adapter = resolve_adapter("auto", None, pairs=True)
+    lsh, kept = ds.MinHashLSH(threshold=threshold, num_perm=num_perm), []
+    for i, row in enumerate(r for r in rows if isinstance(r, dict)):
+        mh = ds.MinHash(num_perm=num_perm)
+        mh.update_batch([s.encode() for s in _shingles(_row_text(row, adapter, None), 5)])
+        if not lsh.query(mh):
+            lsh.insert(i, mh)
+            kept.append(json.dumps(row))
+    return kept
+
+
+@pytest.mark.parametrize(("threshold", "num_perm"), [(0.8, 128), (0.5, 64), (0.9, 256)])
+def test_index_matches_minhash_lsh(tmp_path: Path, threshold: float, num_perm: int) -> None:
+    rows = _variants(120)
+    src = _write(tmp_path / "in.jsonl", rows)
+    out = tmp_path / "out.jsonl"
+    deduplicate_near_jsonl(src, out, threshold=threshold, num_perm=num_perm)
+    kept = out.read_text().splitlines()
+    assert kept == _reference(rows, threshold, num_perm)
+    assert 0 < len(kept) < sum(isinstance(r, dict) for r in rows)
+
+
+def test_workers_match_one_process(tmp_path: Path, monkeypatch) -> None:
+    from convmerge import _parallel
+
+    monkeypatch.setattr(_parallel, "CHUNK_LINES", 7)
+    src = _write(tmp_path / "in.jsonl", _variants(60))
+    with src.open("ab") as f:
+        f.write(b'{"text": "\xff"}\n')
+    results = []
+    for workers in (1, 3):
+        st = NearDedupeStats()
+        out, rej = tmp_path / f"o{workers}.jsonl", tmp_path / f"r{workers}.jsonl"
+        deduplicate_near_jsonl(src, out, rejects=rej, stats=st, workers=workers)
+        results.append((out.read_bytes(), rej.read_bytes(), st))
+    assert results[0] == results[1]
+    assert results[1][2].invalid_json == 4 and results[1][2].first_invalid_line is not None
+    with pytest.raises(ValueError, match="workers"):
+        deduplicate_near_jsonl(src, tmp_path / "o.jsonl", workers=0)
