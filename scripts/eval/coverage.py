@@ -252,7 +252,7 @@ def main() -> int:
     parser.add_argument("--only", nargs="*", default=None, metavar="DATASET",
                         help="check only these dataset ids")  # fmt: skip
     parser.add_argument("--raw", type=int, default=0, metavar="N",
-                        help="print the first N source rows of datasets that are not ok")  # fmt: skip
+                        help="print N source rows of datasets that fail")  # fmt: skip
     parser.add_argument("--set", choices=("v014", "fresh", "all"), default="all",
                         help="v014: the 0.14 list; fresh: the 1.1 additions")  # fmt: skip
     args = parser.parse_args()
