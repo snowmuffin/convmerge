@@ -191,9 +191,9 @@ def test_cli_validate_exit_codes(tmp_path: Path, capsys) -> None:
 
 
 def test_parallel_fail_mode_reports_line(tmp_path: Path, monkeypatch) -> None:
-    import convmerge.convert as convmod
+    from convmerge import _parallel
 
-    monkeypatch.setattr(convmod, "_CHUNK_LINES", 1)
+    monkeypatch.setattr(_parallel, "CHUNK_LINES", 1)
     src = _write(tmp_path / "in.jsonl", GOOD, GOOD, BAD, GOOD)
     with pytest.raises(InvalidExampleError, match="line 3.*no_user"):
         convert_file(

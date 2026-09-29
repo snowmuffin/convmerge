@@ -168,11 +168,11 @@ def test_no_stale_expected_files() -> None:
 @pytest.mark.parametrize("case", sorted(CASES))
 def test_golden_parallel_matches(case: str, tmp_path: Path, monkeypatch) -> None:
     """--workers gives byte-identical output and stats, even with tiny chunks."""
-    import convmerge.convert as convmod
+    from convmerge import _parallel
 
     if UPDATE:
         pytest.skip("regenerating")
-    monkeypatch.setattr(convmod, "_CHUNK_LINES", 2)
+    monkeypatch.setattr(_parallel, "CHUNK_LINES", 2)
     fixture, adapter, fmt, options = CASES[case]
     kwargs = dict(options or {})
     emit = kwargs.pop("emit", None)
@@ -190,3 +190,33 @@ def test_golden_parallel_matches(case: str, tmp_path: Path, monkeypatch) -> None
     )
     stats_text = json.dumps(dataclasses.asdict(stats), indent=2, sort_keys=True) + "\n"
     assert stats_text == (GOLDEN / "expected" / f"{case}.stats.json").read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        b'{"instruction": "q", "output": "\xff"}',
+        b'{"instruction": "q", "output": "\\ud800"}',
+        b'{"messages": ' + b"[" * 100_000 + b"]" * 100_000 + b"}",
+    ],
+    ids=["bad-byte", "lone-surrogate", "too-deep"],
+)
+def test_parallel_skips_unreadable_lines_like_one_worker(
+    line: bytes, tmp_path: Path, monkeypatch
+) -> None:
+    from convmerge import _parallel
+
+    monkeypatch.setattr(_parallel, "CHUNK_LINES", 2)
+    good = b'{"instruction": "q", "output": "a"}'
+    src = tmp_path / "in.jsonl"
+    src.write_bytes(b"\n".join([good, good, line, good]) + b"\n")
+    cfg = build_convert_config(adapter="auto", output_format="messages")
+    results = []
+    for workers in (1, 2):
+        out = tmp_path / f"out{workers}.jsonl"
+        stats = ConvertStats()
+        convert_with_config(src, out, cfg, stats=stats, workers=workers)
+        results.append((out.read_bytes(), dataclasses.asdict(stats)))
+    assert results[0] == results[1]
+    assert results[1][1]["invalid_json"] == 1
+    assert results[1][1]["first_invalid_line"] == 3

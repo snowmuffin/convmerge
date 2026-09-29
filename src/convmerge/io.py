@@ -87,6 +87,33 @@ def _encoding_problem(raw: str, value: Any, *, check_bytes: bool, encoding: str)
     return None
 
 
+def _parse_line(
+    raw: str, *, check_bytes: bool, encoding: str
+) -> tuple[Any, json.JSONDecodeError | str | None]:
+    """``(value, None)`` for a usable stripped line, else ``(None, why)``.
+
+    The rules of :func:`iter_jsonl`, shared with the ``--workers`` code paths
+    that parse lines in other processes. ``check_bytes`` says whether the file
+    had bytes invalid in ``encoding`` (only then is the line scanned for them).
+    """
+    try:
+        value = json.loads(raw)
+    except json.JSONDecodeError as e:
+        return None, e
+    except RecursionError:
+        return None, "nested too deeply"
+    if check_bytes or "\\u" in raw:
+        problem = _encoding_problem(raw, value, check_bytes=check_bytes, encoding=encoding)
+        if problem is not None:
+            return None, problem
+    return value, None
+
+
+def bad_bytes_seen() -> int:
+    """How often this process has decoded an invalid byte (see :func:`iter_raw_lines`)."""
+    return _bad_bytes_seen
+
+
 def iter_raw_lines(path: str | Path, *, encoding: str = "utf-8") -> Iterator[tuple[int, str]]:
     """Yield ``(line_number, raw)`` for every physical line, unparsed.
 
@@ -134,6 +161,8 @@ def iter_jsonl(
             if not raw:
                 st.blank += 1
                 continue
+            # _parse_line applies the same rules; inlined here for speed
+            # (tests/test_io.py checks that the two agree).
             error: json.JSONDecodeError | str | None = None
             try:
                 value = json.loads(raw)
