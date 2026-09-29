@@ -261,7 +261,7 @@ def _dedupe_step(recipe: Recipe, src: Path, out: Path) -> Step:
 
             near = NearDedupeStats()
             deduplicate_near_jsonl(src, stage, threshold=spec.threshold, num_perm=spec.num_perm,
-                                   keys=spec.keys, stats=near)  # fmt: skip
+                                   keys=spec.keys, stats=near, workers=spec.workers)  # fmt: skip
             return dataclasses.asdict(near)
         st = DedupeStats()
         deduplicate_jsonl(src, stage, keys=spec.keys, algorithm=spec.algorithm, stats=st)
@@ -271,7 +271,7 @@ def _dedupe_step(recipe: Recipe, src: Path, out: Path) -> Step:
         "keys": list(spec.keys) if spec.keys else None,
         "algorithm": spec.algorithm,
     }
-    if spec.near:
+    if spec.near:  # workers never change the output, so they are not an option here
         options.update(near=True, threshold=spec.threshold, num_perm=spec.num_perm)
     return Step("dedupe", "dedupe", [src], out, options, run)
 
