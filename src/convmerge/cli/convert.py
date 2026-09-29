@@ -177,8 +177,8 @@ def _add_convert(sub: argparse._SubParsersAction) -> None:
         "--leading-assistant",
         choices=("keep", "drop"),
         default=None,
-        help="drop: remove assistant turns before the first user turn, whose prompt is "
-        "missing (otherwise such examples are dropped as assistant_first)",
+        help="drop: remove assistant turns before the first user turn (answers to a "
+        "withheld prompt, which are otherwise dropped as withheld_prompt, or a greeting)",
     )
     _add_progress_flag(p)
 
@@ -374,9 +374,9 @@ _DROP_HINTS = {
         "map_path_missing: a --from map path matched nothing in these records; check the "
         "paths against a sample row (a.b for keys, a[0] for an item, a[] for every item)"
     ),
-    "assistant_first": (
-        "assistant_first: these conversations start with an answer whose prompt is "
-        "missing; --leading-assistant drop removes that answer and keeps the rest"
+    "withheld_prompt": (
+        "withheld_prompt: the dataset left these prompts null; --leading-assistant drop "
+        "removes the answer to the missing prompt and keeps the rest of the conversation"
     ),
     "unrepresentable_role_order": (
         "unrepresentable_role_order: --merge-consecutive joins repeated user or "

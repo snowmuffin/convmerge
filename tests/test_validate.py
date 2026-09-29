@@ -55,8 +55,8 @@ A = ChatMessage("assistant", "a")
         # Media-only user turn is not empty.
         (_ex(ChatMessage("user", [ContentPart("image", url="x.png")]), A), []),
         (_ex(U, A, issues=["unresolved_image"]), ["unresolved_image"]),
-        # An answer before the first user turn has lost its prompt.
-        (_ex(ChatMessage("system", "s"), A, U, A), ["assistant_first"]),
+        # An agent may speak first.
+        (_ex(ChatMessage("system", "s"), A, U, A), []),
         (_ex(A), ["no_user"]),
     ],
 )
@@ -71,7 +71,6 @@ def test_every_reason_is_documented() -> None:
         "empty_message",
         "no_user",
         "no_assistant",
-        "assistant_first",
         "orphan_tool_message",
         "tool_call_id_mismatch",
     }

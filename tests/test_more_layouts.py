@@ -152,7 +152,8 @@ def test_leading_assistant_cli_and_recipe_keys(tmp_path: Path, capsys) -> None:
                                             {"role": "assistant", "content": "a"}]}) + "\n",
                    encoding="utf-8")  # fmt: skip
     main(["convert", "-i", str(src), "-o", str(tmp_path / "o.jsonl"), "--from", "auto"])
-    assert "--leading-assistant drop" in capsys.readouterr().err
+    # An agent that greets first is a whole conversation, not a withheld prompt.
+    assert "wrote 1 examples" in capsys.readouterr().err
     main(["convert", "-i", str(src), "-o", str(tmp_path / "o.jsonl"), "--from", "auto",
           "--leading-assistant", "drop"])  # fmt: skip
     assert "leading_assistant_dropped=1" in capsys.readouterr().err
@@ -242,3 +243,21 @@ def test_validate_reports_fields_that_change_type(tmp_path: Path, capsys) -> Non
     report = json.loads(captured.out)
     assert [c["path"] for c in report["type_conflicts"]] == sorted(found)
     assert "--tool-arguments string" in captured.err
+
+
+def test_withheld_prompt_needs_a_null_user_turn(tmp_path: Path, capsys) -> None:
+    from convmerge.cli import main
+
+    withheld = {"messages": [{"role": "user", "content": None},
+                             {"role": "assistant", "content": "a0"},
+                             {"role": "user", "content": "q"},
+                             {"role": "assistant", "content": "a"}]}  # fmt: skip
+    ex = _one(SFT, withheld)
+    assert validate_example(ex) == ["withheld_prompt"]
+    src = tmp_path / "in.jsonl"
+    src.write_text(json.dumps(withheld) + "\n", encoding="utf-8")
+    main(["convert", "-i", str(src), "-o", str(tmp_path / "o.jsonl"), "--from", "auto"])
+    assert "--leading-assistant drop" in capsys.readouterr().err
+    # An empty (not null) user turn is a blank turn, skipped as before.
+    blank = {"messages": [{"role": "user", "content": ""}, *withheld["messages"][1:]]}
+    assert validate_example(_one(SFT, blank)) == []
