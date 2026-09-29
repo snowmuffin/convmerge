@@ -178,10 +178,23 @@ Off by default; each one is counted in the report's `transforms`:
 | `--merge-consecutive` | Consecutive user turns, or consecutive assistant turns without tool calls, are joined with a blank line. Turns from different named speakers and tool turns are left alone. | "Conversation roles must alternate" (Mistral, Gemma, Llama 2); LLaMA-Factory's `unrepresentable_role_order`. |
 | `--reasoning-turns last` | Removes the reasoning of assistant turns before the last user turn. | Qwen3 / gpt-oss / DeepSeek-R1 templates, which drop those traces at inference. |
 | `--split-turns` | One example per user turn (the conversation up to the next user turn); earlier answers keep their text but lose their reasoning; `meta.turn` records the position. Not for preference formats. | Training every turn of a multi-turn reasoning conversation the way the model sees it. |
+| `--leading-assistant drop` | Assistant (and tool) turns before the first user turn are removed; system turns stay. | Datasets that withhold the first prompt (Nemotron chat: `null` user turn, otherwise dropped as `withheld_prompt`), or agent data that opens with a greeting when the template requires a user turn first. |
 
-Order: system, merge, split, reasoning turns. The same options exist in
+Order: leading assistant, system, merge, split, reasoning turns. The same options exist in
 presets (`transforms:`), recipes (source `convert` keys), and the API
 (`TransformOptions`).
+
+### Training on the last turn only (`--train-turns last`)
+
+Some multi-turn datasets are meant to train on the final answer alone
+(Nemotron chat: earlier answers were sampled, not selected). With
+`--train-turns last`, the `messages` format writes `"train": false` on every
+assistant turn but the last. axolotl reads the flag with
+`message_field_training: train`, which `convmerge axolotl-config` adds when the
+file has it; checked with `axolotl preprocess`, only the final answers keep
+labels. TRL's `assistant_only_loss` ignores the flag (it trains every
+assistant turn). Other formats reject the option; for LLaMA-Factory set
+`mask_history: true` in the training config instead.
 
 ### Provenance (`--keep-meta`)
 
@@ -292,11 +305,21 @@ Tries, in order:
    - `pairwise_mode="both"` emits both branches; `"a"` / `"b"` always pick one side.
 2. Chat-list containers named `messages`, `conversation`, or `conversations`
    (also when the list is stored as a JSON string, as in
-   `microsoft/orca-agentinstruct-1M-v1`).
+   `microsoft/orca-agentinstruct-1M-v1`, or in a `messages_json` column with
+   `tools_json` next to it, as in `younissk/tool-calling-mix`; a string that
+   is a rendered conversation, such as Gemma turns, is split like a `text`
+   column).
+   - When the turns end without an answer, the answer is read from its own
+     column: the output keys of step 6, `target`, or `target_json` (a string,
+     or an object with `content` and/or `tool_calls`).
    - Both `{role, content}` and ShareGPT-style `{from, value}` entries work,
      as do Capybara-style `{input, output}` turn pairs.
    - A default role map normalizes `human → user`, `gpt/bing/bot/model → assistant`,
-     and `function/function-response/observation → tool`.
+     `input → system` (`heegyu/open-korean-instructions-v20231020`), and
+     `function/function-response/observation → tool`.
+   - A user turn that is `null` while the conversation starts with an answer
+     marks the example `withheld_prompt` (Nemotron chat leaves prompts from
+     other datasets out that way); `--leading-assistant drop` keeps the rest.
    - OpenAI-style content arrays are kept as content parts (text, and media by
      reference: `image_url`, `{"type": "image"}` placeholders, audio, video);
      text-only arrays collapse to a string. `tool_calls` (and the legacy
@@ -319,10 +342,13 @@ Tries, in order:
    an `output` string (`system_prompt` becomes the system turn, as `system`
    does elsewhere).
 6. Fallback: flat question/answer keys — `instruction` / `question` / `prompt` /
-   `problem` / `query`, optional `input` / `context`, and the first of `output` /
-   `response` / `completion` / `solution` / `answer` / `generated_solution` /
-   `generation` (so a full `solution` wins over a short final `answer`) — with the
-   `alpaca` adapter's `system` / `history` handling.
+   `problem` / `query` / `inputs`, optional `input` / `context`, and the first of
+   `output` / `response` / `completion` / `solution` / `answer` /
+   `generated_solution` / `generation` / `targets` (so a full `solution` wins over a
+   short final `answer`) — with the `alpaca` adapter's `system` / `history`
+   handling.
+7. A record with none of these keys but capitalised ones (`Instruction` /
+   `Response`, `Messages`) is read again with lower-case keys.
 
 You can override every part (`conversation_keys`, `role_keys`, `content_keys`,
 `role_map`, `instruction_keys`, `input_keys`, `output_keys`, `pairwise_mode`,
@@ -378,6 +404,8 @@ top-level `tools` list — whatever the source used:
 | xLAM `query` / `answers` / `tools` | `Salesforce/xlam-function-calling-60k` | user query + one assistant turn with the calls |
 | Bracket calls `[Func Name(key="v", n=1), Other()]` + a JSON function list in the system prompt | `Team-ACE/ToolACE` | each call becomes a structured call; the listed functions become `tools`; the system prompt is kept as written |
 | `function-call` / `function-response` turns | `Locutusque/function-calling-chatml` | Glaive-style `{"name": ..., "arguments": '...'}` becomes a call; the function JSON in the system turn moves to `tools` |
+| `AI to=name: {...}` as the last line of an assistant turn | `glaiveai/glaive-function-calling-v2`, `Locutusque/function-calling-chatml` (some rows) | the line becomes a call (the text before it stays); the next tool turns get the function name |
+| `messages_json` + `tools_json` + `target_json` (`{"tool_calls": [...]}`) | `younissk/tool-calling-mix` | the target becomes the assistant turn with its calls |
 
 Hermes tags are decoded only in conversations that have a `tools` column, a
 `tool` turn, or a `<tools>` block in the system prompt, so ordinary text that
@@ -531,7 +559,16 @@ convmerge convert -i in.jsonl -o out.jsonl --from auto -f messages \
 convmerge validate -i out.jsonl # same checks on an existing file; exit 1 if any fail
 ```
 
+`validate` also lists fields whose JSON type changes between rows
+(`type_conflicts`: the path, the first line of each kind, and a hint), with a
+warning on stderr. `datasets.load_dataset("json")` before 4.8 (LLaMA-Factory
+installs 4.0) fails on them with `ArrowInvalid`. The usual causes are tool-call
+arguments written as objects whose values differ between calls
+(`--tool-arguments string` fixes it) and text-only rows mixed with multimodal
+ones. Type conflicts do not change the exit status.
+
 From Python: `convert_file(..., on_invalid="drop", stats=ConvertStats())`,
+`convert_records(records, ...)` for records in memory,
 `convmerge.validate_example(example)`, and `convmerge.validate_file(path)`.
 
 ## Normalization utilities

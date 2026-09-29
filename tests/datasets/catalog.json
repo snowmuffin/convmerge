@@ -958,7 +958,7 @@
  {
   "id": "younissk/tool-calling-mix",
   "kind": "tools",
-  "shape": "`messages_json` / `tools_json` / `target_json` strings",
+  "shape": "`messages_json` / `tools_json` / `target_json` strings (no-call and ToolBench ReAct rows drop)",
   "config": null,
   "split": "train",
   "format": "messages",
@@ -970,7 +970,9 @@
    "n_calls": 1,
    "difficulty": "simple",
    "valid": true
-  }
+  },
+  "min_ok": 0.55,
+  "note": "about 19% of rows have no call and no answer; about 22% are ToolBench trajectories with ReAct text calls"
  },
  {
   "id": "ZeroAgency/gemma3-pythonic-function-tool-calling-v1",

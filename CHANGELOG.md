@@ -7,6 +7,72 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-09-29
+
+More datasets convert with `--from auto`, and the checks before training
+cover the loaders and trainers from the 1.1 evaluation. On 25 popular Hub
+datasets that convmerge had never been tested on, 19 now convert with no
+options (1.1: 11 of 22 loadable). The catalog grows from 52 to 61 datasets,
+each checked on 1,000 real rows. All additive; see "Changed output" for the
+rows that convert differently.
+
+### Added
+
+- Layouts `--from auto` recognises:
+  - `inputs` / `targets` (FLAN, P3, `CohereLabs/aya_dataset`)
+  - capitalised keys (`Instruction` / `Response`) when no known key is
+    present (`CertifiedJoon/Korean-Instruction`)
+  - `messages_json` / `tools_json` columns, and the answer in its own column
+    after prompt-only turns (`response`, `target`, `target_json` with
+    `tool_calls`; `younissk/tool-calling-mix`)
+  - a rendered conversation (Gemma, ChatML, ...) under a conversation key
+    (`ZeroAgency/gemma3-pythonic-function-tool-calling-v1`)
+  - `chosen_response` / `rejected_response`, `response_chosen` /
+    `response_rejected` (`argilla/distilabel-math-preference-dpo`,
+    `shibing624/DPO-En-Zh-20k-Preference`)
+  - HH transcripts that start with `Human:` instead of a blank line
+  - Glaive `AI to=name: {...}` calls at the end of an assistant turn
+  - the `input` role as the system prompt
+    (`heegyu/open-korean-instructions-v20231020`)
+- `--leading-assistant drop` (preset and recipe key `leading_assistant`,
+  `TransformOptions.leading_assistant`) removes assistant turns before the
+  first user turn.
+- `--train-turns last` (`EmitOptions.train_turns`, preset and recipe key
+  `train_turns`) writes `"train": false` on every assistant turn but the last
+  in the `messages` format; `axolotl-config` adds `message_field_training:
+  train`. Checked with `axolotl preprocess`: only the final answers keep
+  labels.
+- `validate` reports `type_conflicts`: fields whose JSON type changes between
+  rows, on which `datasets.load_dataset("json")` before 4.8 fails with
+  `ArrowInvalid` (LLaMA-Factory installs 4.0), with a hint per field.
+- `tokens` reports `response_markers`, the `instruction_part` /
+  `response_part` for Unsloth's `train_on_responses_only` worked out from
+  the chat template (the same strings Unsloth documents for Qwen, Llama 3.1,
+  and Gemma), and `markers_missing`, rows whose tokens do not contain them.
+- `convert_records()`: the convert pipeline in memory, for notebooks and
+  `datasets.Dataset` (same rows and stats as `convert_file`).
+- `dedupe --rejects` (`deduplicate_jsonl(rejects=)`) writes the removed
+  duplicates, for exact and `--near` dedupe.
+- Catalog: nine datasets, among them Nemotron chat (with
+  `--leading-assistant drop`) and the Korean copy of the distilabel math DPO
+  set (with `--from map` on its `_ko` columns).
+
+### Changed output
+
+- Rows in the layouts above that were dropped before are now written:
+  - `glaiveai/glaive-function-calling-v2` and
+    `Locutusque/function-calling-chatml` convert 1,000 of 1,000 sample rows
+    (1.1: 998).
+  - Files with `inputs` / `targets`, capitalised keys, `*_json` columns, or
+    alias preference keys convert where 1.1 wrote nothing.
+- A conversation whose user turn is `null` and that starts with the answer
+  to it (Nemotron chat withholds prompts from other datasets that way) is
+  dropped as `withheld_prompt` instead of being written without its prompt;
+  `--leading-assistant drop` keeps the rest of the conversation.
+
+Every other catalog dataset converts exactly as in 1.1 (the pinned outputs
+are unchanged), and `convert` runs at the same speed.
+
 ## [1.1.1] - 2026-09-29
 
 Fixes from the 1.1 evaluation: files in another encoding, `fetch` errors,
