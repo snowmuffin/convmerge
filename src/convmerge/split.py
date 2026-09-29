@@ -89,8 +89,8 @@ def split_jsonl(
     Path(train_out).parent.mkdir(parents=True, exist_ok=True)
     Path(val_out).parent.mkdir(parents=True, exist_ok=True)
     with (
-        open(train_out, "w", encoding=encoding) as ftrain,
-        open(val_out, "w", encoding=encoding) as fval,
+        open(train_out, "w", encoding="utf-8") as ftrain,
+        open(val_out, "w", encoding="utf-8") as fval,
     ):
         for index, line in enumerate(iter_jsonl(src, encoding=encoding, stats=read)):
             if to_val(index, row_hash(line.value)):

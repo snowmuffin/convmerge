@@ -105,3 +105,30 @@ def test_manifest_revision_errors(entry: dict, error: str) -> None:
 
     with pytest.raises(ValueError, match=error):
         parse_manifest({"datasets": [entry]})
+
+
+def _fetch_exit(argv: list[str]) -> int:
+    from convmerge.cli import main
+
+    with pytest.raises(SystemExit) as exc:
+        main(argv)
+    return int(exc.value.code or 0)
+
+
+def test_cli_fetch_without_datasets_exits_2_with_install_hint(
+    monkeypatch, tmp_path: Path, capsys
+) -> None:
+    monkeypatch.setitem(sys.modules, "datasets", None)  # import fails
+    assert _fetch_exit(["fetch", "hf://org/ds", "-o", str(tmp_path)]) == 2
+    err = capsys.readouterr().err
+    assert "pip install 'convmerge[fetch-all]'" in err and "Traceback" not in err
+
+
+def test_cli_fetch_network_error_is_one_line(monkeypatch, tmp_path: Path, capsys) -> None:
+    def fail(*args, **kwargs):
+        raise ConnectionError("proxy said no to https://user:secret@example.com/x\nsecond line")
+
+    monkeypatch.setitem(sys.modules, "datasets", types.SimpleNamespace(load_dataset=fail))
+    assert _fetch_exit(["fetch", "hf://org/ds", "-o", str(tmp_path)]) == 1
+    err = capsys.readouterr().err.strip()
+    assert err == "error: fetch failed: ConnectionError: proxy said no to https://example.com/x"
