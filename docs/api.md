@@ -13,6 +13,7 @@ internal and may change without notice.
 |------|---------|
 | `convert_file(input, output, *, adapter_name, output_format, ...)` | Read JSONL → adapter → validate → emit. Returns `(lines_read, lines_written)`. Options: `encoding`, `adapter_options`, `progress`, `stats`, `on_invalid` (`drop`/`keep`/`fail`), `emit_options`, `workers`, `transform_options`. `encoding` is the input's; every function writes its output files as UTF-8. |
 | `convert_with_config(input, output, cfg, ...)` | Same, from a resolved `ConvertConfig`. |
+| `convert_records(records, *, adapter_name="auto", output_format="messages", ...)` | The same pipeline in memory: any iterable of dicts (a list, a generator, a `datasets.Dataset`) in, output rows (dicts) out, lazily. Takes `adapter_options`, `emit_options`, `transform_options`, `on_invalid`, and `stats` like `convert_file`. |
 | `build_convert_config(*, preset_path, adapter, output_format, ...)` | Merge a preset file, `--adapter-kwargs` JSON, and explicit overrides into a `ConvertConfig`. |
 | `validate_file(input, *, adapter_name="chat")` | Run validation only; returns `ConvertStats`. |
 | `ConvertStats` | Counters and drop reasons; pass one as `stats=` and read it afterwards. `to_report()` gives the `--report` JSON. |
@@ -35,6 +36,16 @@ convert_file(
     stats=stats, workers=4,
 )
 print(stats.written, stats.drop_reasons)
+```
+
+In a notebook, without files:
+
+```python
+from datasets import Dataset, load_dataset
+from convmerge import convert_records
+
+raw = load_dataset("tatsu-lab/alpaca", split="train[:1000]")
+train = Dataset.from_list(list(convert_records(raw)))
 ```
 
 ## Data model

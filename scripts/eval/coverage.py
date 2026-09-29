@@ -69,7 +69,7 @@ FRESH: list[tuple[str, str, str | None]] = [
     # general / agent SFT
     ("nvidia/Nemotron-SFT-Instruction-Following-Chat-v3", "sft", None),
     ("allenai/tulu-3-sft-personas-instruction-following", "sft", None),
-    ("openbmb/UltraData-SFT-Agent-2609", "sft", None),
+    ("openbmb/UltraData-SFT-Agent-2609", "sft", "Tool-Use"),
     ("OpenDataArena/Spark-234K", "sft", None),
     ("nisten/opus5-5-doctor-patient-conversations-all-human-diseases", "sft", None),
     ("OpenAssistant/oasst2", "sft", None),
@@ -78,8 +78,8 @@ FRESH: list[tuple[str, str, str | None]] = [
     ("agent-eto/eto-sft-trajectory", "sft", None),
     # reasoning
     ("MoreThought/Fable-5.1-Max-Reasoning-Filtered-10000x", "reasoning", None),
-    ("IFM/Code-Reasoning", "reasoning", None),
-    ("CohereLabs/tiny-aya-l2-thinker-multilingual-reasoning", "reasoning", None),
+    ("IFM/Code-Reasoning", "reasoning", "code-thinking-v1"),
+    ("CohereLabs/tiny-aya-l2-thinker-multilingual-reasoning", "reasoning", "ko"),
     ("Roman1111111/GPT-5.6-luna-reasoning-102881x", "reasoning", None),
     ("open-thoughts/OpenThoughts-114k", "reasoning", None),
     # tools
@@ -91,7 +91,7 @@ FRESH: list[tuple[str, str, str | None]] = [
     ("ZeroAgency/gemma3-pythonic-function-tool-calling-v1", "tools", None),
     # preference
     ("argilla/distilabel-math-preference-dpo", "preference", None),
-    ("shibing624/DPO-En-Zh-20k-Preference", "preference", None),
+    ("shibing624/DPO-En-Zh-20k-Preference", "preference", "en"),
     ("Columbia-NLP/DPO-tldr-summarisation-preferences", "preference", None),
     ("allenai/llama-3.1-tulu-3-8b-preference-mixture", "preference", None),
     ("openbmb/UltraFeedback", "preference", None),
@@ -113,6 +113,24 @@ def rows(dataset: str, config: str | None, n: int) -> tuple[str, list[dict[str, 
     split = "train" if "train" in splits else splits[0]
     ds = load_dataset(dataset, config, split=split, streaming=True)
     return split, [dict(r) for r in ds.take(n)]
+
+
+RAW_ROWS = 0  # --raw: source rows kept in the result (strings clipped)
+
+
+def _clip(value: Any, limit: int = 300) -> Any:
+    if isinstance(value, str) and value[:1] in "[{":
+        try:  # a JSON column (messages_json): clip inside it, not the whole string
+            return {"<json>": _clip(json.loads(value), limit)}
+        except ValueError:
+            pass
+    if isinstance(value, str):
+        return value if len(value) <= limit else value[:limit] + f"...(+{len(value) - limit})"
+    if isinstance(value, dict):
+        return {k: _clip(v, limit) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_clip(v, limit) for v in value[:8]]
+    return value if isinstance(value, (int, float, bool, type(None))) else str(value)
 
 
 def check(dataset: str, kind: str, config: str | None, n: int) -> dict[str, Any]:
@@ -143,6 +161,7 @@ def check(dataset: str, kind: str, config: str | None, n: int) -> dict[str, Any]
     result.update(read=stats.lines_read, written=stats.written, reasoning=stats.reasoning,
                   drops=dict(stats.drop_reasons))  # fmt: skip
     result["first"] = first[0][:400] if first else None
+    result["raw"] = [_clip(r) for r in data[:RAW_ROWS]]
     ok = stats.lines_read and stats.written >= 0.9 * stats.lines_read
     result["status"] = "ok" if ok else ("partial" if stats.written else "fail")
     return result
@@ -157,7 +176,7 @@ def _isolated(dataset: str, kind: str, config: str | None, args: argparse.Namesp
     import subprocess
     import time
 
-    cmd = [sys.executable, __file__, "--rows", str(args.rows),
+    cmd = [sys.executable, __file__, "--rows", str(args.rows), "--raw", str(args.raw),
            "--one", dataset, kind, config or "-"]  # fmt: skip
     base: dict[str, Any] = {"id": dataset, "kind": kind, "config": config}
     limit_kb = int(args.max_memory_gb * 2**20)
@@ -235,9 +254,15 @@ def main() -> int:
                         help=argparse.SUPPRESS)  # fmt: skip
     parser.add_argument("--timeout", type=int, default=300, help="seconds per dataset")
     parser.add_argument("--max-memory-gb", type=float, default=4.0)
+    parser.add_argument("--only", nargs="*", default=None, metavar="DATASET",
+                        help="check only these dataset ids")  # fmt: skip
+    parser.add_argument("--raw", type=int, default=0, metavar="N",
+                        help="print N source rows of datasets that fail")  # fmt: skip
     parser.add_argument("--set", choices=("v014", "fresh", "all"), default="all",
                         help="v014: the 0.14 list; fresh: the 1.1 additions")  # fmt: skip
     args = parser.parse_args()
+    global RAW_ROWS
+    RAW_ROWS = args.raw
     if args.one:
         dataset, kind, config = args.one
         print(json.dumps(check(dataset, kind, None if config == "-" else config, args.rows)))
@@ -248,6 +273,8 @@ def main() -> int:
         if args.set not in (name, "all"):
             continue
         for dataset, kind, config in entries:
+            if args.only and dataset not in args.only:
+                continue
             print(f"[check] {dataset}", file=sys.stderr, flush=True)
             results.append({**_isolated(dataset, kind, config, args), "set": name})
     text = render(results, args.rows)
@@ -259,7 +286,10 @@ def main() -> int:
         args.json.write_text(json.dumps(results, ensure_ascii=False, indent=1), encoding="utf-8")
     for r in results:  # full detail for failures, in the log
         if r["status"] not in ("ok",):
+            raw = r.pop("raw", None)
             print(json.dumps(r, ensure_ascii=False)[:1500])
+            for row in raw or []:
+                print("  raw:", json.dumps(row, ensure_ascii=False)[:3000])
     return 0
 
 

@@ -51,6 +51,7 @@ adapter_options:
 #   alpaca_multiturn: flatten # flatten | history | drop
 #   reasoning: keep           # keep | inline | reasoning_content | thinking | drop
 #   tool_content: empty       # empty ("" on tool-call turns) | null
+#   train_turns: all          # all | last ("train": false on earlier answers)
 
 # Optional: fixes for strict chat templates (all off by default)
 # transforms:
@@ -58,6 +59,7 @@ adapter_options:
 #   merge_consecutive: false  # join consecutive same-role turns
 #   split_turns: false        # one example per user turn
 #   reasoning_turns: all      # all | last (reasoning only after the last user turn)
+#   leading_assistant: keep   # keep | drop (answers before the first user turn)
 """
 
 

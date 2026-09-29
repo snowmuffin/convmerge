@@ -48,7 +48,7 @@ def flags(entry: dict[str, Any]) -> str:
     out = f"--from {entry.get('adapter', 'auto')} --format {entry['format']}"
     if entry.get("preference"):
         out += f" --preference {entry['preference']}"
-    for key, value in entry.get("emit", {}).items():
+    for key, value in {**entry.get("emit", {}), **entry.get("transforms", {})}.items():
         out += f" --{key.replace('_', '-')} {value}"
     if entry.get("adapter_kwargs"):
         out += f" --adapter-kwargs '{json.dumps(entry['adapter_kwargs'], separators=(',', ':'))}'"
@@ -66,6 +66,7 @@ def convert_config(entry: dict[str, Any]) -> Any:
         preference=entry.get("preference"),
         emit_overrides=entry.get("emit") or None,
         adapter_kwargs_json=json.dumps(kwargs) if kwargs else None,
+        transform_overrides=entry.get("transforms") or None,
     )
 
 
@@ -157,8 +158,9 @@ def check_entry(
     result = Result(rid, "ok", stats.lines_read, stats.written, stats.reasoning, drops)
     if not stats.lines_read:
         result.status, result.note = "fail", "no rows"
-    elif stats.written < min_ok * stats.lines_read:
-        result.status, result.note = "fail", f"fewer than {min_ok:.0%} of rows converted"
+    elif stats.written < entry.get("min_ok", min_ok) * stats.lines_read:
+        need = entry.get("min_ok", min_ok)
+        result.status, result.note = "fail", f"fewer than {need:.0%} of rows converted"
     elif entry["kind"] == "reasoning" and not stats.reasoning and traced:
         result.status = "fail"
         result.note = f"{traced} rows carry a reasoning trace, but no converted row does"
