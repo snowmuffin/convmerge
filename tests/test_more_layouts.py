@@ -1,0 +1,161 @@
+"""Layouts recognised since 1.2 (and the rules that keep older records as they were)."""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+import pytest
+
+from convmerge import TransformOptions, convert_file
+from convmerge.adapter_resolve import resolve_adapter
+from convmerge.validate import validate_example
+
+SFT = resolve_adapter("auto", None)
+PAIRS = resolve_adapter("auto", None, pairs=True)
+
+
+def _one(adapter, record):
+    [example] = list(adapter(record))
+    return example
+
+
+def _turns(example):
+    return [(m.role, m.text, [c.name for c in m.tool_calls]) for m in example.messages]
+
+
+def test_inputs_targets() -> None:
+    ex = _one(SFT, {"inputs": "Capital of France?", "targets": "Paris.", "language": "English"})
+    assert _turns(ex) == [("user", "Capital of France?", []), ("assistant", "Paris.", [])]
+
+
+def test_known_keys_win_over_inputs_targets() -> None:
+    ex = _one(SFT, {"instruction": "q", "output": "a", "inputs": "x", "targets": "y"})
+    assert _turns(ex) == [("user", "q", []), ("assistant", "a", [])]
+
+
+def test_capitalised_keys() -> None:
+    ex = _one(SFT, {"Instruction": "질문", "Response": "답변", "Source": "kin"})
+    assert _turns(ex) == [("user", "질문", []), ("assistant", "답변", [])]
+    # Records with a known key are read exactly as before: "Response" is not an answer here.
+    ex = _one(SFT, {"messages": [{"role": "user", "content": "q"}], "Response": "a"})
+    assert validate_example(ex) == ["no_assistant"]
+
+
+def test_input_role_is_the_system_prompt() -> None:
+    turns = [("input", "Be brief."), ("human", "Hi"), ("bot", "Hello")]
+    record = {"conversations": [{"from": f, "value": v} for f, v in turns]}
+    assert [t[0] for t in _turns(_one(SFT, record))] == ["system", "user", "assistant"]
+
+
+def test_json_columns_and_separate_answer() -> None:
+    record = {
+        "messages_json": json.dumps([{"role": "user", "content": "Variance of 1, 2, 3?"}]),
+        "tools_json": json.dumps([{"name": "variance", "parameters": {"type": "object"}}]),
+        "target_json": json.dumps({"tool_calls": [{"name": "variance", "arguments": {"x": [1]}}]}),
+    }
+    ex = _one(SFT, record)
+    assert _turns(ex) == [("user", "Variance of 1, 2, 3?", []), ("assistant", "", ["variance"])]
+    assert ex.tools and ex.tools[0]["function"]["name"] == "variance"
+    assert validate_example(ex) == []
+
+
+def test_answer_column_only_fills_a_missing_answer() -> None:
+    record = {"messages": [{"role": "user", "content": "q"}], "response": "a"}
+    assert _turns(_one(SFT, record))[-1] == ("assistant", "a", [])
+    record = {"messages": [{"role": "user", "content": "q"}, {"role": "assistant", "content": "a"}],
+              "response": "other"}  # fmt: skip
+    assert _turns(_one(SFT, record)) == [("user", "q", []), ("assistant", "a", [])]
+
+
+def test_rendered_conversation_under_a_conversation_key() -> None:
+    text = ("<bos><start_of_turn>user\nHi<end_of_turn>\n"
+            "<start_of_turn>model\nHello<end_of_turn>\n")  # fmt: skip
+    assert _turns(_one(SFT, {"conversation": text})) == [
+        ("user", "Hi", []),
+        ("assistant", "Hello", []),
+    ]
+
+
+@pytest.mark.parametrize(
+    ("chosen", "rejected"),
+    [("chosen_response", "rejected_response"), ("response_chosen", "response_rejected")],
+)
+def test_preference_key_aliases(chosen: str, rejected: str) -> None:
+    ex = _one(PAIRS, {"instruction": "2+2?", chosen: "4", rejected: "5"})
+    assert [m.text for m in ex.messages] == ["2+2?", "4"]
+    assert [m.text for m in ex.rejected] == ["2+2?", "5"]
+
+
+def test_hh_transcript_without_leading_blank_line() -> None:
+    record = {"chosen": "Human: Hi there\n\nAssistant: Hello!",
+              "rejected": "Human: Hi there\n\nAssistant: Go away."}  # fmt: skip
+    ex = _one(PAIRS, record)
+    assert [(m.role, m.text) for m in ex.messages] == [
+        ("user", "Hi there"),
+        ("assistant", "Hello!"),
+    ]
+    assert ex.rejected[-1].text == "Go away."
+    # A plain answer that happens to start with "Human" is not a transcript.
+    ex = _one(PAIRS, {"prompt": "Q", "chosen": "Human rights matter.", "rejected": "No."})
+    assert ex.messages[-1].text == "Human rights matter."
+
+
+def test_glaive_ai_to_call() -> None:
+    record = {
+        "system": 'SYSTEM: You have functions -\n{"name": "bmi", "parameters": {"type": "object"}}',
+        "chat": "USER: My BMI? 1.75 m\n\n\nASSISTANT: Let me check.\n"
+        'AI to=bmi: {"height": 1.75} <|endoftext|>\n\n\n'
+        'FUNCTION RESPONSE: {"bmi": 22.2}\n\n\nASSISTANT: It is 22.2. <|endoftext|>',
+    }
+    ex = _one(SFT, record)
+    assert _turns(ex)[1:] == [
+        ("user", "My BMI? 1.75 m", []),
+        ("assistant", "Let me check.", ["bmi"]),
+        ("tool", '{"bmi": 22.2}', []),
+        ("assistant", "It is 22.2.", []),
+    ]
+    assert ex.messages[3].name == "bmi" and validate_example(ex) == []
+
+
+def test_ai_to_needs_a_json_object() -> None:
+    answer = {"role": "assistant", "content": "Say AI to=someone: hello"}
+    record = {"messages": [{"role": "user", "content": "q"}, answer]}
+    assert _turns(_one(SFT, record))[-1] == ("assistant", "Say AI to=someone: hello", [])
+
+
+def _rows(path: Path) -> list[dict]:
+    return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
+
+
+def test_leading_assistant(tmp_path: Path) -> None:
+    src = tmp_path / "in.jsonl"
+    src.write_text(json.dumps({"messages": [
+        {"role": "system", "content": None}, {"role": "user", "content": None},
+        {"role": "assistant", "content": "a0"}, {"role": "user", "content": "q1"},
+        {"role": "assistant", "content": "a1"}]}) + "\n", encoding="utf-8")  # fmt: skip
+    out = tmp_path / "out.jsonl"
+    assert convert_file(src, out, adapter_name="auto", output_format="messages") == (1, 0)
+    convert_file(src, out, adapter_name="auto", output_format="messages",
+                 transform_options=TransformOptions(leading_assistant="drop"))  # fmt: skip
+    assert _rows(out) == [{"messages": [{"role": "user", "content": "q1"},
+                                        {"role": "assistant", "content": "a1"}]}]  # fmt: skip
+
+
+def test_leading_assistant_cli_and_recipe_keys(tmp_path: Path, capsys) -> None:
+    from convmerge.cli import main
+    from convmerge.config import transform_options_from_mapping
+
+    src = tmp_path / "in.jsonl"
+    src.write_text(json.dumps({"messages": [{"role": "assistant", "content": "a0"},
+                                            {"role": "user", "content": "q"},
+                                            {"role": "assistant", "content": "a"}]}) + "\n",
+                   encoding="utf-8")  # fmt: skip
+    main(["convert", "-i", str(src), "-o", str(tmp_path / "o.jsonl"), "--from", "auto"])
+    assert "--leading-assistant drop" in capsys.readouterr().err
+    main(["convert", "-i", str(src), "-o", str(tmp_path / "o.jsonl"), "--from", "auto",
+          "--leading-assistant", "drop"])  # fmt: skip
+    assert "leading_assistant_dropped=1" in capsys.readouterr().err
+    assert transform_options_from_mapping({"leading_assistant": "drop"}).leading_assistant == "drop"
+    with pytest.raises(ValueError):
+        TransformOptions(leading_assistant="first")

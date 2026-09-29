@@ -497,6 +497,7 @@ that would train badly are **dropped by default** and counted by reason:
 | `empty_message` | a message has neither content nor tool calls |
 | `no_user` | there is no user message (e.g. a plain `text` record) |
 | `no_assistant` | there is no assistant message with content or tool calls |
+| `assistant_first` | the conversation starts with an assistant turn whose prompt is missing (`--leading-assistant drop` removes that turn and keeps the rest) |
 | `orphan_tool_message` | a `tool` message is not preceded by an assistant tool call |
 | `tool_call_id_mismatch` | a `tool_call_id` matches no earlier tool call id |
 | `unresolved_image` / `_video` / `_audio` | a media placeholder has no matching reference in the record |

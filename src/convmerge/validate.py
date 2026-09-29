@@ -20,6 +20,10 @@ REASONS: dict[str, str] = {
     "empty_message": "a message has neither content nor tool calls",
     "no_user": "there is no user message",
     "no_assistant": "there is no assistant message with content or tool calls",
+    "assistant_first": (
+        "the conversation starts with an assistant turn (its prompt is missing; "
+        "--leading-assistant drop removes it)"
+    ),
     "orphan_tool_message": "a tool message is not preceded by an assistant tool call",
     "tool_call_id_mismatch": "a tool message's tool_call_id matches no earlier tool call",
 }
@@ -44,9 +48,11 @@ def validate_example(example: TrainingExample) -> list[str]:
         # (e.g. ``preference_record``) has already said what is wrong.
         return list(example.issues) or ["no_messages"]
 
-    unknown_role = empty = has_user = has_assistant = has_tool = False
+    unknown_role = empty = has_user = has_assistant = has_tool = assistant_first = False
     for m in msgs:
         role = m.role
+        if role == "assistant" and not has_user:
+            assistant_first = True
         if role not in ALLOWED_ROLES:
             unknown_role = True
         is_empty = _is_empty(m)
@@ -67,6 +73,8 @@ def validate_example(example: TrainingExample) -> list[str]:
         reasons.append("no_user")
     if not has_assistant:
         reasons.append("no_assistant")
+    elif assistant_first and has_user:
+        reasons.append("assistant_first")
     if has_tool:
         reasons.extend(_tool_pairing(msgs))
     reasons.extend(example.issues)

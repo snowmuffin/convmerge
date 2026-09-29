@@ -37,17 +37,40 @@ _B_WINS = ("conversation_b", "conversation_a")
 _ARENA_WINNERS = {"model_a": _A_WINS, "a": _A_WINS, "model_b": _B_WINS, "b": _B_WINS}
 
 _HH_TURN = re.compile(r"\n\n(Human|Assistant):[ \t]?")
+# The same transcript without the leading blank line ("Human: ...").
+_HH_START = re.compile(r"\A\s*Human:[ \t]?")
+
+# Other names for the chosen / rejected answers (distilabel math DPO,
+# ``chosen_response`` / ``rejected_response``), in priority order.
+PREFERENCE_ALIASES: tuple[tuple[str, str], ...] = (
+    ("chosen_response", "rejected_response"),
+    ("response_chosen", "response_rejected"),
+    ("chosen_output", "rejected_output"),
+)
 _LIST_KEYS = ("conversations", "messages", "conversation")
+
+
+def with_preference_keys(record: dict[str, Any]) -> dict[str, Any]:
+    """``record`` with ``chosen`` / ``rejected`` taken from an alias pair
+    (``chosen_response`` / ``rejected_response``, ...) when it has neither."""
+    if "chosen" in record or "rejected" in record:
+        return record
+    for chosen, rejected in PREFERENCE_ALIASES:
+        if chosen in record and rejected in record:
+            rest = {k: v for k, v in record.items() if k not in (chosen, rejected)}
+            return {**rest, "chosen": record[chosen], "rejected": record[rejected]}
+    return record
 
 
 def apply_preference(record: dict[str, Any], which: str) -> dict[str, Any]:
     """Return ``record`` with its ``which`` answer folded in (unchanged if absent)."""
+    record = with_preference_keys(record)
     value = record.get(which)
     if value is None:
         return record
     rest = {k: v for k, v in record.items() if k not in PREFERENCES}
 
-    if isinstance(value, str) and _HH_TURN.search(value):
+    if isinstance(value, str) and _is_hh(value):
         turns = _parse_hh(value)
         if turns:
             return {**_without_lists(rest), "messages": turns}
@@ -86,8 +109,15 @@ def apply_preference(record: dict[str, Any], which: str) -> dict[str, Any]:
     return record
 
 
+def _is_hh(text: str) -> bool:
+    if _HH_TURN.search(text):
+        return True
+    return bool(_HH_START.match(text)) and "Assistant:" in text
+
+
 def _parse_hh(text: str) -> list[dict[str, str]]:
-    parts = _HH_TURN.split(text)
+    # A transcript may start with "Human:" instead of "\n\nHuman:".
+    parts = _HH_TURN.split(_HH_START.sub("\n\nHuman: ", text, count=1))
     # parts: [preamble, speaker, text, speaker, text, ...]
     turns: list[dict[str, str]] = []
     for i in range(1, len(parts) - 1, 2):
@@ -123,7 +153,12 @@ def _assistant(text: str) -> dict[str, str]:
 
 
 def is_preference_record(record: dict[str, Any]) -> bool:
-    return "chosen" in record and "rejected" in record
+    if "chosen" in record:
+        return "rejected" in record
+    for chosen, rejected in PREFERENCE_ALIASES:
+        if chosen in record and rejected in record:
+            return True
+    return False
 
 
 def iter_pairs(
@@ -134,7 +169,7 @@ def iter_pairs(
     A record that is not a preference record is adapted as-is (the
     ``preference`` format then drops it as ``unrepresentable_not_preference``).
     """
-    record = _arena_as_preference(record)
+    record = with_preference_keys(_arena_as_preference(record))
     if not is_preference_record(record):
         yield from adapter(record)
         return
