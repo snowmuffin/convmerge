@@ -9,6 +9,7 @@ import sys
 from pathlib import Path
 
 from convmerge.cli._common import add_progress_flag as _add_progress_flag
+from convmerge.cli._common import encoding_advice
 from convmerge.cli._common import positive_int as _positive_int
 
 
@@ -137,7 +138,8 @@ def _add_dedupe(sub: argparse._SubParsersAction) -> None:
     )  # fmt: skip
     p.add_argument(
         "--threshold", type=float, default=0.8,
-        help="--near: estimated Jaccard similarity that makes a row a duplicate (0.8)",
+        help="--near: estimated Jaccard similarity that makes a row a duplicate (0.8; "
+        "0.7 also catches copies with a few words changed)",
     )  # fmt: skip
     p.add_argument("--num-perm", type=_positive_int, default=128,
                    help="--near: MinHash permutations (128)")  # fmt: skip
@@ -161,7 +163,10 @@ def _cmd_dedupe(args: argparse.Namespace) -> None:
     if args.workers > 1:
         print("error: --workers applies to --near (exact dedupe is single-pass)", file=sys.stderr)
         sys.exit(2)
+    from convmerge.io import bad_bytes_seen
+
     stats = DedupeStats()
+    bad_bytes_before = bad_bytes_seen()
     total, kept = deduplicate_jsonl(
         args.input,
         args.output,
@@ -183,7 +188,10 @@ def _cmd_dedupe(args: argparse.Namespace) -> None:
         print(
             f"warning: dropped {stats.invalid_json:,} invalid JSON lines "
             f"(first at line {stats.first_invalid_line}); "
-            "run `convmerge normalize` first to repair the file",
+            + (
+                encoding_advice(bad_bytes_before, "utf-8", has_encoding_flag=False)
+                or "run `convmerge normalize` first to repair the file"
+            ),
             file=sys.stderr,
         )
 
@@ -247,7 +255,10 @@ def _cmd_split(args: argparse.Namespace) -> None:
         print(f"error: input file not found: {args.input}", file=sys.stderr)
         sys.exit(1)
     val_output = args.val_output or default_val_path(args.output)
+    from convmerge.io import bad_bytes_seen
+
     stats = SplitStats()
+    bad_bytes_before = bad_bytes_seen()
     split_jsonl(
         args.input, args.output, val_output,
         val=args.val, val_rows=args.val_rows, seed=args.seed, keys=args.keys, stats=stats,
@@ -262,6 +273,9 @@ def _cmd_split(args: argparse.Namespace) -> None:
             f"(first at line {stats.first_invalid_line})",
             file=sys.stderr,
         )
+        advice = encoding_advice(bad_bytes_before, "utf-8", has_encoding_flag=False)
+        if advice:
+            print(f"hint: {advice}", file=sys.stderr)
 
 
 def _fraction(value: str) -> float:

@@ -150,6 +150,15 @@ convmerge dedupe -i big.jsonl -o deduped.jsonl --near --workers 4  # same output
 - Rows whose estimated Jaccard similarity to an earlier kept row reaches
   `--threshold` are dropped, so the first row of a group of near-copies
   stays.
+- Similarity falls quickly with edits: one changed word breaks up to five
+  5-grams, so changing 3% of the words already brings it to about 0.74. On
+  100,000 rows of English text with 4,974 planted copies that had 1-4% of
+  their words changed, `--threshold 0.8` removed 54% of the copies, 0.75
+  removed 70%, and 0.7 removed 85%. None of the originals and none of 1,940
+  copies with 25-35% of their words changed were removed at any of the three.
+  datatrove's default (14 bands of 8 hashes, about 0.72) removed 90%. Use
+  `--threshold 0.7` to catch lightly edited copies; the default stays 0.8
+  within 1.x so existing outputs do not change.
 - This catches what exact `dedupe` misses: the same source translated or
   reformatted slightly differently, or answers that differ in a few words.
 - It is approximate. MinHash estimates the similarity, and LSH finds the

@@ -336,3 +336,26 @@ def test_global_max_rows_skips_unsamplable_entries(monkeypatch, tmp_path: Path) 
     assert result.failed == []
     assert seen == {"a.jsonl": 9, "b.json": None}
     assert any("array: cannot be sampled" in m for m in logs)
+
+
+def test_cli_manifest_on_error_fail_ends_with_one_line(monkeypatch, tmp_path: Path, capsys) -> None:
+    pytest.importorskip("yaml")
+    import convmerge.fetch.hf as hfmod
+    from convmerge.cli import main
+
+    def boom(*a, **kw):
+        raise ConnectionError("unreachable")
+
+    monkeypatch.setattr(hfmod, "download_hf_dataset", boom)
+    manifest = tmp_path / "m.yaml"
+    manifest.write_text(
+        f"defaults:\n  output_root: {tmp_path}\n  on_error: fail\n"
+        "datasets:\n  - name: ds1\n    hf: org/a\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(SystemExit) as exc:
+        main(["fetch", str(manifest)])
+    assert exc.value.code == 1
+    err = capsys.readouterr().err
+    assert "Traceback" not in err
+    assert err.strip().splitlines()[-1].startswith("error: RuntimeError: Fetch failed for 'ds1'")

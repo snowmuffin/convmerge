@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 
 from convmerge.cli._common import add_progress_flag as _add_progress_flag
-from convmerge.cli._common import config_errors
+from convmerge.cli._common import config_errors, encoding_advice
 from convmerge.cli._common import positive_int as _positive_int
 from convmerge.convert import REPORT_VERSION, ConvertStats, convert_file
 
@@ -53,7 +53,10 @@ def _add_convert(sub: argparse._SubParsersAction) -> None:
             'or {"sharegpt":{"turn_mode":"full"}}'
         ),
     )
-    p.add_argument("--encoding", default="utf-8", help="File encoding (default: utf-8)")
+    p.add_argument(
+        "--encoding", default="utf-8",
+        help="Input file encoding, such as cp949 (default: utf-8); output is always UTF-8",
+    )  # fmt: skip
     p.add_argument(
         "--preference",
         choices=("chosen", "rejected"),
@@ -187,9 +190,11 @@ def _cmd_convert(args: argparse.Namespace) -> None:
         print(f"error: {e}", file=sys.stderr)
         sys.exit(2)
     from convmerge.convert import InvalidExampleError
+    from convmerge.io import bad_bytes_seen
     from convmerge.progress import progress_enabled
 
     stats = ConvertStats()
+    bad_bytes_before = bad_bytes_seen()
     try:
         n_in, n_out = convert_file(
             args.input,
@@ -209,7 +214,8 @@ def _cmd_convert(args: argparse.Namespace) -> None:
         print(f"error: {e} (use --on-invalid drop or keep to continue)", file=sys.stderr)
         sys.exit(1)
     print(f"read {n_in} lines, wrote {n_out} examples", file=sys.stderr)
-    if n_out == 0:
+    advice = encoding_advice(bad_bytes_before, cfg.encoding, has_encoding_flag=True)
+    if n_out == 0 and not advice:  # a bad encoding is explained with the skipped lines below
         for hint in _explain_empty(args.input, cfg.adapter, cfg.encoding, stats):
             print(f"hint: {hint}", file=sys.stderr)
     if stats.reasoning:
@@ -230,7 +236,7 @@ def _cmd_convert(args: argparse.Namespace) -> None:
     if stats.first_invalid_line is not None:
         print(
             f"warning: first invalid JSON at line {stats.first_invalid_line}; "
-            "run `convmerge normalize` first to repair the file",
+            f"{advice or 'run `convmerge normalize` first to repair the file'}",
             file=sys.stderr,
         )
 
@@ -390,7 +396,7 @@ def _add_validate(sub: argparse._SubParsersAction) -> None:
         metavar="ADAPTER",
         help="Adapter used to read records (default: chat, which reads messages rows)",
     )
-    p.add_argument("--encoding", default="utf-8")
+    p.add_argument("--encoding", default="utf-8", help="Input file encoding (default: utf-8)")
 
 
 def _cmd_validate(args: argparse.Namespace) -> None:
