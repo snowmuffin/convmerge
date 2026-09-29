@@ -73,6 +73,7 @@
   --slop-max default=3
   --min-script default=[]
   --rules-file
+  --workers default=1
 [convmerge decontam]
   --input, -i required
   --against required
