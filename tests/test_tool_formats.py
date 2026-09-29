@@ -269,9 +269,10 @@ def test_toolace_bracket_calls(tmp_path: Path) -> None:
 @pytest.mark.parametrize(
     ("answer", "calls"),
     [
-        # Argument names that are Python keywords (ToolACE: from=..., to=...).
-        ('[SEC Filings(shareuid=6789, from="2025-01-01", to="2025-12-31")]',
-         [_call("SEC Filings", {"shareuid": 6789, "from": "2025-01-01", "to": "2025-12-31"})]),
+        # Argument names that are Python keywords or OData options (ToolACE).
+        ('[SEC Filings(shareuid=6789, from="2025-01-01", to="2025-12-31", $top=10)]',
+         [_call("SEC Filings", {"shareuid": 6789, "from": "2025-01-01", "to": "2025-12-31",
+                                "$top": 10})]),
         # Names with parentheses; the longest listed name wins.
         ('[User Feed (Video Posts) V2(username="sunny"), User Feed (id=1)]',
          [_call("User Feed (Video Posts) V2", {"username": "sunny"}),
