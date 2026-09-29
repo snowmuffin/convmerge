@@ -166,6 +166,13 @@ def _add_convert(sub: argparse._SubParsersAction) -> None:
         help="last: remove reasoning from assistant turns before the last user turn "
         "(what Qwen3 / gpt-oss templates render)",
     )
+    g.add_argument(
+        "--leading-assistant",
+        choices=("keep", "drop"),
+        default=None,
+        help="drop: remove assistant turns before the first user turn, whose prompt is "
+        "missing (otherwise such examples are dropped as assistant_first)",
+    )
     _add_progress_flag(p)
 
 
@@ -326,6 +333,8 @@ def _transform_overrides(args: argparse.Namespace) -> dict[str, object]:
         out["split_turns"] = True
     if args.reasoning_turns is not None:
         out["reasoning_turns"] = args.reasoning_turns
+    if args.leading_assistant is not None:
+        out["leading_assistant"] = args.leading_assistant
     return out
 
 
@@ -355,6 +364,10 @@ _DROP_HINTS = {
     "map_path_missing": (
         "map_path_missing: a --from map path matched nothing in these records; check the "
         "paths against a sample row (a.b for keys, a[0] for an item, a[] for every item)"
+    ),
+    "assistant_first": (
+        "assistant_first: these conversations start with an answer whose prompt is "
+        "missing; --leading-assistant drop removes that answer and keeps the rest"
     ),
     "unrepresentable_role_order": (
         "unrepresentable_role_order: --merge-consecutive joins repeated user or "

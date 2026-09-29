@@ -42,6 +42,7 @@ from convmerge.adapters._common import (
     build_example,
     coerce_messages,
     first_text,
+    parse_tool_calls,
     source_meta,
 )
 from convmerge.adapters.alpaca import iter_from_alpaca_line
@@ -61,6 +62,7 @@ DEFAULT_ROLE_MAP: dict[str, str] = {
     "bot": "assistant",
     "model": "assistant",
     "system": "system",
+    "input": "system",  # heegyu/open-korean-instructions-v20231020: the system prompt
     "tool": "tool",
     "function": "tool",
     "function-response": "tool",
@@ -86,6 +88,7 @@ DEFAULT_INSTRUCTION_KEYS: tuple[str, ...] = (
     "prompt",
     "problem",
     "query",
+    "inputs",  # FLAN / P3 / Aya inputs/targets
 )
 DEFAULT_OUTPUT_KEYS: tuple[str, ...] = (
     "output",
@@ -95,6 +98,7 @@ DEFAULT_OUTPUT_KEYS: tuple[str, ...] = (
     "answer",
     "generated_solution",  # nvidia OpenMathInstruct
     "generation",  # distilabel text generation
+    "targets",  # FLAN / P3 / Aya inputs/targets
 )
 DEFAULT_INPUT_KEYS: tuple[str, ...] = ("input", "context")
 
@@ -143,8 +147,20 @@ def iter_from_chat_line(
 
     for key in conversation_keys:
         convs = record.get(key)
+        if convs is None and f"{key}_json" in record:
+            # ``messages_json`` / ``tools_json``: the columns as JSON strings.
+            record = _json_columns(record, (key, "tools"))
+            convs = record.get(key)
         if isinstance(convs, str):
-            convs = _json_list(convs)  # orca-agentinstruct: the turns as a JSON string
+            text = convs
+            convs = _json_list(text)  # orca-agentinstruct: the turns as a JSON string
+            if convs is None and text.strip():
+                # A rendered conversation (Gemma, ChatML, ...) under a
+                # conversation key instead of ``text``.
+                turns = parse_text_chat(text)
+                if turns:
+                    yield build_example(turns, record, meta={"source": "chat:text"})
+                    return
         if isinstance(convs, list) and convs:
             msgs = coerce_messages(
                 convs,
@@ -153,6 +169,11 @@ def iter_from_chat_line(
                 role_map=role_map,
                 reasoning_keys=reasoning_keys,
             ) or _input_output_turns(convs)
+            if msgs and msgs[-1].role != "assistant" and not _has_answer(msgs):
+                # The prompt turns, with the answer in its own column.
+                answer = _answer_turn(record, (*output_keys, "target", "target_json"))
+                if answer is not None:
+                    msgs.append(answer)
             if msgs:
                 yield build_example(msgs, record, meta={"source": "chat"})
             return
@@ -212,6 +233,25 @@ def iter_from_chat_line(
     if remapped is not None:
         reasoning = first_text(record, record_reasoning_keys)
         yield from iter_from_alpaca_line(remapped, reasoning=reasoning)
+        return
+    lowered = _lower_case_keys(
+        record, (*conversation_keys, *instruction_keys, *output_keys, "text", "chat")
+    )
+    if lowered is not record:
+        # Only capitalised keys (``Instruction`` / ``Response``): read them again.
+        yield from iter_from_chat_line(
+            lowered,
+            conversation_keys=conversation_keys,
+            role_keys=role_keys,
+            content_keys=content_keys,
+            role_map=role_map,
+            pairwise_mode=pairwise_mode,
+            instruction_keys=instruction_keys,
+            output_keys=output_keys,
+            input_keys=input_keys,
+            reasoning_keys=reasoning_keys,
+            record_reasoning_keys=record_reasoning_keys,
+        )
 
 
 def _iter_pairwise(
@@ -295,6 +335,60 @@ def _remap_for_alpaca(
         "output": out or "",
         "response": "",
     }
+
+
+def _lower_case_keys(record: dict[str, Any], known: tuple[str, ...]) -> dict[str, Any]:
+    """``record`` with lower-case copies of its keys when only a capitalised
+    form of a known key is present (``Instruction`` / ``Response``).
+
+    A record that already has a known key is returned unchanged, so records
+    that converted before are read exactly as before.
+    """
+    if any(k in record for k in known):
+        return record
+    extra = {k.lower(): v for k, v in record.items() if k.lower() != k and k.lower() in known}
+    if not extra or any(k in record for k in extra):
+        return record
+    return {**record, **extra}
+
+
+def _has_answer(msgs: list[ChatMessage]) -> bool:
+    for m in msgs:
+        if m.role == "assistant":
+            return True
+    return False
+
+
+def _json_columns(record: dict[str, Any], keys: tuple[str, ...]) -> dict[str, Any]:
+    """Read ``messages_json`` / ``tools_json`` (JSON strings) as ``messages`` /
+    ``tools`` when the record has no column of that name."""
+    extra = {
+        k: record[f"{k}_json"]
+        for k in keys
+        if k not in record and isinstance(record.get(f"{k}_json"), str)
+    }
+    return {**record, **extra} if extra else record
+
+
+def _answer_turn(record: dict[str, Any], keys: tuple[str, ...]) -> ChatMessage | None:
+    """The assistant turn stored apart from the prompt turns: a string, or an
+    object with ``content`` and/or ``tool_calls`` (``target_json``)."""
+    for key in keys:
+        value = record.get(key)
+        if isinstance(value, str) and key.endswith("_json"):
+            try:
+                value = json.loads(value)
+            except ValueError:
+                continue
+        if isinstance(value, str) and value.strip():
+            return ChatMessage("assistant", value)
+        if isinstance(value, dict):
+            calls = tuple(parse_tool_calls(value))
+            content = value.get("content")
+            text = content if isinstance(content, str) and content.strip() else None
+            if calls or text:
+                return ChatMessage("assistant", text, tool_calls=calls)
+    return None
 
 
 def _first_string(record: dict[str, Any], keys: tuple[str, ...]) -> str | None:

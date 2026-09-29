@@ -1,6 +1,6 @@
 [convmerge]
 class AdapterOptions(chat: 'ChatAdapterOptions | None' = None, sharegpt: 'SharegptAdapterOptions | None' = None, preference: 'str | None' = None, map: 'MapSpec | None' = None) -> None
-class ChatAdapterOptions(conversation_keys: 'tuple[str, ...]' = ('messages', 'conversation', 'conversations'), role_keys: 'tuple[str, ...]' = ('role', 'from'), content_keys: 'tuple[str, ...]' = ('content', 'value', 'text'), role_map: 'dict[str, str] | None' = None, pairwise_mode: 'str' = 'winner', instruction_keys: 'tuple[str, ...]' = ('instruction', 'question', 'prompt', 'problem', 'query'), output_keys: 'tuple[str, ...]' = ('output', 'response', 'completion', 'solution', 'answer', 'generated_solution', 'generation'), input_keys: 'tuple[str, ...]' = ('input', 'context'), reasoning_keys: 'tuple[str, ...]' = ('reasoning_content', 'thinking', 'reasoning'), record_reasoning_keys: 'tuple[str, ...]' = ()) -> None
+class ChatAdapterOptions(conversation_keys: 'tuple[str, ...]' = ('messages', 'conversation', 'conversations'), role_keys: 'tuple[str, ...]' = ('role', 'from'), content_keys: 'tuple[str, ...]' = ('content', 'value', 'text'), role_map: 'dict[str, str] | None' = None, pairwise_mode: 'str' = 'winner', instruction_keys: 'tuple[str, ...]' = ('instruction', 'question', 'prompt', 'problem', 'query', 'inputs'), output_keys: 'tuple[str, ...]' = ('output', 'response', 'completion', 'solution', 'answer', 'generated_solution', 'generation', 'targets'), input_keys: 'tuple[str, ...]' = ('input', 'context'), reasoning_keys: 'tuple[str, ...]' = ('reasoning_content', 'thinking', 'reasoning'), record_reasoning_keys: 'tuple[str, ...]' = ()) -> None
 class ChatMessage(role: 'str', content: 'str | Sequence[ContentPart] | None', tool_calls: 'Sequence[ToolCall]' = (), tool_call_id: 'str | None' = None, name: 'str | None' = None, reasoning: 'str | None' = None) -> None
     media: property -> tuple[ContentPart, ...]
     text: property -> str
@@ -45,7 +45,7 @@ class ToolCall(name: 'str', arguments: 'str' = '{}', id: 'str | None' = None) ->
     def arguments_object(self) -> 'Any'
     @classmethod from_any(cls, name: 'str', arguments: 'Any', id: 'str | None' = None) -> 'ToolCall'
 class TrainingExample(messages: 'list[ChatMessage]' = <factory>, meta: 'dict[str, object]' = <factory>, tools: 'list[dict[str, Any]] | None' = None, issues: 'list[str]' = <factory>, rejected: 'list[ChatMessage] | None' = None) -> None
-class TransformOptions(system: 'SystemMode' = 'keep', merge_consecutive: 'bool' = False, split_turns: 'bool' = False, reasoning_turns: 'ReasoningTurns' = 'all') -> None
+class TransformOptions(system: 'SystemMode' = 'keep', merge_consecutive: 'bool' = False, split_turns: 'bool' = False, reasoning_turns: 'ReasoningTurns' = 'all', leading_assistant: 'LeadingAssistant' = 'keep') -> None
     active: property -> bool
 class UnrepresentableExample(ValueError)(reason: 'str', message: 'str' = '')
 __version__: str

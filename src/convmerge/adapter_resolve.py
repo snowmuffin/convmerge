@@ -51,7 +51,7 @@ def _with_preference(record, *, adapter, which):
 
 
 def _flag_preference(record, *, adapter):
-    if "rejected" not in record or not is_preference_record(record):
+    if not is_preference_record(record):
         return adapter(record)
     return _flagged(record, adapter)
 

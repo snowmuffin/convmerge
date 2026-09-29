@@ -23,6 +23,7 @@
   --merge-consecutive (switch)
   --split-turns (switch)
   --reasoning-turns choices=all|last
+  --leading-assistant choices=keep|drop
   --progress (switch)
 [convmerge validate]
   --input, -i required

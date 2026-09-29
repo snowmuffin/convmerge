@@ -20,6 +20,7 @@ from convmerge.adapters.tool_formats import (
     glaive_call_object,
     hermes_tools,
     looks_like_bracket_calls,
+    rewrite_ai_to_calls,
     rewrite_bracket_calls,
     rewrite_hermes,
     system_tool_specs,
@@ -332,6 +333,10 @@ def build_example(
             tools = hermes_tools(msgs)
     if tools is None and looks_like_bracket_calls(msgs):
         msgs, tools = rewrite_bracket_calls(msgs)
+    for m in msgs:
+        if m.role == "assistant" and type(m.content) is str and "AI to=" in m.content:
+            msgs = rewrite_ai_to_calls(msgs)
+            break
     if tools is None and any(m.tool_calls for m in msgs):
         msgs, tools = system_tool_specs(msgs)
     msgs, issues = attach_media(msgs, record)

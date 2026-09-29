@@ -203,6 +203,40 @@ def glaive_call_object(text: str) -> ToolCall | None:
     return ToolCall.from_any(match.group(1), match.group(2)) if match else None
 
 
+# Some Glaive-derived rows write a call as a line of the assistant's text:
+# ``Let me check.\nAI to=calculate_bmi: {"height": 1.75}`` instead of
+# ``<functioncall>``.
+_AI_TO = re.compile(r"(?:\A|\n)[ \t]*AI to=([\w.\-]+):[ \t]*(\{.*\})\s*\Z", re.S)
+
+
+def rewrite_ai_to_calls(messages: list[ChatMessage]) -> list[ChatMessage]:
+    """Assistant text ending in an ``AI to=name: {...}`` line becomes a tool call
+    (the text before it stays as content); the tool turns that answer it get
+    the function's name when they have none."""
+    out: list[ChatMessage] = []
+    last_call: str | None = None
+    for m in messages:
+        if m.role == "assistant" and not m.tool_calls and isinstance(m.content, str):
+            match = _AI_TO.search(m.content) if "AI to=" in m.content else None
+            if match is not None:
+                try:
+                    args = json.loads(match.group(2))
+                except ValueError:
+                    args = None
+                if isinstance(args, dict):
+                    text = m.content[: match.start()].strip()
+                    call = ToolCall.from_any(match.group(1), args)
+                    last_call = call.name
+                    out.append(replace(m, content=text or None, tool_calls=(call,)))
+                    continue
+        if m.role == "tool" and m.name is None and last_call is not None:
+            m = replace(m, name=last_call)
+        elif m.role != "tool":
+            last_call = None
+        out.append(m)
+    return out
+
+
 def system_tool_specs(messages: list[ChatMessage]) -> tuple[list[ChatMessage], list[Any] | None]:
     """Move function specs written into the system turn (Glaive style) to ``tools``."""
     for i, m in enumerate(messages):

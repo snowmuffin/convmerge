@@ -58,6 +58,7 @@ adapter_options:
 #   merge_consecutive: false  # join consecutive same-role turns
 #   split_turns: false        # one example per user turn
 #   reasoning_turns: all      # all | last (reasoning only after the last user turn)
+#   leading_assistant: keep   # keep | drop (answers before the first user turn)
 """
 
 

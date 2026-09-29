@@ -82,7 +82,13 @@ _EMIT_OPTION_KEYS = (
     "tool_content",
     "meta",
 )
-_TRANSFORM_OPTION_KEYS = ("system", "merge_consecutive", "split_turns", "reasoning_turns")
+_TRANSFORM_OPTION_KEYS = (
+    "system",
+    "merge_consecutive",
+    "split_turns",
+    "reasoning_turns",
+    "leading_assistant",
+)
 
 
 def check_preference(value: Any) -> str:
@@ -146,7 +152,7 @@ def transform_options_from_mapping(
             if not isinstance(data[key], bool):
                 raise ValueError(f"{where}.{key} must be true or false")
             kw[key] = data[key]
-    for key in ("system", "reasoning_turns"):
+    for key in ("system", "reasoning_turns", "leading_assistant"):
         if key in data:
             kw[key] = str(data[key])
     return TransformOptions(**kw)

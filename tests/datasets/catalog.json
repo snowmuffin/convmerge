@@ -542,6 +542,63 @@
   }
  },
  {
+  "id": "CohereLabs/aya_dataset",
+  "kind": "sft",
+  "shape": "inputs / targets",
+  "lang": "multi",
+  "config": null,
+  "split": "train",
+  "format": "messages",
+  "record": {
+   "inputs": "Quels président des États-Unis ne s'est jamais marié ?",
+   "targets": "James Buchanan est le seul président qui ne s'est jamais marié.",
+   "language": "French",
+   "language_code": "fra",
+   "annotation_type": "re-annotations",
+   "user_id": "5bd1"
+  }
+ },
+ {
+  "id": "CertifiedJoon/Korean-Instruction",
+  "kind": "sft",
+  "shape": "Instruction / Response (capitalised)",
+  "lang": "ko",
+  "config": null,
+  "split": "train",
+  "format": "messages",
+  "record": {
+   "Instruction": "화상을 입었는데 병원에 가야 하나요?",
+   "Response": "물집이 크면 병원에 가세요.",
+   "Source": "Naver Kin",
+   "MetaData": "https://kin.naver.com/qna/1"
+  }
+ },
+ {
+  "id": "heegyu/open-korean-instructions-v20231020",
+  "kind": "sft",
+  "shape": "ShareGPT, `input` turn = system prompt",
+  "lang": "ko",
+  "config": null,
+  "split": "train",
+  "format": "messages",
+  "record": {
+   "conversations": [
+    {
+     "from": "input",
+     "value": "당신은 문제 해결 도우미입니다."
+    },
+    {
+     "from": "human",
+     "value": "공 3개에서 1개를 주면 몇 개가 남나요?"
+    },
+    {
+     "from": "bot",
+     "value": "3 - 1 = 2개가 남습니다."
+    }
+   ]
+  }
+ },
+ {
   "id": "open-thoughts/OpenThoughts3-1.2M",
   "kind": "reasoning",
   "shape": "ShareGPT, inline `<think>`",
@@ -689,6 +746,57 @@
      }
     }
    ]
+  }
+ },
+ {
+  "id": "nvidia/Nemotron-SFT-Instruction-Following-Chat-v3",
+  "kind": "reasoning",
+  "shape": "messages + `reasoning_content`, first prompt withheld (`null`)",
+  "config": null,
+  "split": "chat",
+  "format": "messages",
+  "transforms": {
+   "leading_assistant": "drop"
+  },
+  "min_ok": 0.6,
+  "note": "single-turn rows whose only prompt is withheld drop as no_user (about 30%)",
+  "record": {
+   "messages": [
+    {
+     "role": "system",
+     "content": null
+    },
+    {
+     "role": "user",
+     "content": null
+    },
+    {
+     "role": "assistant",
+     "reasoning_content": "The user hit a React Router error.",
+     "content": "Use useNavigate in v6."
+    },
+    {
+     "role": "user",
+     "content": "Module has no exported member 'useHistory'."
+    },
+    {
+     "role": "assistant",
+     "reasoning_content": "Same migration issue.",
+     "content": "Replace useHistory with useNavigate."
+    }
+   ],
+   "used_in": [
+    "ultra_v3"
+   ],
+   "uuid": "1996a0ef",
+   "metadata": {
+    "seed_dataset": "allenai/WildChat-1M",
+    "train_turns": [
+     false,
+     false,
+     true
+    ]
+   }
   }
  },
  {
@@ -845,6 +953,36 @@
      "value": "Top headline: Louvre to reopen."
     }
    ]
+  }
+ },
+ {
+  "id": "younissk/tool-calling-mix",
+  "kind": "tools",
+  "shape": "`messages_json` / `tools_json` / `target_json` strings",
+  "config": null,
+  "split": "train",
+  "format": "messages",
+  "record": {
+   "tools_json": "[{\"name\": \"calculate_variance\", \"description\": \"Calculates variance of a dataset.\", \"parameters\": {\"type\": \"dict\", \"properties\": {\"data\": {\"type\": \"array\", \"items\": {\"type\": \"float\"}}}, \"required\": [\"data\"]}}]",
+   "messages_json": "[{\"role\": \"user\", \"content\": \"What is the variance of 1, 2 and 3?\"}]",
+   "target_json": "{\"tool_calls\": [{\"name\": \"calculate_variance\", \"arguments\": {\"data\": [1, 2, 3]}}]}",
+   "meta_source": "synthetic_parallel",
+   "n_calls": 1,
+   "difficulty": "simple",
+   "valid": true
+  }
+ },
+ {
+  "id": "ZeroAgency/gemma3-pythonic-function-tool-calling-v1",
+  "kind": "tools",
+  "shape": "Gemma-rendered `conversation`, Python-style calls",
+  "lang": "en, ru",
+  "config": null,
+  "split": "train",
+  "format": "messages",
+  "record": {
+   "conversation": "<bos><start_of_turn>system\nYou are a helpful assistant.\n\nTools (functions) are available. If you decide to invoke one or more of the tools, you must respond with a python list of the function calls.\n[{\"name\": \"get_weather\", \"description\": \"Weather for a city\", \"parameters\": {\"type\": \"object\", \"properties\": {\"city\": {\"type\": \"string\"}}}}]<end_of_turn>\n<start_of_turn>user\nWhat is the weather in Paris?<end_of_turn>\n<start_of_turn>model\n[get_weather(city='Paris')]<end_of_turn>\n<start_of_turn>user\nThanks!<end_of_turn>\n<start_of_turn>model\nYou're welcome.<end_of_turn>\n",
+   "source": "Vikhrmodels/tool-plannings-v0.2:full_dataset"
   }
  },
  {
@@ -1200,6 +1338,68 @@
      "feedback2": "Vague."
     }
    ]
+  }
+ },
+ {
+  "id": "argilla/distilabel-math-preference-dpo",
+  "kind": "preference",
+  "shape": "instruction + chosen_response / rejected_response",
+  "config": null,
+  "split": "train",
+  "format": "preference",
+  "record": {
+   "metadata": "{\"length-input\": 139}",
+   "instruction": "What is 2x^2 - 3y + 7 at x = 5, y = -2?",
+   "chosen_response": "2(25) + 6 + 7 = 63.",
+   "chosen_rating": 9.0,
+   "rejected_response": "50 - 6 + 7 = 51.",
+   "rejected_rating": 7.0
+  }
+ },
+ {
+  "id": "shibing624/DPO-En-Zh-20k-Preference",
+  "kind": "preference",
+  "shape": "history pairs + question + response_chosen / response_rejected",
+  "lang": "en, zh",
+  "config": "en",
+  "split": "train",
+  "format": "preference",
+  "record": {
+   "system": "",
+   "history": [
+    [
+     "Rate these movies.",
+     "8.5/10 and 3.5/10."
+    ]
+   ],
+   "question": "How would a strong director change that?",
+   "response_rejected": "It would not matter.",
+   "response_chosen": "It could raise both ratings by a point or more."
+  }
+ },
+ {
+  "id": "ChuGyouk/argilla-distilabel-math-preference-dpo-korean",
+  "kind": "preference",
+  "shape": "English + `_ko` columns, chosen_response / rejected_response",
+  "lang": "ko",
+  "config": null,
+  "split": "train",
+  "format": "preference",
+  "adapter": "map",
+  "adapter_kwargs": {
+   "map": {
+    "user": "instruction_ko",
+    "chosen": "chosen_response_ko",
+    "rejected": "rejected_response_ko"
+   }
+  },
+  "record": {
+   "instruction": "What is 2+2?",
+   "instruction_ko": "2+2는 무엇인가요?",
+   "chosen_response": "4",
+   "chosen_response_ko": "4입니다.",
+   "rejected_response": "5",
+   "rejected_response_ko": "5입니다."
   }
  }
 ]
