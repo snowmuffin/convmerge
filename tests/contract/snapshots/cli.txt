@@ -44,6 +44,7 @@
   --output, -o required
   --keys nargs=+
   --algorithm choices=md5|sha256 default='md5'
+  --rejects
   --seen-store choices=memory|sqlite default='memory'
   --seen-db
   --near (switch)

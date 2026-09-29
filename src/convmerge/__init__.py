@@ -18,6 +18,7 @@ __version__ = "1.1.1"
 _EXPORTS: dict[str, str] = {
     # convert pipeline
     "convert_file": "convmerge.convert",
+    "convert_records": "convmerge.convert",
     "convert_with_config": "convmerge.convert",
     "validate_file": "convmerge.convert",
     "ConvertStats": "convmerge.convert",
@@ -109,6 +110,7 @@ __all__ = [
     "build_index",
     "check_tokens",
     "convert_file",
+    "convert_records",
     "convert_with_config",
     "decontaminate_jsonl",
     "deduplicate_jsonl",
@@ -154,6 +156,7 @@ if TYPE_CHECKING:  # pragma: no cover - for type checkers and IDEs only
         ConvertStats,
         InvalidExampleError,
         convert_file,
+        convert_records,
         convert_with_config,
         validate_file,
     )

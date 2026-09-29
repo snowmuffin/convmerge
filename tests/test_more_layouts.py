@@ -185,3 +185,60 @@ def test_train_turns_last_needs_the_messages_format() -> None:
     with pytest.raises(ValueError, match="mask_history"):
         build_convert_config(adapter="auto", output_format="sharegpt",
                              emit_overrides={"train_turns": "last"})  # fmt: skip
+
+
+def test_convert_records_matches_convert_file(tmp_path: Path) -> None:
+    from convmerge import ConvertStats, InvalidExampleError, convert_records
+
+    records = [
+        {"instruction": "Hi", "output": "Hello"},
+        {"conversations": [{"from": "human", "value": "q"}, {"from": "gpt", "value": "a"}]},
+        "not a record",
+        {"messages": [{"role": "user", "content": "no answer"}]},
+    ]
+    stats = ConvertStats()
+    rows = list(convert_records(iter(records), stats=stats))
+    src, out = tmp_path / "in.jsonl", tmp_path / "out.jsonl"
+    src.write_text("".join(json.dumps(r) + "\n" for r in records), encoding="utf-8")
+    file_stats = ConvertStats()
+    convert_file(src, out, adapter_name="auto", output_format="messages", stats=file_stats)
+    assert rows == _rows(out)
+    assert (stats.lines_read, stats.written, stats.non_object, stats.drop_reasons) == (
+        4, 2, 1, {"no_assistant": 1},
+    )  # fmt: skip
+    assert stats.drop_reasons == file_stats.drop_reasons
+    with pytest.raises(InvalidExampleError) as exc:
+        list(convert_records(records, on_invalid="fail"))
+    assert exc.value.line_number == 4
+
+
+def test_validate_reports_fields_that_change_type(tmp_path: Path, capsys) -> None:
+    from convmerge.arrow import type_conflicts
+    from convmerge.cli import main
+
+    call = {"type": "function", "function": {"name": "f", "arguments": {"data": [1]}}}
+    rows = [
+        {"messages": [{"role": "user", "content": "q"},
+                      {"role": "assistant", "content": "", "tool_calls": [call]}]},
+        {"messages": [{"role": "user", "content": [{"type": "text", "text": "q"}]},
+                      {"role": "assistant", "content": "a", "n": 1.5}]},
+        {"messages": [{"role": "user", "content": "q"}, {"role": "assistant", "content": None,
+                                                         "n": 2}]},
+    ]  # fmt: skip
+    rows[1]["messages"][1]["tool_calls"] = [
+        {"type": "function", "function": {"name": "f", "arguments": {"data": "[1]"}}}
+    ]
+    src = tmp_path / "in.jsonl"
+    src.write_text("".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8")
+    found = {c.path: c.first_line for c in type_conflicts(src)}
+    # int/float and null do not conflict
+    assert found == {
+        "messages[].content": {"list": 2, "string": 1},
+        "messages[].tool_calls[].function.arguments.data": {"list": 1, "string": 2},
+    }
+    with pytest.raises(SystemExit):
+        main(["validate", "-i", str(src)])
+    captured = capsys.readouterr()
+    report = json.loads(captured.out)
+    assert [c["path"] for c in report["type_conflicts"]] == sorted(found)
+    assert "--tool-arguments string" in captured.err

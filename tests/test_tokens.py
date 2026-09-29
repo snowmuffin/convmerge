@@ -214,3 +214,27 @@ def test_missing_jinja2_is_one_clear_error(
     src = _write(tmp_path / "in.jsonl", [{"messages": M(("user", "a"), ("assistant", "b"))}])
     with pytest.raises(ImportError, match=r"jinja2 is missing.*convmerge\[tokens\]"):
         check_tokens(src, tokenizer=str(tokenizer_dir))
+
+
+QWEN_LIKE = (
+    "{% for m in messages %}<|im_start|>{{ m.role }}\n{{ m.content }}<|im_end|>\n{% endfor %}"
+    "{% if add_generation_prompt %}<|im_start|>assistant\n{% endif %}"
+)
+
+
+def test_response_markers_for_unsloth(tmp_path: Path, tokenizer_dir: Path) -> None:
+    from transformers import AutoTokenizer
+
+    from convmerge.tokens import response_markers
+
+    tok = AutoTokenizer.from_pretrained(tokenizer_dir)
+    assert response_markers(tok, QWEN_LIKE) == {
+        "instruction_part": "<|im_start|>user\n",
+        "response_part": "<|im_start|>assistant\n",
+    }
+    # No generation prompt: nothing to report.
+    assert response_markers(tok, CHATML) is None
+    src = _write(tmp_path / "in.jsonl", [{"messages": M(("user", "a"), ("assistant", "b"))}])
+    report = check_tokens(src, tokenizer=tok, chat_template=QWEN_LIKE).to_report()
+    assert report["response_markers"]["response_part"] == "<|im_start|>assistant\n"
+    assert report["markers_missing"] == 0

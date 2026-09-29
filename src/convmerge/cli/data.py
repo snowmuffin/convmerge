@@ -119,6 +119,10 @@ def _add_dedupe(sub: argparse._SubParsersAction) -> None:
     )
     p.add_argument("--algorithm", default="md5", choices=("md5", "sha256"))
     p.add_argument(
+        "--rejects", type=Path, default=None,
+        help="Also write the removed duplicates to this file",
+    )  # fmt: skip
+    p.add_argument(
         "--seen-store",
         choices=("memory", "sqlite"),
         default="memory",
@@ -176,6 +180,7 @@ def _cmd_dedupe(args: argparse.Namespace) -> None:
         seen_store=args.seen_store,
         seen_db=args.seen_db,
         stats=stats,
+        rejects=args.rejects,
     )
     removed = total - kept
     pct = (removed / total * 100) if total else 0.0
@@ -203,7 +208,7 @@ def _near_dedupe(args: argparse.Namespace) -> None:
     try:
         total, kept = deduplicate_near_jsonl(
             args.input, args.output, threshold=args.threshold, num_perm=args.num_perm,
-            keys=args.keys, stats=stats, workers=args.workers,
+            keys=args.keys, stats=stats, workers=args.workers, rejects=args.rejects,
         )  # fmt: skip
     except (ImportError, ValueError) as e:
         print(f"error: {e}", file=sys.stderr)

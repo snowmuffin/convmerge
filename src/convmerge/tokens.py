@@ -24,6 +24,10 @@ tokenized. That gives:
 - rows whose reasoning trace does not appear in the rendered text (most
   reasoning templates render it only after the last user turn, and each
   reads its own field: ``reasoning_content`` or ``thinking``);
+- the ``instruction_part`` / ``response_part`` strings for Unsloth's
+  ``train_on_responses_only`` (the text the template puts before a user and
+  before an assistant turn), and rows in which they do not appear as tokens
+  (Unsloth would mask those rows entirely);
 - ``hints``: the ``convert`` options that fix what was found;
 - optionally, a filtered copy: rows that render and fit go to ``output``,
   the rest to ``rejects``, both byte-for-byte as read.
@@ -83,6 +87,11 @@ class TokenStats:
     reasoning_dropped_final: int = 0
     """Of those, rows where even the final answer's trace is missing."""
     lengths: array = field(default_factory=lambda: array("I"), repr=False)
+    response_markers: dict[str, str] | None = None
+    """``instruction_part`` / ``response_part`` for Unsloth's ``train_on_responses_only``
+    (``None`` when the template's turn headers could not be worked out)."""
+    markers_missing: int = 0
+    """Rows whose tokens do not contain both markers' tokens."""
 
     def to_report(self) -> dict[str, Any]:
         lengths = sorted(self.lengths)
@@ -103,6 +112,8 @@ class TokenStats:
             "missing_eos": self.missing_eos,
             "reasoning_dropped": self.reasoning_dropped,
             "reasoning_dropped_final": self.reasoning_dropped_final,
+            "response_markers": self.response_markers,
+            "markers_missing": self.markers_missing,
             "kept": self.kept,
             "rejected": self.rejected,
             "hints": self.hints(),
@@ -173,6 +184,12 @@ class TokenStats:
                 f"{self.max_tokens:,} tokens and train on nothing when truncated; filter them "
                 "with -o (tokens --max-tokens) or raise the trainer's max length"
             )
+        if self.markers_missing:
+            out.append(
+                f"{self.markers_missing:,} rows do not contain the response_markers as tokens: "
+                "Unsloth train_on_responses_only would mask all of their labels; check the "
+                "markers against the template the trainer uses"
+            )
         if self.missing_eos:
             stops = ", ".join(self.stop_tokens) or "none"
             out.append(
@@ -236,6 +253,13 @@ def check_tokens(
     st.tokenizer = tokenizer if isinstance(tokenizer, str) else getattr(tok, "name_or_path", None)
     st.generation_tags = bool(_GENERATION_TAG.search(template))
     st.stop_tokens = _stop_tokens(tok)
+    st.response_markers = response_markers(tok, template)
+    marker_ids: list[list[int]] = []
+    if st.response_markers:
+        marker_ids = [
+            tok(text, add_special_tokens=False)["input_ids"]
+            for text in st.response_markers.values()
+        ]
 
     out = open(output, "w", encoding="utf-8") if output is not None else None
     rej = open(rejects, "w", encoding="utf-8") if rejects is not None else None
@@ -248,9 +272,9 @@ def check_tokens(
                 continue
             batch.append(row)
             if len(batch) >= _BATCH:
-                _measure(batch, tok, max_tokens, st, out, rej)
+                _measure(batch, tok, max_tokens, st, out, rej, marker_ids)
                 batch = []
-        _measure(batch, tok, max_tokens, st, out, rej)
+        _measure(batch, tok, max_tokens, st, out, rej, marker_ids)
     finally:
         for f in (out, rej):
             if f is not None:
@@ -472,6 +496,7 @@ def _measure(
     st: TokenStats,
     out: Any,
     rej: Any,
+    marker_ids: list[list[int]] | None = None,
 ) -> None:
     if not batch:
         return
@@ -487,6 +512,8 @@ def _measure(
         texts = row.texts or []
         raw = row.raw
         length = max(len(ids[pos + i]) for i in range(len(texts)))
+        if marker_ids and texts and not all(_contains(ids[pos], m) for m in marker_ids):
+            st.markers_missing += 1
         pos += len(texts)
         if row.prefix is not None:
             if max_tokens is not None and len(ids[pos]) >= max_tokens:
@@ -503,6 +530,65 @@ def _measure(
         if out is not None:
             st.kept += 1
             _write(out, raw)
+
+
+_PROBE = ("QQQ1", "AAA1", "QQQ2")
+
+
+def response_markers(tok: Any, template: str) -> dict[str, str] | None:
+    """The text a chat template puts before a user turn and before an assistant turn.
+
+    ``response_part`` is the generation prompt (what the template adds for
+    the model to answer); ``instruction_part`` is what follows the end of an
+    assistant turn before the next user message, minus the turn end the
+    template also writes after a user turn. These are the strings Unsloth's
+    ``train_on_responses_only(instruction_part=..., response_part=...)``
+    expects. ``None`` when the template does not fit this pattern.
+    """
+    q1, a1, q2 = _PROBE
+
+    def render(msgs: list[tuple[str, str]], gen: bool = False) -> str:
+        dicts = [{"role": r, "content": c} for r, c in msgs]
+        text = tok.apply_chat_template(dicts, chat_template=template, tokenize=False,
+                                       add_generation_prompt=gen)  # fmt: skip
+        if not isinstance(text, str):
+            raise TypeError("the template did not render text")
+        return text
+
+    try:
+        prompt = render([("user", q1)])
+        with_gen = render([("user", q1)], gen=True)
+        one = render([("user", q1), ("assistant", a1)])
+        two = render([("user", q1), ("assistant", a1), ("user", q2)])
+    except Exception:  # noqa: BLE001 - templates raise anything
+        return None
+    if not with_gen.startswith(prompt):
+        return None
+    response = with_gen[len(prompt) :]
+    user_to_answer = one[one.find(q1) + len(q1) : one.find(a1)]
+    answer_to_user = two[two.find(a1) + len(a1) : two.find(q2)]
+    at = user_to_answer.find(response) if response.strip() else -1
+    if at < 0:
+        return None
+    turn_end = user_to_answer[:at]
+    if not answer_to_user.startswith(turn_end):
+        return None
+    instruction = answer_to_user[len(turn_end) :]
+    if not instruction.strip() or response in instruction or instruction in response:
+        return None  # not two distinct turn headers (e.g. a template that needs content parts)
+    return {"instruction_part": instruction, "response_part": response}
+
+
+def _contains(seq: list[int], sub: list[int]) -> bool:
+    if not sub:
+        return True
+    hay, needle = array("I", seq).tobytes(), array("I", sub).tobytes()
+    at = hay.find(needle)
+    while at >= 0:
+        if at % 4 == 0:
+            return True
+        at = hay.find(needle, at + 1)
+    return False
 
 
 def _write(f: Any, raw: str) -> None:

@@ -357,10 +357,25 @@ def _process(
     transform: Transform | None = None,
 ) -> list[str]:
     """Convert one parsed record; return its output lines and update ``st``."""
+    rows = _process_rows(obj, number, adapter, emitter, st, on_invalid, notes, transform)
+    return [json.dumps(row, ensure_ascii=False) + "\n" for row in rows]
+
+
+def _process_rows(
+    obj: object,
+    number: int,
+    adapter: AdapterFn,
+    emitter: EmitterFn | None,
+    st: ConvertStats,
+    on_invalid: OnInvalid,
+    notes: list[str],
+    transform: Transform | None = None,
+) -> list[dict[str, Any]]:
+    """Convert one parsed record; return its output rows and update ``st``."""
     if not isinstance(obj, dict):
         st.non_object += 1
         return []
-    rows: list[str] = []
+    rows: list[dict[str, Any]] = []
     produced = 0
     for example in _examples(adapter(obj), transform, st):
         produced += 1
@@ -383,7 +398,7 @@ def _process(
             st.note([e.reason], number)
             st.dropped += 1
             continue
-        rows.append(json.dumps(row, ensure_ascii=False) + "\n")
+        rows.append(row)
         st.written += 1
         if _has_reasoning(example):
             st.reasoning += 1
@@ -393,6 +408,45 @@ def _process(
     if not produced:
         st.no_example += 1
     return rows
+
+
+def convert_records(
+    records: Iterable[Any],
+    *,
+    adapter_name: str = "auto",
+    output_format: str = "messages",
+    adapter_options: AdapterOptions | None = None,
+    emit_options: EmitOptions | None = None,
+    transform_options: TransformOptions | None = None,
+    on_invalid: OnInvalid = "drop",
+    stats: ConvertStats | None = None,
+) -> Iterator[dict[str, Any]]:
+    """Convert records in memory: the pipeline of :func:`convert_file` without files.
+
+    ``records`` is any iterable of dicts, such as a list, a generator, or a
+    Hugging Face ``datasets.Dataset``. Yields the output rows as dicts, lazily,
+    in order; records that are not dicts or that fail validation are skipped
+    and counted in ``stats`` as by ``convert_file`` (``lines_read`` counts the
+    records). ``on_invalid="fail"`` raises :class:`InvalidExampleError` with
+    the 1-based record number.
+
+    >>> rows = list(convert_records([{"instruction": "Hi", "output": "Hello"}]))
+    >>> rows[0]["messages"][1]
+    {'role': 'assistant', 'content': 'Hello'}
+    """
+    if on_invalid not in ("drop", "keep", "fail"):
+        raise ValueError(f"on_invalid must be 'drop', 'keep', or 'fail', got {on_invalid!r}")
+    notes: list[str] = []
+    emitter = get_emitter(output_format, options=emit_options, notes=notes)
+    pairs = wants_pairs(output_format)
+    check_transforms(transform_options, pairs=pairs)
+    adapter = resolve_adapter(adapter_name, adapter_options, pairs=pairs)
+    transform = _transformer(transform_options)
+    st = stats if stats is not None else ConvertStats()
+    for number, record in enumerate(records, 1):
+        st.lines_read += 1
+        yield from _process_rows(record, number, adapter, emitter, st, on_invalid, notes,
+                                 transform)  # fmt: skip
 
 
 def _examples(
