@@ -7,7 +7,8 @@ and returns the matching ``datasets:`` entry; :func:`render_config` turns
 entries into a YAML snippet for an axolotl config.
 
 - ``messages`` → ``type: chat_template`` (tools, and ``reasoning_content`` or
-  ``thinking`` traces, are read by axolotl as they are)
+  ``thinking`` traces, are read by axolotl as they are; per-turn ``train``
+  flags from ``--train-turns last`` add ``message_field_training: train``)
 - ``sharegpt`` → ``chat_template`` with ``from`` / ``value`` mappings and the
   ``system`` column
 - ``preference`` / ``sharegpt-preference`` → ``chat_template.default`` for
@@ -39,7 +40,7 @@ def dataset_config(path: str | Path, *, file_path: str | None = None) -> dict[st
     which ``--format`` to convert to instead.
     """
     keys: set[str] = set()
-    thinking = function_calls = multi_answer = False
+    thinking = function_calls = multi_answer = train_flags = False
     rows = 0
     for line in iter_jsonl(path):
         value = line.value
@@ -49,6 +50,7 @@ def dataset_config(path: str | Path, *, file_path: str | None = None) -> dict[st
         keys.update(value)
         for turn in _turns(value):
             thinking = thinking or isinstance(turn.get("thinking"), str)
+            train_flags = train_flags or isinstance(turn.get("train"), bool)
             function_calls = function_calls or turn.get("from") == "function_call"
         for side in ("chosen", "rejected"):
             answer = value.get(side)
@@ -78,6 +80,9 @@ def dataset_config(path: str | Path, *, file_path: str | None = None) -> dict[st
                      roles_to_train=["assistant"])  # fmt: skip
         if thinking:
             entry.update(field_thinking="thinking", template_thinking_key="thinking")
+        if train_flags:
+            # convert --train-turns last: "train": false on earlier answers.
+            entry["message_field_training"] = "train"
     elif "conversations" in keys:
         if function_calls:
             raise ValueError(

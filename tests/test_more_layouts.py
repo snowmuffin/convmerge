@@ -159,3 +159,29 @@ def test_leading_assistant_cli_and_recipe_keys(tmp_path: Path, capsys) -> None:
     assert transform_options_from_mapping({"leading_assistant": "drop"}).leading_assistant == "drop"
     with pytest.raises(ValueError):
         TransformOptions(leading_assistant="first")
+
+
+def test_train_turns_last(tmp_path: Path) -> None:
+    from convmerge import EmitOptions
+    from convmerge.axolotl import dataset_config
+
+    src = tmp_path / "in.jsonl"
+    turns = [("user", "q1"), ("assistant", "a1"), ("user", "q2"), ("assistant", "a2")]
+    src.write_text(json.dumps({"messages": [{"role": r, "content": c} for r, c in turns]}) + "\n",
+                   encoding="utf-8")  # fmt: skip
+    out = tmp_path / "out.jsonl"
+    convert_file(src, out, adapter_name="auto", output_format="messages",
+                 emit_options=EmitOptions(train_turns="last"))  # fmt: skip
+    msgs = _rows(out)[0]["messages"]
+    assert [m.get("train") for m in msgs] == [None, False, None, None]
+    assert dataset_config(out)["message_field_training"] == "train"
+    convert_file(src, out, adapter_name="auto", output_format="messages")
+    assert "message_field_training" not in dataset_config(out)
+
+
+def test_train_turns_last_needs_the_messages_format() -> None:
+    from convmerge import build_convert_config
+
+    with pytest.raises(ValueError, match="mask_history"):
+        build_convert_config(adapter="auto", output_format="sharegpt",
+                             emit_overrides={"train_turns": "last"})  # fmt: skip
