@@ -6,6 +6,16 @@ name: Eval
 
 on:
   workflow_dispatch:
+    inputs:
+      set:
+        description: "v014, fresh, or all"
+        default: "all"
+      only:
+        description: "space-separated dataset ids (empty: every dataset in the set)"
+        default: ""
+      raw:
+        description: "source rows to print for datasets that are not ok"
+        default: "0"
   pull_request:
     paths:
       - scripts/eval/coverage.py
@@ -37,7 +47,13 @@ jobs:
       - name: Coverage
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
-        run: python scripts/eval/coverage.py --rows 200 --summary "$GITHUB_STEP_SUMMARY" --json coverage.json
+          SET: ${{ inputs.set || 'all' }}
+          ONLY: ${{ inputs.only }}
+          RAW: ${{ inputs.raw || '0' }}
+        run: >-
+          python scripts/eval/coverage.py --rows 200 --set "$SET" --raw "$RAW"
+          ${ONLY:+--only $ONLY}
+          --summary "$GITHUB_STEP_SUMMARY" --json coverage.json
       - uses: actions/upload-artifact@v4
         if: always()
         with:
