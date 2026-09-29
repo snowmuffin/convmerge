@@ -40,6 +40,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from convmerge import _parallel
 from convmerge._text import excerpt, fold, ngrams, without_code, words
 from convmerge.io import ReadStats, iter_jsonl
 from convmerge.models import ChatMessage, TrainingExample
@@ -322,59 +323,139 @@ def filter_jsonl(
     rejects: str | Path | None = None,
     encoding: str = "utf-8",
     stats: FilterStats | None = None,
+    workers: int = 1,
 ) -> FilterStats:
     """Check every row of ``path`` against ``spec``'s rules.
 
     With ``output``, rows that pass are written there and the others to
     ``rejects`` (if given), both byte-for-byte as read. Without it only the
-    statistics are collected.
+    statistics are collected. ``workers`` > 1 checks rows in that many
+    processes; the output and statistics are the same as with one.
     """
-    from convmerge.adapter_resolve import resolve_adapter
-
+    if workers < 1:
+        raise ValueError("workers: expected a positive integer")
     spec = spec or FilterSpec()
     st = stats if stats is not None else FilterStats()
     st.rules = {name: 0 for name in spec.active}
-    checker = _Checker(spec)
-    adapter = resolve_adapter("auto", None, pairs=True)
-    read = ReadStats()
     for target in (output, rejects):
         if target is not None:
             Path(target).parent.mkdir(parents=True, exist_ok=True)
     out = open(output, "w", encoding=encoding) if output is not None else None
     rej = open(rejects, "w", encoding=encoding) if rejects is not None else None
     try:
-        for line in iter_jsonl(path, encoding=encoding, stats=read):
-            st.rows += 1
-            examples = list(adapter(line.value)) if isinstance(line.value, dict) else []
-            usable = [ex for ex in examples if ex.messages]
-            if not usable:
-                st.unreadable += 1
-                hits: dict[str, str] = {"unreadable": ""}
-            else:
-                hits = {}
-                for ex in usable:
-                    for rule, text in checker.check(ex, st).items():
-                        hits.setdefault(rule, text)
-                for rule, text in hits.items():
-                    st.rules[rule] += 1
-                    samples = st.samples.setdefault(rule, [])
-                    if len(samples) < _SAMPLES:
-                        samples.append({"line": line.number, "text": text})
-            if hits:
-                st.rejected += 1
-                if rej is not None:
-                    _write(rej, line.raw)
-            else:
-                st.kept += 1
-                if out is not None:
-                    _write(out, line.raw)
+        if workers > 1:
+            _filter_parallel(path, spec, st, out, rej, encoding, workers)
+        else:
+            _filter_serial(path, spec, st, out, rej, encoding)
     finally:
         for f in (out, rej):
             if f is not None:
                 f.close()
+    return st
+
+
+def _filter_serial(
+    path: str | Path, spec: FilterSpec, st: FilterStats, out: Any, rej: Any, encoding: str
+) -> None:
+    from convmerge.adapter_resolve import resolve_adapter
+
+    checker = _Checker(spec)
+    adapter = resolve_adapter("auto", None, pairs=True)
+    read = ReadStats()
+    try:
+        for line in iter_jsonl(path, encoding=encoding, stats=read):
+            f = out if _keep(line.value, line.number, adapter, checker, st) else rej
+            if f is not None:
+                _write(f, line.raw)
+    finally:
         st.invalid_json = read.invalid_json
         st.first_invalid_line = read.first_invalid_line
-    return st
+
+
+def _keep(value: Any, number: int, adapter: Any, checker: _Checker, st: FilterStats) -> bool:
+    """Check one row, counting it in ``st``; ``True`` when it passes."""
+    st.rows += 1
+    examples = list(adapter(value)) if isinstance(value, dict) else []
+    usable = [ex for ex in examples if ex.messages]
+    if not usable:
+        st.unreadable += 1
+        hits: dict[str, str] = {"unreadable": ""}
+    else:
+        hits = {}
+        for ex in usable:
+            for rule, text in checker.check(ex, st).items():
+                hits.setdefault(rule, text)
+        for rule, text in hits.items():
+            st.rules[rule] += 1
+            samples = st.samples.setdefault(rule, [])
+            if len(samples) < _SAMPLES:
+                samples.append({"line": number, "text": text})
+    if hits:
+        st.rejected += 1
+        return False
+    st.kept += 1
+    return True
+
+
+# --- filter --workers ---------------------------------------------------------
+
+_WORKER: dict[str, Any] = {}
+
+
+def _worker_init(spec: FilterSpec, encoding: str) -> None:
+    from convmerge.adapter_resolve import resolve_adapter
+
+    _WORKER.update(
+        spec=spec,
+        checker=_Checker(spec),
+        adapter=resolve_adapter("auto", None, pairs=True),
+        encoding=encoding,
+    )
+
+
+def _worker_chunk(chunk: _parallel.Chunk) -> tuple[str, str, FilterStats]:
+    st = FilterStats(rules={name: 0 for name in _WORKER["spec"].active})
+    kept: list[str] = []
+    rejected: list[str] = []
+    for number, raw, value in _parallel.parse_chunk(chunk, _WORKER["encoding"], st):
+        keep = _keep(value, number, _WORKER["adapter"], _WORKER["checker"], st)
+        (kept if keep else rejected).append(raw + "\n")
+    return "".join(kept), "".join(rejected), st
+
+
+def _filter_parallel(
+    path: str | Path,
+    spec: FilterSpec,
+    st: FilterStats,
+    out: Any,
+    rej: Any,
+    encoding: str,
+    workers: int,
+) -> None:
+    chunks = _parallel.raw_chunks(path, encoding, ReadStats())
+    parts = _parallel.ordered_map(
+        chunks, _worker_chunk, workers=workers, initializer=_worker_init,
+        initargs=(spec, encoding),
+    )  # fmt: skip
+    for kept, rejected, part in parts:
+        if out is not None:
+            out.write(kept)
+        if rej is not None:
+            rej.write(rejected)
+        _merge(st, part)
+
+
+def _merge(st: FilterStats, part: FilterStats) -> None:
+    """Add a later chunk's statistics to ``st``."""
+    for name in ("rows", "kept", "rejected", "unreadable", "pairs", "chosen_longer"):
+        setattr(st, name, getattr(st, name) + getattr(part, name))
+    _parallel.merge_invalid(st, part)
+    for rule, n in part.rules.items():
+        st.rules[rule] = st.rules.get(rule, 0) + n
+    for rule, samples in part.samples.items():
+        mine = st.samples.setdefault(rule, [])
+        mine.extend(samples[: max(0, _SAMPLES - len(mine))])
+    st.length_ratios.extend(part.length_ratios)
 
 
 def _write(f: Any, raw: str) -> None:

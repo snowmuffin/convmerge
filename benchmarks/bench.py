@@ -53,6 +53,8 @@ def _scenarios(d: Path, rows: int) -> dict[str, list[str]]:
             "convert", "-i", a, "-o", out, "--from", "chat", "-f", "messages", "--workers", "4",
         ],
         "dedupe": ["dedupe", "-i", a, "-o", out],
+        "filter": ["filter", "-i", a, "-o", out],
+        "filter-w4": ["filter", "-i", a, "-o", out, "--workers", "4"],
         "mix-total": [
             "mix", "-i", f"{a}:0.5", f"{b}:0.3", f"{c}:0.2", "-o", out,
             "--total", str(rows // 10), "--no-recipe",

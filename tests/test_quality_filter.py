@@ -190,6 +190,9 @@ def test_recipe_step(tmp_path: Path) -> None:
                               "rejected_empty": 0, "fine": 1}  # fmt: skip
     assert len((tmp_path / "out.jsonl").read_text().splitlines()) == 1
     assert run(recipe, log=lambda _m: None).ran == []
+    two = parse_recipe({**raw, "filter": {**raw["filter"], "workers": 2}}, path=recipe.path)
+    assert two.filter is not None and two.filter.workers == 2
+    assert run(two, log=lambda _m: None).ran == []  # workers never change the output
     (tmp_path / "rules.json").write_text(json.dumps({"patterns": {}}))
     assert run(recipe, log=lambda _m: None).ran == ["filter"]
 
@@ -199,6 +202,8 @@ def test_recipe_step(tmp_path: Path) -> None:
         ({"repetition_max": "x"}, "filter.repetition_max"),
         ({"min_script": {"hangul": 2}}, "min_script.hangul"),
         ({"colour": 1}, "filter.colour: unknown key"),
+        ({"workers": 0}, "filter.workers: expected a positive integer"),
+        ({"workers": True}, "filter.workers: expected int"),
     ):
         with pytest.raises(RecipeError, match=match):
             parse_recipe({**raw, "filter": bad}, path=tmp_path / "r.yaml")
@@ -217,3 +222,45 @@ def test_scoped_assistants_may_decline(tmp_path: Path) -> None:
     assert _rules(tmp_path, [system, disclaimer, _chat(decline)]) == {"refusal": 2}
     st = filter_jsonl(_write(tmp_path / "loop.jsonl", [_chat(LOOP)]))
     assert st.samples["repetition"][0]["text"].startswith("91% repeated: ")
+
+
+def test_workers_match_one_process(tmp_path: Path, monkeypatch) -> None:
+    from convmerge import _parallel
+
+    monkeypatch.setattr(_parallel, "CHUNK_LINES", 2)
+    rows: list = []
+    for i in range(6):
+        rows += [
+            _chat(f"Answer {i} is fine."),
+            _chat("I'm sorry, but I can't help with that request."),
+            "",
+            _chat(""),
+            "{not json",
+            {"foo": i},
+            {"prompt": f"p{i}", "chosen": "a longer chosen answer", "rejected": "short"},
+            {"prompt": f"p{i}", "chosen": "Same", "rejected": "same"},
+            _chat("See https://example.com"),
+        ]
+    src = _write(tmp_path / "in.jsonl", rows)
+    with src.open("ab") as f:
+        f.write(b'{"messages": [{"role": "user", "content": "\xff"}]}\n')
+    spec = FilterSpec(patterns={"url": "https?://"})
+    results = []
+    for workers in (1, 3):
+        st = FilterStats()
+        out, rej = tmp_path / f"o{workers}.jsonl", tmp_path / f"r{workers}.jsonl"
+        filter_jsonl(src, spec=spec, output=out, rejects=rej, stats=st, workers=workers)
+        results.append((out.read_bytes(), rej.read_bytes(), st.to_report(), st.warnings()))
+    assert results[0] == results[1]
+    report = results[1][2]
+    assert report["invalid_json"] == 7 and report["preference"]["pairs"] == 12
+    assert len(report["samples"]["refusal"]) == 3
+    with pytest.raises(ValueError, match="workers"):
+        filter_jsonl(src, workers=0)
+
+
+def test_cli_workers(tmp_path: Path, capsys) -> None:
+    src = _write(tmp_path / "in.jsonl", [_chat("fine"), _chat("I'm sorry, but I can't.")])
+    main(["filter", "-i", str(src), "-o", str(tmp_path / "o.jsonl"), "--workers", "2"])
+    assert json.loads(capsys.readouterr().out)["kept"] == 1
+    assert (tmp_path / "o.jsonl").read_text() == json.dumps(_chat("fine")) + "\n"

@@ -105,6 +105,8 @@ class DedupeSpec:
     near: bool = False
     threshold: float = 0.8
     num_perm: int = 128
+    workers: int = 1
+    """``near``: processes computing MinHashes (does not change the output)."""
 
 
 @dataclass(frozen=True)
@@ -112,6 +114,8 @@ class FilterStep:
     options: dict[str, Any]
     """Keyword arguments for :meth:`convmerge.quality.FilterSpec.from_options`."""
     rules_file: Path | None = None
+    workers: int = 1
+    """Processes to check rows with (does not change the output)."""
 
 
 @dataclass(frozen=True)
@@ -465,7 +469,7 @@ def _dedupe(raw: Any) -> DedupeSpec | None:
     if raw is True:
         return DedupeSpec()
     spec = _mapping(raw, "dedupe")
-    _only(spec, {"keys", "algorithm", "near", "threshold", "num_perm"}, "dedupe")
+    _only(spec, {"keys", "algorithm", "near", "threshold", "num_perm", "workers"}, "dedupe")
     keys = spec.get("keys")
     if keys is not None and not (isinstance(keys, list) and all(isinstance(k, str) for k in keys)):
         raise RecipeError("dedupe.keys: expected a list of top-level keys")
@@ -485,8 +489,14 @@ def _dedupe(raw: Any) -> DedupeSpec | None:
     num_perm = spec.get("num_perm", 128)
     if isinstance(num_perm, bool) or not isinstance(num_perm, int) or num_perm < 16:
         raise RecipeError("dedupe.num_perm: expected an integer of at least 16")
+    workers = spec.get("workers", 1)
+    if isinstance(workers, bool) or not isinstance(workers, int) or workers < 1:
+        raise RecipeError("dedupe.workers: expected a positive integer")
+    if workers > 1 and not near:
+        raise RecipeError("dedupe.workers: applies to near: true")
     return DedupeSpec(keys=tuple(keys) if keys else None, algorithm=algorithm, near=near,
-                      threshold=float(threshold), num_perm=num_perm)  # fmt: skip
+                      threshold=float(threshold), num_perm=num_perm,
+                      workers=workers)  # fmt: skip
 
 
 _FILTER_KEYS = {
@@ -499,6 +509,7 @@ _FILTER_KEYS = {
     "slop_max": int,
     "min_script": dict,
     "rules_file": str,
+    "workers": int,
 }
 
 
@@ -517,8 +528,11 @@ def _filter(raw: Any, base: Path) -> FilterStep | None:
             ok = isinstance(value, (int, float)) and not isinstance(value, bool)
         if not ok:
             raise RecipeError(f"filter.{key}: expected {kind.__name__}")
-        if key != "rules_file":
+        if key not in ("rules_file", "workers"):
             options[key] = value
+    workers = spec.get("workers", 1)
+    if workers < 1:
+        raise RecipeError("filter.workers: expected a positive integer")
     rules_file = base / spec["rules_file"] if "rules_file" in spec else None
     try:
         for key in ("enable", "disable"):
@@ -528,7 +542,7 @@ def _filter(raw: Any, base: Path) -> FilterStep | None:
         FilterSpec.from_options(**options)
     except ValueError as e:
         raise RecipeError(f"filter: {e}") from None
-    return FilterStep(options=options, rules_file=rules_file)
+    return FilterStep(options=options, rules_file=rules_file, workers=workers)
 
 
 def _decontam(raw: Any, base: Path) -> DecontamStep | None:

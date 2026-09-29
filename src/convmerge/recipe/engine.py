@@ -261,7 +261,7 @@ def _dedupe_step(recipe: Recipe, src: Path, out: Path) -> Step:
 
             near = NearDedupeStats()
             deduplicate_near_jsonl(src, stage, threshold=spec.threshold, num_perm=spec.num_perm,
-                                   keys=spec.keys, stats=near)  # fmt: skip
+                                   keys=spec.keys, stats=near, workers=spec.workers)  # fmt: skip
             return dataclasses.asdict(near)
         st = DedupeStats()
         deduplicate_jsonl(src, stage, keys=spec.keys, algorithm=spec.algorithm, stats=st)
@@ -271,7 +271,7 @@ def _dedupe_step(recipe: Recipe, src: Path, out: Path) -> Step:
         "keys": list(spec.keys) if spec.keys else None,
         "algorithm": spec.algorithm,
     }
-    if spec.near:
+    if spec.near:  # workers never change the output, so they are not an option here
         options.update(near=True, threshold=spec.threshold, num_perm=spec.num_perm)
     return Step("dedupe", "dedupe", [src], out, options, run)
 
@@ -286,10 +286,10 @@ def _filter_step(recipe: Recipe, src: Path, out: Path) -> Step:
     def run(stage: Path) -> dict[str, Any]:
         options = FilterSpec.from_options(**spec.options, rules_file=spec.rules_file)
         st = FilterStats()
-        filter_jsonl(src, spec=options, output=stage, stats=st)
+        filter_jsonl(src, spec=options, output=stage, stats=st, workers=spec.workers)
         return st.to_report()
 
-    options: dict[str, Any] = dict(spec.options)
+    options: dict[str, Any] = dict(spec.options)  # workers never change output
     if spec.rules_file is not None:
         options["rules_file"] = _display(spec.rules_file, recipe.base_dir)
     return Step("filter", "filter", inputs, out, options, run)

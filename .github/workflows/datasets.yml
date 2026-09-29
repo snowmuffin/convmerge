@@ -14,6 +14,9 @@ on:
       only:
         description: Dataset ids to check, space-separated (empty = all)
         default: ""
+      show_drops:
+        description: Print up to N dropped rows per dataset
+        default: "0"
   schedule:
     - cron: "17 3 * * 1"  # Mondays, 03:17 UTC
   pull_request:
@@ -62,7 +65,8 @@ jobs:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
           ROWS: ${{ inputs.rows || '50' }}
           ONLY: ${{ inputs.only }}
+          SHOW_DROPS: ${{ inputs.show_drops || '0' }}
         run: |
           # shellcheck disable=SC2086  # ONLY is a space-separated list of ids
           python scripts/datasets.py check --rows "$ROWS" ${ONLY:+--only $ONLY} \
-            --summary "$GITHUB_STEP_SUMMARY"
+            --show-drops "$SHOW_DROPS" --summary "$GITHUB_STEP_SUMMARY"

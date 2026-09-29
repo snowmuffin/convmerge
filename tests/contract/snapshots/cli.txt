@@ -47,6 +47,7 @@
   --near (switch)
   --threshold default=0.8
   --num-perm default=128
+  --workers default=1
   --progress (switch)
 [convmerge turns]
   --input, -i required
@@ -73,6 +74,7 @@
   --slop-max default=3
   --min-script default=[]
   --rules-file
+  --workers default=1
 [convmerge decontam]
   --input, -i required
   --against required

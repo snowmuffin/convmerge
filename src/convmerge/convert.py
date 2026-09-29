@@ -9,6 +9,7 @@ from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, TextIO
 
+from convmerge import _parallel
 from convmerge.adapter_resolve import resolve_adapter
 from convmerge.config import AdapterOptions, ConvertConfig
 from convmerge.emitters import (
@@ -411,12 +412,14 @@ def _has_reasoning(example: TrainingExample) -> bool:
 
 # --- parallel convert -------------------------------------------------------
 
-_CHUNK_LINES = 2_000
 _WORKER: dict[str, object] = {}
 
 
 def _worker_init(spec: tuple) -> None:
-    adapter_name, adapter_options, output_format, emit_options, on_invalid, transforms = spec
+    (
+        adapter_name, adapter_options, output_format, emit_options, on_invalid, transforms,
+        encoding,
+    ) = spec  # fmt: skip
     notes: list[str] = []
     emitter = get_emitter(output_format, options=emit_options, notes=notes)
     _WORKER.update(
@@ -425,20 +428,14 @@ def _worker_init(spec: tuple) -> None:
         notes=notes,
         on_invalid=on_invalid,
         transform=_transformer(transforms),
+        encoding=encoding,
     )
 
 
-def _worker_chunk(chunk: list[tuple[int, str]]) -> tuple[str, ConvertStats]:
+def _worker_chunk(chunk: _parallel.Chunk) -> tuple[str, ConvertStats]:
     st = ConvertStats()
     out: list[str] = []
-    for number, raw in chunk:
-        try:
-            obj = json.loads(raw)
-        except json.JSONDecodeError:
-            st.invalid_json += 1
-            if st.first_invalid_line is None:
-                st.first_invalid_line = number
-            continue
+    for number, _raw, obj in _parallel.parse_chunk(chunk, _WORKER["encoding"], st):  # type: ignore[arg-type]
         out.extend(
             _process(
                 obj,
@@ -454,29 +451,6 @@ def _worker_chunk(chunk: list[tuple[int, str]]) -> tuple[str, ConvertStats]:
     return "".join(out), st
 
 
-def _raw_chunks(path: Path, encoding: str, st: ConvertStats):
-    """Yield chunks of ``(line_number, text)``, counting lines and blanks in ``st``.
-
-    Mirrors :func:`convmerge.io.iter_jsonl`; JSON is parsed in the workers.
-    """
-    chunk: list[tuple[int, str]] = []
-    with path.open(encoding=encoding) as f:
-        for number, line in enumerate(f, 1):
-            st.lines_read += 1
-            raw = line.strip()
-            if number == 1:
-                raw = raw.removeprefix("\ufeff").strip()
-            if not raw:
-                st.blank += 1
-                continue
-            chunk.append((number, raw))
-            if len(chunk) >= _CHUNK_LINES:
-                yield chunk
-                chunk = []
-    if chunk:
-        yield chunk
-
-
 def _run_parallel(
     input_path: Path,
     fout: TextIO,
@@ -486,27 +460,18 @@ def _run_parallel(
     workers: int,
     spec: tuple,
 ) -> None:
-    from collections import deque
-    from concurrent.futures import ProcessPoolExecutor
+    def chunks() -> Iterator[_parallel.Chunk]:
+        for chunk in _parallel.raw_chunks(input_path, encoding, st):
+            reporter.update(len(chunk[0]))
+            yield chunk
 
-    # A bounded window of in-flight chunks keeps memory flat on huge inputs
-    # (Pool.imap would read the whole file ahead of the workers).
-    window = workers * 4
-    with ProcessPoolExecutor(workers, initializer=_worker_init, initargs=(spec,)) as pool:
-        pending: deque = deque()
-
-        def drain_one() -> None:
-            text, part = pending.popleft().result()
-            fout.write(text)
-            st.merge(part)
-
-        for chunk in _raw_chunks(input_path, encoding, st):
-            pending.append(pool.submit(_worker_chunk, chunk))
-            reporter.update(len(chunk))
-            if len(pending) >= window:
-                drain_one()
-        while pending:
-            drain_one()
+    results = _parallel.ordered_map(
+        chunks(), _worker_chunk, workers=workers, initializer=_worker_init,
+        initargs=((*spec, encoding),),
+    )  # fmt: skip
+    for text, part in results:
+        fout.write(text)
+        st.merge(part)
 
 
 def convert_with_config(
