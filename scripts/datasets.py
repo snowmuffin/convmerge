@@ -3,7 +3,7 @@
 ``python scripts/datasets.py table [--write]``
     Print the README "Tested datasets" table, or rewrite it in README.md.
 
-``python scripts/datasets.py check [--rows N] [--only ID ...] [--summary PATH]``
+``python scripts/datasets.py check [--rows N] [--only ID ...] [--summary PATH] [--show-drops N]``
     Stream the first N rows of every catalog dataset from the Hugging Face
     Hub (needs ``pip install "convmerge[fetch-all]"`` and network access),
     convert them the way the catalog says, and report how many converted and
@@ -12,7 +12,8 @@
     ``--min-ok`` of its rows convert, or, for reasoning datasets, when no
     converted row carries a reasoning trace. ``--summary`` appends a Markdown
     table (the ``datasets`` workflow passes ``$GITHUB_STEP_SUMMARY``). Exits 1
-    if any dataset fails.
+    if any dataset fails. ``--show-drops N`` prints up to N dropped rows per
+    dataset (long strings shortened) to find out why they drop.
 """
 
 from __future__ import annotations
@@ -118,7 +119,12 @@ def hub_rows(entry: dict[str, Any], rows: int) -> Iterable[dict[str, Any]]:
 
 
 def check_entry(
-    entry: dict[str, Any], rows: int, *, loader: Loader = hub_rows, min_ok: float = 0.9
+    entry: dict[str, Any],
+    rows: int,
+    *,
+    loader: Loader = hub_rows,
+    min_ok: float = 0.9,
+    show_drops: int = 0,
 ) -> Result:
     """Convert real rows of one catalog dataset and judge the outcome."""
     from convmerge import ConvertStats, convert_with_config
@@ -130,16 +136,21 @@ def check_entry(
         return Result(rid, "skip", note="gated: set HF_TOKEN to check it")
     stats = ConvertStats()
     traced = 0  # raw rows that look like they carry a reasoning trace
+    kept: list[dict[str, Any]] = []
     try:
         with tempfile.TemporaryDirectory() as tmp:
             src, dst = Path(tmp, "in.jsonl"), Path(tmp, "out.jsonl")
             with src.open("w", encoding="utf-8") as f:
                 for row in loader(entry, rows):
                     traced += has_trace(row)
+                    if show_drops:
+                        kept.append(row)
                     f.write(json.dumps(row, ensure_ascii=False, default=str) + "\n")
             convert_with_config(src, dst, convert_config(entry), stats=stats)
     except Exception as exc:  # noqa: BLE001 - report it and go on with the next dataset
         return Result(rid, "fail", note=f"{type(exc).__name__}: {exc}"[:300])
+    if show_drops:
+        _print_drops(rid, kept, stats, show_drops)
     drops = dict(stats.drop_reasons)
     if stats.skipped:
         drops["skipped_lines"] = stats.skipped
@@ -156,6 +167,27 @@ def check_entry(
     elif stats.written < stats.lines_read:
         result.status = "warn"
     return result
+
+
+def _print_drops(rid: str, rows: list[dict[str, Any]], stats: Any, limit: int) -> None:
+    shown = 0
+    for reason, lines in sorted(stats.drop_lines.items()):
+        for number in lines:
+            if shown >= limit or not 0 < number <= len(rows):
+                return
+            shown += 1
+            print(f"--- {rid} line {number}: {reason}")
+            print(json.dumps(_shorten(rows[number - 1]), ensure_ascii=False, default=str))
+
+
+def _shorten(value: Any, width: int = 400) -> Any:
+    if isinstance(value, str):
+        return value if len(value) <= width else value[:width] + f"…(+{len(value) - width})"
+    if isinstance(value, list):
+        return [_shorten(v, width) for v in value]
+    if isinstance(value, dict):
+        return {k: _shorten(v, width) for k, v in value.items()}
+    return value
 
 
 _TRACE_KEY_PARTS = ("think", "reason", "thought", "trajectory")
@@ -209,12 +241,13 @@ def check(
     summary: Path | None = None,
     min_ok: float = 0.9,
     loader: Loader = hub_rows,
+    show_drops: int = 0,
 ) -> int:
     results: list[Result] = []
     for e in load_catalog():
         if only and e["id"] not in only:
             continue
-        r = check_entry(e, rows, loader=loader, min_ok=min_ok)
+        r = check_entry(e, rows, loader=loader, min_ok=min_ok, show_drops=show_drops)
         results.append(r)
         detail = f"  dropped={r.drops}" if r.drops else ""
         note = f"  ({r.note})" if r.note else ""
@@ -235,6 +268,8 @@ def main(argv: list[str] | None = None) -> int:
     live.add_argument("--only", nargs="+", default=None, metavar="ID")
     live.add_argument("--min-ok", type=float, default=0.9, help="Share of rows that must convert")
     live.add_argument("--summary", type=Path, default=None, help="Append a Markdown table here")
+    live.add_argument("--show-drops", type=int, default=0, metavar="N",
+                      help="Print up to N dropped rows per dataset")  # fmt: skip
     args = parser.parse_args(argv)
     if args.cmd == "table":
         rendered = render_table(load_catalog())
@@ -243,7 +278,8 @@ def main(argv: list[str] | None = None) -> int:
         else:
             print(rendered)
         return 0
-    return check(args.rows, args.only, summary=args.summary, min_ok=args.min_ok)
+    return check(args.rows, args.only, summary=args.summary, min_ok=args.min_ok,
+                 show_drops=args.show_drops)  # fmt: skip
 
 
 if __name__ == "__main__":
