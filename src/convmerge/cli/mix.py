@@ -57,7 +57,10 @@ def _add_mix(sub: argparse._SubParsersAction) -> None:
         action="store_true",
         help="Skip writing the .mix.json sidecar file",
     )
-    p.add_argument("--encoding", default="utf-8")
+    p.add_argument(
+        "--encoding", default="utf-8",
+        help="Encoding of the source files (default: utf-8); output is always UTF-8",
+    )  # fmt: skip
 
 
 def _cmd_mix(args: argparse.Namespace) -> None:
@@ -129,5 +132,5 @@ def _cmd_mix(args: argparse.Namespace) -> None:
     print(f"total written: {result.total_written:,} -> {result.output}", file=sys.stderr)
 
     if not args.no_recipe:
-        sidecar = write_mix_recipe(result, encoding=args.encoding)
+        sidecar = write_mix_recipe(result)
         print(f"recipe:        {sidecar}", file=sys.stderr)

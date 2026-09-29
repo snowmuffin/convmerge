@@ -223,8 +223,8 @@ def decontaminate_jsonl(
     for target in (output, rejects):
         if target is not None:
             Path(target).parent.mkdir(parents=True, exist_ok=True)
-    out = open(output, "w", encoding=encoding) if output is not None else None
-    rej = open(rejects, "w", encoding=encoding) if rejects is not None else None
+    out = open(output, "w", encoding="utf-8") if output is not None else None
+    rej = open(rejects, "w", encoding="utf-8") if rejects is not None else None
     try:
         for line in iter_jsonl(path, encoding=encoding, stats=read):
             st.rows += 1

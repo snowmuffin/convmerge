@@ -95,10 +95,10 @@ def deduplicate_near_jsonl(
     signer = _Signer(num_perm, lsh.b, lsh.r, shingle, list(keys) if keys else None)
     seen: set[int] = set()
     Path(dst).parent.mkdir(parents=True, exist_ok=True)
-    rej = open(rejects, "w", encoding=encoding) if rejects is not None else None
+    rej = open(rejects, "w", encoding="utf-8") if rejects is not None else None
     invalid = ReadStats()
     try:
-        with open(dst, "w", encoding=encoding) as out:
+        with open(dst, "w", encoding="utf-8") as out:
             for raw, bands in _signed_rows(src, encoding, signer, workers, invalid):
                 st.total += 1
                 if not seen.isdisjoint(bands):

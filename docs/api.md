@@ -11,7 +11,7 @@ internal and may change without notice.
 
 | Name | Purpose |
 |------|---------|
-| `convert_file(input, output, *, adapter_name, output_format, ...)` | Read JSONL → adapter → validate → emit. Returns `(lines_read, lines_written)`. Options: `encoding`, `adapter_options`, `progress`, `stats`, `on_invalid` (`drop`/`keep`/`fail`), `emit_options`, `workers`, `transform_options`. |
+| `convert_file(input, output, *, adapter_name, output_format, ...)` | Read JSONL → adapter → validate → emit. Returns `(lines_read, lines_written)`. Options: `encoding`, `adapter_options`, `progress`, `stats`, `on_invalid` (`drop`/`keep`/`fail`), `emit_options`, `workers`, `transform_options`. `encoding` is the input's; every function writes its output files as UTF-8. |
 | `convert_with_config(input, output, cfg, ...)` | Same, from a resolved `ConvertConfig`. |
 | `build_convert_config(*, preset_path, adapter, output_format, ...)` | Merge a preset file, `--adapter-kwargs` JSON, and explicit overrides into a `ConvertConfig`. |
 | `validate_file(input, *, adapter_name="chat")` | Run validation only; returns `ConvertStats`. |

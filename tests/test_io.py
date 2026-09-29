@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -189,3 +190,43 @@ def test_parse_line_agrees_with_iter_jsonl(tmp_path: Path) -> None:
         assert (error is None) == (number in good), number
         if error is None:
             assert value == good[number]
+
+
+def test_other_input_encodings_are_written_as_utf8(tmp_path: Path) -> None:
+    # ``encoding`` is the input's; every output file is UTF-8 (a cp949 file
+    # used to come out as cp949).
+    from convmerge.convert import convert_file
+    from convmerge.mix import MixSource, mix_files
+    from convmerge.quality import FilterSpec, filter_jsonl
+    from convmerge.split import split_jsonl
+
+    rows = [{"instruction": f"안녕하세요 질문 {i}", "output": f"답변입니다 {i}"} for i in range(4)]
+    text = "".join(json.dumps(r, ensure_ascii=False) + "\n" for r in rows)
+    src = _write_bytes(tmp_path / "in.jsonl", text.encode("cp949"))
+    for workers in (1, 2):
+        out = tmp_path / f"c{workers}.jsonl"
+        convert_file(src, out, adapter_name="alpaca", output_format="messages",
+                     encoding="cp949", workers=workers)  # fmt: skip
+        assert "안녕하세요 질문 0" in out.read_text(encoding="utf-8")
+    filter_jsonl(src, spec=FilterSpec(), output=tmp_path / "f.jsonl", encoding="cp949")
+    split_jsonl(src, tmp_path / "t.jsonl", tmp_path / "v.jsonl", val_rows=1, encoding="cp949")
+    mix_files([MixSource(path=src, weight=1.0)], tmp_path / "m.jsonl", total=4, seed=0,
+              encoding="cp949")  # fmt: skip
+    for name in ("f.jsonl", "t.jsonl", "m.jsonl"):
+        assert (tmp_path / name).read_text(encoding="utf-8").count("\n") in (3, 4), name
+
+
+def test_cli_suggests_encoding_for_undecodable_input(tmp_path: Path, capsys) -> None:
+    from convmerge.cli import main
+
+    text = json.dumps({"instruction": "질문", "output": "답변"}, ensure_ascii=False) + "\n"
+    src = _write_bytes(tmp_path / "in.jsonl", text.encode("cp949"))
+    main(["convert", "-i", str(src), "-o", str(tmp_path / "o.jsonl"), "--from", "auto"])
+    err = capsys.readouterr().err
+    assert "pass --encoding NAME" in err and "normalize" not in err
+    main(["dedupe", "-i", str(src), "-o", str(tmp_path / "d.jsonl")])
+    assert "--encoding NAME" in capsys.readouterr().err
+    broken = _write(tmp_path / "b.jsonl", '{"instruction": "q", "output": "a"}\n{bad\n')
+    main(["convert", "-i", str(broken), "-o", str(tmp_path / "o2.jsonl"), "--from", "auto"])
+    err = capsys.readouterr().err
+    assert "normalize" in err and "--encoding" not in err

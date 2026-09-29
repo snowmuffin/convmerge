@@ -7,6 +7,7 @@ import json
 import sys
 from pathlib import Path
 
+from convmerge.cli._common import encoding_advice
 from convmerge.cli._common import positive_int as _positive_int
 
 
@@ -107,6 +108,9 @@ def _cmd_filter(args: argparse.Namespace) -> None:
         print(f"error: {e}", file=sys.stderr)
         sys.exit(2)
     stats = FilterStats()
+    from convmerge.io import bad_bytes_seen
+
+    bad_bytes_before = bad_bytes_seen()
     filter_jsonl(
         args.input, spec=spec, output=args.output, rejects=args.rejects, stats=stats,
         workers=args.workers,
@@ -123,6 +127,9 @@ def _cmd_filter(args: argparse.Namespace) -> None:
     if stats.invalid_json:
         print(f"warning: dropped {stats.invalid_json:,} invalid JSON lines "
               f"(first at line {stats.first_invalid_line})", file=sys.stderr)  # fmt: skip
+        advice = encoding_advice(bad_bytes_before, "utf-8", has_encoding_flag=False)
+        if advice:
+            print(f"hint: {advice}", file=sys.stderr)
     for warning in stats.warnings():
         print(f"warning: {warning}", file=sys.stderr)
     verb = f"kept {stats.kept:,} -> {args.output}" if args.output else f"would keep {stats.kept:,}"
