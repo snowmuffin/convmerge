@@ -226,7 +226,7 @@ def convert_file(
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    with output_path.open("w", encoding=encoding) as fout:
+    with output_path.open("w", encoding="utf-8") as fout:
         if workers > 1:
             _run_parallel(
                 input_path,

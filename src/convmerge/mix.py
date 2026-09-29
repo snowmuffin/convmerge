@@ -138,7 +138,7 @@ def _mix_v1(
     rng.shuffle(all_records)
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    with output_path.open("w", encoding=encoding) as f:
+    with output_path.open("w", encoding="utf-8") as f:
         for line in all_records:
             f.write(line + "\n")
 
@@ -179,7 +179,7 @@ def _mix_v2(
 
     with tempfile.TemporaryDirectory(prefix=".convmerge-mix-", dir=output_path.parent) as tmp:
         buckets = [Path(tmp) / f"{i}.jsonl" for i in range(n_buckets)]
-        handles = [b.open("w", encoding=encoding) for b in buckets] if n_buckets > 1 else []
+        handles = [b.open("w", encoding="utf-8") for b in buckets] if n_buckets > 1 else []
         in_memory: list[str] = []
         try:
             # Pass 2: stream each source, emit chosen lines to random buckets.
@@ -196,12 +196,12 @@ def _mix_v2(
             for h in handles:
                 h.close()
 
-        with output_path.open("w", encoding=encoding) as out:
+        with output_path.open("w", encoding="utf-8") as out:
             if not handles:
                 rng.shuffle(in_memory)
                 out.writelines(x + "\n" for x in in_memory)
             for bucket in buckets if handles else []:
-                with bucket.open(encoding=encoding) as f:
+                with bucket.open(encoding="utf-8") as f:
                     lines = f.readlines()
                 rng.shuffle(lines)
                 out.writelines(lines)

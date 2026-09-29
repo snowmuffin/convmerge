@@ -65,7 +65,14 @@ def _cmd_fetch(args: argparse.Namespace) -> None:
     source = args.source
 
     if source.startswith("hf://") or source.startswith("https://") or source.startswith("http://"):
-        _cmd_fetch_shortcut(args, source)
+        try:
+            _cmd_fetch_shortcut(args, source)
+        except ImportError as e:
+            print(f"error: {e}", file=sys.stderr)
+            sys.exit(2)
+        except Exception as e:  # noqa: BLE001  (network, HTTP, and Hub errors: one line, not a trace)
+            print(f"error: fetch failed: {_one_line(e)}", file=sys.stderr)
+            sys.exit(1)
         return
 
     manifest_path = Path(source)
@@ -92,14 +99,21 @@ def _cmd_fetch(args: argparse.Namespace) -> None:
             resume=False if args.no_resume else None,
         )
 
-    result = run_manifest(
-        manifest,
-        output_root=args.output,
-        only=args.only,
-        hf_token=args.hf_token,
-        github_token=args.github_token,
-        max_rows=args.max_rows,
-    )
+    try:
+        result = run_manifest(
+            manifest,
+            output_root=args.output,
+            only=args.only,
+            hf_token=args.hf_token,
+            github_token=args.github_token,
+            max_rows=args.max_rows,
+        )
+    except RuntimeError as e:
+        if not str(e).startswith("Fetch failed for "):
+            raise
+        # An entry failed with on_error: fail; the runner already logged it.
+        print(f"error: {_one_line(e)}", file=sys.stderr)
+        sys.exit(1)
     # Propagate failure when requested.
     if manifest.defaults.on_error == "fail" and result.failed:
         sys.exit(1)
@@ -174,6 +188,14 @@ def _cmd_fetch_shortcut(args: argparse.Namespace, source: str) -> None:
         file=sys.stderr,
     )
     sys.exit(2)
+
+
+def _one_line(e: BaseException) -> str:
+    """``Type: first line of the message``, with credentials removed from URLs."""
+    from convmerge.fetch.auth import redact_url
+
+    lines = str(e).strip().splitlines()
+    return redact_url(f"{type(e).__name__}: {lines[0] if lines else ''}".rstrip(": "))
 
 
 def _with_overridden_defaults(manifest, *, on_error, resume):

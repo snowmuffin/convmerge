@@ -8,7 +8,7 @@
 [![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-2.1-4baaaa.svg)](CODE_OF_CONDUCT.md)
 
 > **Convert Alpaca, ShareGPT, tool-calling, preference, and mixed chat datasets into one training-ready JSONL.**  
-> Fetch from HuggingFace or GitHub, normalize messy Parquet / JSON / JSONL, convert [30+ popular dataset layouts](#tested-datasets) into `messages` (SFT) or `{prompt, chosen, rejected}` (DPO) rows, weighted-mix multiple domain sources, deduplicate, filter, and decontaminate — one command each, or the whole pipeline from a reproducible recipe.
+> Fetch from HuggingFace or GitHub, normalize messy Parquet / JSON / JSONL, convert [50+ popular dataset layouts](#tested-datasets) into `messages` (SFT) or `{prompt, chosen, rejected}` (DPO) rows, weighted-mix multiple domain sources, deduplicate, filter, and decontaminate — one command each, or the whole pipeline from a reproducible recipe.
 
 `convmerge` is a **data-preparation CLI and library** for LLM supervised fine-tuning (SFT).
 It takes heterogeneous instruction-tuning datasets — **Alpaca**, **ShareGPT**, raw chat JSONL,
@@ -25,6 +25,35 @@ loading, no inference, no labeling, no training orchestration. See
 **Repository:** [github.com/snowmuffin/convmerge](https://github.com/snowmuffin/convmerge)  
 **Status:** stable since 1.0: the CLI, the Python API, and the file formats
 change incompatibly only in a new major version ([stability.md](docs/stability.md)).
+
+## Quickstart
+
+Three rows in three layouts (Alpaca, ShareGPT, OpenAI messages) become one
+training file:
+
+```bash
+pip install convmerge
+cat > raw.jsonl <<'JSONL'
+{"instruction": "Translate to French", "input": "Good morning", "output": "Bonjour"}
+{"conversations": [{"from": "human", "value": "What is 2+2?"}, {"from": "gpt", "value": "4"}]}
+{"messages": [{"role": "user", "content": "Hi"}, {"role": "assistant", "content": "Hello!"}]}
+JSONL
+convmerge convert -i raw.jsonl -o train.jsonl --from auto
+# read 3 lines, wrote 3 examples
+head -n 1 train.jsonl
+# {"messages": [{"role": "user", "content": "Translate to French\nGood morning"}, {"role": "assistant", "content": "Bonjour"}]}
+```
+
+A dataset from the Hub (`fetch` needs the `[fetch-all]` extra):
+
+```bash
+pip install "convmerge[fetch-all]"
+convmerge fetch hf://tatsu-lab/alpaca --max-rows 1000 -o raw
+convmerge convert -i raw/tatsu-lab_alpaca.jsonl -o train.jsonl --from auto
+```
+
+A file saved in another encoding (cp949 on Korean Windows, for example) is
+read with `--encoding cp949`; the output is always UTF-8.
 
 ## Install
 

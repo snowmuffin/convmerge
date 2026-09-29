@@ -237,8 +237,8 @@ def check_tokens(
     st.generation_tags = bool(_GENERATION_TAG.search(template))
     st.stop_tokens = _stop_tokens(tok)
 
-    out = open(output, "w", encoding=encoding) if output is not None else None
-    rej = open(rejects, "w", encoding=encoding) if rejects is not None else None
+    out = open(output, "w", encoding="utf-8") if output is not None else None
+    rej = open(rejects, "w", encoding="utf-8") if rejects is not None else None
     try:
         batch: list[_Row] = []
         for row in _render(path, tok, template, encoding, st, prefixes=max_tokens is not None):

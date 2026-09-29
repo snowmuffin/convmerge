@@ -510,7 +510,13 @@ Lines that are not usable JSON are skipped and counted as `invalid_json`
 before any adapter runs: broken JSON, bytes that are not valid in
 `--encoding`, unpaired UTF-16 surrogate escapes (`"\ud800"`), and nesting too
 deep to parse. When nothing is written, `convert` prints a hint: run
-`normalize` first, use `--from auto`, or map the listed keys with `--from map`.
+`normalize` first, pass `--encoding` (when the lines are not valid UTF-8), use
+`--from auto`, or map the listed keys with `--from map`.
+
+`--encoding` (and the `encoding` argument of the Python API) is the input
+file's encoding, for example `cp949` for files saved on Korean Windows. Every
+output file is written as UTF-8, whatever the input encoding (before 1.1.1
+the output used the input's encoding).
 
 Adapters skip blank turns (such as an empty system prompt) instead of
 failing the whole example. Tool calls without ids (LLaMA-Factory) are paired

@@ -7,6 +7,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-09-29
+
+Fixes from the 1.1 evaluation: files in another encoding, `fetch` errors,
+and a README that starts with a working example.
+
+### Fixed
+
+- `--encoding` (and the `encoding` argument of the Python API) now applies
+  to the input only. Every output file is written as UTF-8; before, reading
+  a cp949 file with `convert --encoding cp949` also wrote the output in
+  cp949, which trainers cannot read. Affects `convert`, `mix`, and the
+  `filter_jsonl`, `split_jsonl`, `decontaminate_jsonl`,
+  `deduplicate_near_jsonl`, and `check_tokens` functions.
+- When lines are skipped because they are not valid in the input encoding,
+  `convert` now says to pass `--encoding NAME` instead of suggesting
+  `normalize`; `dedupe`, `filter`, and `split` say to re-save the file as
+  UTF-8. Broken JSON still points at `normalize`.
+- `fetch hf://…` without the `[fetch-all]` extra printed a traceback and
+  exited 1; it now prints the install command and exits 2, like other
+  commands with a missing extra. Download errors (network, HTTP, Hub) print
+  one line (`error: fetch failed: …`, credentials removed) and exit 1
+  instead of a traceback. A manifest entry with `on_error: fail` also ends
+  with one line.
+
+### Changed output
+
+- Output files written from a non-UTF-8 `--encoding` are now UTF-8 (see
+  above). Output from UTF-8 input is unchanged.
+
+### Documentation
+
+- README opens with a quickstart that runs as written, and counts 50+
+  tested dataset layouts (was "30+").
+- `dedupe --near`: how the threshold relates to edits, measured on planted
+  copies. `--threshold 0.7` catches 85% of copies with 1-4% of words
+  changed (0.8: 54%) without removing originals; the default stays 0.8
+  within 1.x.
+
 ## [1.1.0] - 2026-09-29
 
 Faster and lighter on large files. Everything is additive: the same input and
