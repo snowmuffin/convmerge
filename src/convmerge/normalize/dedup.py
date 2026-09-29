@@ -123,6 +123,7 @@ def deduplicate_jsonl(
     seen_store: str = "memory",
     seen_db: str | Path | None = None,
     stats: DedupeStats | None = None,
+    rejects: str | Path | None = None,
 ) -> tuple[int, int]:
     """Stream ``src`` JSONL into ``dst``, dropping duplicate rows.
 
@@ -143,7 +144,8 @@ def deduplicate_jsonl(
       when omitted.
 
     Unparseable lines are dropped; pass a :class:`DedupeStats` as ``stats`` to
-    count them separately from true duplicates.
+    count them separately from true duplicates. ``rejects`` writes the
+    dropped duplicates to their own file.
 
     Returns ``(total_rows, kept_rows)``.
     """
@@ -170,6 +172,7 @@ def deduplicate_jsonl(
 
     st = stats if stats is not None else DedupeStats()
     read = ReadStats()
+    rej = open(rejects, "w", encoding="utf-8") if rejects is not None else None
     try:
         with dst_p.open("w", encoding="utf-8") as wf:
             for line in iter_jsonl(src_p, stats=read):
@@ -179,11 +182,15 @@ def deduplicate_jsonl(
                 h = hasher(normalized.encode("utf-8"))
                 if not store.add(h):
                     st.duplicates += 1
+                    if rej is not None:
+                        rej.write(line.raw + "\n")
                     continue
                 wf.write(line.raw + "\n")
                 st.kept += 1
     finally:
         store.close()
+        if rej is not None:
+            rej.close()
         # Corrupt rows are dropped and counted; re-run normalize to repair.
         st.invalid_json = read.invalid_json
         st.first_invalid_line = read.first_invalid_line

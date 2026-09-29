@@ -437,7 +437,22 @@ def _cmd_validate(args: argparse.Namespace) -> None:
     report["invalid"] = report.pop("dropped")
     for key in ("kept_invalid",):
         report.pop(key)
+    from convmerge.arrow import type_conflicts
+
+    conflicts = type_conflicts(args.input, encoding=args.encoding)
+    if conflicts:
+        report["type_conflicts"] = [c.to_report() for c in conflicts]
     print(json.dumps(report, ensure_ascii=False, indent=2))
+    if conflicts:
+        print(
+            f"warning: {len(conflicts)} field(s) change type between rows; "
+            'datasets.load_dataset("json") fails on them before datasets 4.8 '
+            "(LLaMA-Factory installs 4.0) with ArrowInvalid",
+            file=sys.stderr,
+        )
+        for c in conflicts[:5]:
+            kinds = ", ".join(f"{k} (line {n})" for k, n in c.first_line.items())
+            print(f"  {c.path}: {kinds}; {c.hint()}", file=sys.stderr)
     if stats.dropped or stats.skipped:
         sys.exit(1)
 
