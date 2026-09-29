@@ -11,8 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 More datasets convert with `--from auto`, and the checks before training
 cover the loaders and trainers from the 1.1 evaluation. On 25 popular Hub
-datasets that convmerge had never been tested on, 19 now convert with no
-options (1.1: 11 of 22 loadable). The catalog grows from 52 to 61 datasets,
+datasets that convmerge had never been tested on, 20 now convert with no
+options (1.1: 11 of 22 loadable; Nemotron chat converts too with
+`--leading-assistant drop`). The catalog grows from 52 to 61 datasets,
 each checked on 1,000 real rows. All additive; see "Changed output" for the
 rows that convert differently.
 
