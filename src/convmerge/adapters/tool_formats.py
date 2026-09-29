@@ -271,22 +271,28 @@ def _system_function_list(messages: list[ChatMessage]) -> list[dict[str, Any]] |
 
 
 def parse_bracket_calls(text: str, names: set[str]) -> list[ToolCall] | None:
-    """``[Name(k=v, ...), ...]`` with every name in ``names``, else ``None``."""
+    """``[Name(k=v, ...), ...]`` with every name in ``names``, else ``None``.
+
+    Names may contain spaces and parentheses (``User Feed (Video) V2(...)``):
+    the longest listed name followed by ``(`` is taken. Argument names may be
+    Python keywords (``from="2025-01-01"``).
+    """
     s = text.strip()
     if not (s.startswith("[") and s.endswith("]")):
         return None
     body, pos, calls = s[1:-1], 0, []
+    ordered = sorted(names, key=len, reverse=True)
     while pos < len(body):
         while pos < len(body) and body[pos] in " \n\t,":
             pos += 1
         if pos >= len(body):
             break
-        paren = body.find("(", pos)
-        if paren < 0:
+        name = _name_at(body, pos, ordered)
+        if name is None:
             return None
-        name = body[pos:paren].strip()
+        paren = body.index("(", pos + len(name))
         end = _closing_paren(body, paren)
-        if name not in names or end is None:
+        if end is None:
             return None
         kwargs = _keyword_arguments(body[paren + 1 : end])
         if kwargs is None:
@@ -294,6 +300,14 @@ def parse_bracket_calls(text: str, names: set[str]) -> list[ToolCall] | None:
         calls.append(ToolCall.from_any(name, kwargs))
         pos = end + 1
     return calls or None
+
+
+def _name_at(body: str, pos: int, names: list[str]) -> str | None:
+    """The longest of ``names`` at ``pos`` that is followed by ``(``."""
+    for name in names:
+        if body.startswith(name, pos) and body[pos + len(name) :].lstrip(" ").startswith("("):
+            return name
+    return None
 
 
 def _closing_paren(text: str, start: int) -> int | None:
@@ -317,30 +331,64 @@ def _closing_paren(text: str, start: int) -> int | None:
     return None
 
 
+def _split_arguments(args: str) -> list[str]:
+    """``args`` split at the commas outside quotes and brackets."""
+    parts, depth, quote, start, i = [], 0, "", 0, 0
+    while i < len(args):
+        c = args[i]
+        if quote:
+            if c == "\\":
+                i += 1
+            elif c == quote:
+                quote = ""
+        elif c in "\"'":
+            quote = c
+        elif c in "([{":
+            depth += 1
+        elif c in ")]}":
+            depth -= 1
+        elif c == "," and depth == 0:
+            parts.append(args[start:i])
+            start = i + 1
+        i += 1
+    parts.append(args[start:])
+    return parts
+
+
+_KEYWORD = re.compile(r"\s*([^\W\d]\w*)\s*=(?!=)(.*)", re.DOTALL)
 _JSON_NAMES = {"true": True, "false": False, "null": None}
+_NOT_LITERAL = object()
 
 
 def _keyword_arguments(args: str) -> dict[str, Any] | None:
     """``a=1, b="x"`` as a dict of literals (parsed, never evaluated)."""
-    try:
-        call = ast.parse(f"f({args})", mode="eval").body
-    except (SyntaxError, ValueError, RecursionError, MemoryError):
-        return None
-    if not isinstance(call, ast.Call) or call.args:
-        return None
+    parts = _split_arguments(args)
+    if parts and not parts[-1].strip():
+        parts.pop()  # no arguments, or a trailing comma
     out: dict[str, Any] = {}
-    for kw in call.keywords:
-        if kw.arg is None:
+    for part in parts:
+        match = _KEYWORD.fullmatch(part)
+        if match is None:
             return None
-        node = kw.value
-        if isinstance(node, ast.Name) and node.id in _JSON_NAMES:
-            out[kw.arg] = _JSON_NAMES[node.id]
-            continue
-        try:
-            out[kw.arg] = ast.literal_eval(node)
-        except (ValueError, TypeError, SyntaxError, RecursionError, MemoryError):
+        value = _literal(match[2].strip())
+        if value is _NOT_LITERAL:
             return None
+        out[match[1]] = value
     return out
+
+
+def _literal(text: str) -> Any:
+    """A Python or JSON literal, or ``_NOT_LITERAL``."""
+    if text in _JSON_NAMES:
+        return _JSON_NAMES[text]
+    try:
+        return ast.literal_eval(text)
+    except (ValueError, TypeError, SyntaxError, RecursionError, MemoryError):
+        pass
+    try:
+        return json.loads(text)
+    except (ValueError, RecursionError):
+        return _NOT_LITERAL
 
 
 # --- xLAM --------------------------------------------------------------------
