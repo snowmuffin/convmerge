@@ -81,6 +81,7 @@ _EMIT_OPTION_KEYS = (
     "reasoning",
     "tool_content",
     "meta",
+    "train_turns",
 )
 _TRANSFORM_OPTION_KEYS = (
     "system",
@@ -108,7 +109,10 @@ def emit_options_from_mapping(data: dict[str, Any]) -> EmitOptions:
             f"supported: {', '.join(_EMIT_OPTION_KEYS)}"
         )
     kw: dict[str, Any] = {}
-    for key in ("tool_arguments", "meta_key", "alpaca_multiturn", "reasoning", "tool_content"):
+    for key in (
+        "tool_arguments", "meta_key", "alpaca_multiturn", "reasoning", "tool_content",
+        "train_turns",
+    ):  # fmt: skip
         if key in data:
             kw[key] = str(data[key])
     if "meta" in data:
@@ -373,6 +377,11 @@ def build_convert_config(
         cfg_transforms = replace(cfg_transforms or TransformOptions(), **transform_overrides)
     if cfg_emit is not None:
         _check_reasoning_format(cfg_emit.reasoning, cfg_format)
+        if cfg_emit.train_turns == "last" and cfg_format != "messages":
+            raise ValueError(
+                "train_turns: last writes per-turn train flags, which only the messages "
+                "format has (for LLaMA-Factory, set mask_history: true in the training config)"
+            )
     if cfg_transforms is not None:
         _check_split_turns(cfg_transforms, cfg_format)
 

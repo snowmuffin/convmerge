@@ -31,6 +31,7 @@ class UnrepresentableExample(ValueError):
 ToolArguments = Literal["string", "object"]
 AlpacaMultiturn = Literal["flatten", "history", "drop"]
 ToolContent = Literal["empty", "null"]
+TrainTurns = Literal["all", "last"]
 
 
 @dataclass(frozen=True)
@@ -62,6 +63,10 @@ class EmitOptions:
     - ``meta_values``: constant fields written under ``meta_key`` on every
       row (with or without ``keep_meta``), e.g. ``{"dataset": "kullm",
       "license": "apache-2.0"}`` to keep each row's origin after a mix.
+    - ``train_turns``: ``"last"`` writes ``"train": false`` on every assistant
+      turn but the last (``messages`` only), for datasets meant to train on
+      the final answer alone (axolotl reads the flag with
+      ``message_field_training: train``); ``"all"`` (default) writes no flag.
     """
 
     tool_arguments: ToolArguments = "string"
@@ -71,6 +76,7 @@ class EmitOptions:
     reasoning: ReasoningMode = "keep"
     tool_content: ToolContent = "empty"
     meta_values: Mapping[str, str] | None = None
+    train_turns: TrainTurns = "all"
 
     def __post_init__(self) -> None:
         if self.tool_arguments not in ("string", "object"):
@@ -88,6 +94,8 @@ class EmitOptions:
             )
         if self.tool_content not in ("empty", "null"):
             raise ValueError(f"tool_content must be 'empty' or 'null', got {self.tool_content!r}")
+        if self.train_turns not in ("all", "last"):
+            raise ValueError(f"train_turns must be 'all' or 'last', got {self.train_turns!r}")
         if not isinstance(self.keep_meta, bool):
             object.__setattr__(self, "keep_meta", tuple(self.keep_meta))
         if self.meta_values is not None:
@@ -119,9 +127,17 @@ def emit_messages(
     """
     opts = options if options is not None else EmitOptions(tool_arguments=tool_arguments)
     row: dict[str, Any] = {"messages": _message_dicts(example.messages, opts)}
+    if opts.train_turns == "last":
+        _train_last_turn_only(row["messages"])
     if example.tools:
         row["tools"] = example.tools
     return _with_meta(row, example, options)
+
+
+def _train_last_turn_only(messages: list[dict[str, Any]]) -> None:
+    answers = [m for m in messages if m["role"] == "assistant"]
+    for m in answers[:-1]:
+        m["train"] = False
 
 
 def _with_meta(

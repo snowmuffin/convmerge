@@ -35,6 +35,7 @@ _CONVERT_KEYS = {
     "alpaca_multiturn",
     "reasoning",
     "tool_content",
+    "train_turns",
     "system",
     "merge_consecutive",
     "split_turns",
@@ -351,7 +352,10 @@ def _convert(raw: Any, base: Path, where: str) -> ConvertSpec:
     if isinstance(workers, bool) or not isinstance(workers, int) or workers < 1:
         raise RecipeError(f"{where}.workers: expected a positive integer")
     emit: dict[str, Any] = {}
-    for key in ("tool_arguments", "meta_key", "alpaca_multiturn", "reasoning", "tool_content"):
+    for key in (
+        "tool_arguments", "meta_key", "alpaca_multiturn", "reasoning", "tool_content",
+        "train_turns",
+    ):  # fmt: skip
         if key in spec:
             emit[key] = _str(spec[key], f"{where}.{key}")
     if "meta" in spec:

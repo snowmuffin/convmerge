@@ -51,6 +51,7 @@ adapter_options:
 #   alpaca_multiturn: flatten # flatten | history | drop
 #   reasoning: keep           # keep | inline | reasoning_content | thinking | drop
 #   tool_content: empty       # empty ("" on tool-call turns) | null
+#   train_turns: all          # all | last ("train": false on earlier answers)
 
 # Optional: fixes for strict chat templates (all off by default)
 # transforms:

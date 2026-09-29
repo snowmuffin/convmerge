@@ -134,6 +134,13 @@ def _add_convert(sub: argparse._SubParsersAction) -> None:
         help='content of assistant turns that only call tools: "" (default; every '
         "common chat template accepts it) or null",
     )
+    p.add_argument(
+        "--train-turns",
+        choices=("all", "last"),
+        default=None,
+        help='last: mark every assistant turn but the last with "train": false '
+        "(messages format; axolotl message_field_training: train)",
+    )
     g = p.add_argument_group("fixes for strict chat templates (all off by default)")
     g.add_argument(
         "--system",
@@ -320,6 +327,8 @@ def _emit_overrides(args: argparse.Namespace) -> dict[str, object]:
         out["reasoning"] = args.reasoning
     if args.tool_content is not None:
         out["tool_content"] = args.tool_content
+    if args.train_turns is not None:
+        out["train_turns"] = args.train_turns
     return out
 
 
