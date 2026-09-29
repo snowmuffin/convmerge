@@ -63,6 +63,45 @@ DATASETS: list[tuple[str, str, str | None]] = [
     ("jojo0217/korean_rlhf_dataset", "sft", None),
 ]
 
+# Picked for the 1.1 evaluation from the Hub's trending and most-downloaded
+# lists (September 2026): never looked at while building convmerge.
+FRESH: list[tuple[str, str, str | None]] = [
+    # general / agent SFT
+    ("nvidia/Nemotron-SFT-Instruction-Following-Chat-v3", "sft", None),
+    ("allenai/tulu-3-sft-personas-instruction-following", "sft", None),
+    ("openbmb/UltraData-SFT-Agent-2609", "sft", None),
+    ("OpenDataArena/Spark-234K", "sft", None),
+    ("nisten/opus5-5-doctor-patient-conversations-all-human-diseases", "sft", None),
+    ("OpenAssistant/oasst2", "sft", None),
+    ("CohereLabs/aya_dataset", "sft", None),
+    ("HuggingFaceTB/smol-smoltalk", "sft", None),
+    ("agent-eto/eto-sft-trajectory", "sft", None),
+    # reasoning
+    ("MoreThought/Fable-5.1-Max-Reasoning-Filtered-10000x", "reasoning", None),
+    ("IFM/Code-Reasoning", "reasoning", None),
+    ("CohereLabs/tiny-aya-l2-thinker-multilingual-reasoning", "reasoning", None),
+    ("Roman1111111/GPT-5.6-luna-reasoning-102881x", "reasoning", None),
+    ("open-thoughts/OpenThoughts-114k", "reasoning", None),
+    # tools
+    ("zake7749/Qwen3.6-35B-A3B-Tool-Calling", "tools", None),
+    ("zake7749/deepseek-v4-pro-agent-tool-calling-trajectory", "tools", None),
+    ("smolagents/toolcalling", "tools", None),
+    ("Mozilla/standard_chat_tool_calling_general", "tools", None),
+    ("younissk/tool-calling-mix", "tools", None),
+    ("ZeroAgency/gemma3-pythonic-function-tool-calling-v1", "tools", None),
+    # preference
+    ("argilla/distilabel-math-preference-dpo", "preference", None),
+    ("shibing624/DPO-En-Zh-20k-Preference", "preference", None),
+    ("Columbia-NLP/DPO-tldr-summarisation-preferences", "preference", None),
+    ("allenai/llama-3.1-tulu-3-8b-preference-mixture", "preference", None),
+    ("openbmb/UltraFeedback", "preference", None),
+    # Korean
+    ("CertifiedJoon/Korean-Instruction", "sft", None),
+    ("neuralfoundry-coder/korean-legal-instruction-sample", "sft", None),
+    ("heegyu/open-korean-instructions-v20231020", "sft", None),
+    ("ChuGyouk/argilla-distilabel-math-preference-dpo-korean", "preference", None),
+]
+
 
 def rows(dataset: str, config: str | None, n: int) -> tuple[str, list[dict[str, Any]]]:
     from datasets import get_dataset_split_names, load_dataset
@@ -164,22 +203,24 @@ def _shape(value: Any) -> str:
 
 
 def render(results: list[dict[str, Any]], n: int) -> str:
-    loadable = [r for r in results if r["status"] != "load_error"]
-    ok = sum(r["status"] == "ok" for r in loadable)
-    lines = [
-        f"### Zero-config coverage: `convert --from auto`, first {n} rows",
+    lines = [f"### Zero-config coverage: `convert --from auto`, first {n} rows", ""]
+    for name in dict.fromkeys(r.get("set", "") for r in results):
+        part = [r for r in results if r.get("set", "") == name]
+        loadable = [r for r in part if r["status"] != "load_error"]
+        ok = sum(r["status"] == "ok" for r in loadable)
+        lines.append(f"- {name or 'all'}: ok {ok} / loadable {len(loadable)} "
+                     f"(load errors: {len(part) - len(loadable)})")  # fmt: skip
+    lines += [
         "",
-        f"ok {ok} / loadable {len(loadable)} (load errors: {len(results) - len(loadable)})",
-        "",
-        "| Dataset | Kind | Status | Written | Drops / note | Columns |",
-        "|---|---|---|---|---|---|",
+        "| Set | Dataset | Kind | Status | Written | Drops / note | Columns |",
+        "|---|---|---|---|---|---|---|",
     ]
     for r in results:
         drops = ", ".join(f"{k}={v}" for k, v in sorted(r.get("drops", {}).items()))
         note = drops or r.get("note", "")
         written = f"{r.get('written', '')}/{r.get('read', '')}" if "read" in r else ""
         cols = ", ".join(r.get("columns", []))[:120]
-        cells = [r["id"], r["kind"], r["status"], written, note[:160], cols]
+        cells = [r.get("set", ""), r["id"], r["kind"], r["status"], written, note[:160], cols]
         cells = [c.replace("|", "\\|").replace("\n", " ") for c in cells]
         lines.append("| " + " | ".join(cells) + " |")
     return "\n".join(lines) + "\n"
@@ -194,15 +235,21 @@ def main() -> int:
                         help=argparse.SUPPRESS)  # fmt: skip
     parser.add_argument("--timeout", type=int, default=300, help="seconds per dataset")
     parser.add_argument("--max-memory-gb", type=float, default=4.0)
+    parser.add_argument("--set", choices=("v014", "fresh", "all"), default="all",
+                        help="v014: the 0.14 list; fresh: the 1.1 additions")  # fmt: skip
     args = parser.parse_args()
     if args.one:
         dataset, kind, config = args.one
         print(json.dumps(check(dataset, kind, None if config == "-" else config, args.rows)))
         return 0
+    sets = {"v014": DATASETS, "fresh": FRESH}
     results = []
-    for dataset, kind, config in DATASETS:
-        print(f"[check] {dataset}", file=sys.stderr, flush=True)
-        results.append(_isolated(dataset, kind, config, args))
+    for name, entries in sets.items():
+        if args.set not in (name, "all"):
+            continue
+        for dataset, kind, config in entries:
+            print(f"[check] {dataset}", file=sys.stderr, flush=True)
+            results.append({**_isolated(dataset, kind, config, args), "set": name})
     text = render(results, args.rows)
     print(text)
     if args.summary:
