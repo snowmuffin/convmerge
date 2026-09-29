@@ -112,6 +112,8 @@ class FilterStep:
     options: dict[str, Any]
     """Keyword arguments for :meth:`convmerge.quality.FilterSpec.from_options`."""
     rules_file: Path | None = None
+    workers: int = 1
+    """Processes to check rows with (does not change the output)."""
 
 
 @dataclass(frozen=True)
@@ -499,6 +501,7 @@ _FILTER_KEYS = {
     "slop_max": int,
     "min_script": dict,
     "rules_file": str,
+    "workers": int,
 }
 
 
@@ -517,8 +520,11 @@ def _filter(raw: Any, base: Path) -> FilterStep | None:
             ok = isinstance(value, (int, float)) and not isinstance(value, bool)
         if not ok:
             raise RecipeError(f"filter.{key}: expected {kind.__name__}")
-        if key != "rules_file":
+        if key not in ("rules_file", "workers"):
             options[key] = value
+    workers = spec.get("workers", 1)
+    if workers < 1:
+        raise RecipeError("filter.workers: expected a positive integer")
     rules_file = base / spec["rules_file"] if "rules_file" in spec else None
     try:
         for key in ("enable", "disable"):
@@ -528,7 +534,7 @@ def _filter(raw: Any, base: Path) -> FilterStep | None:
         FilterSpec.from_options(**options)
     except ValueError as e:
         raise RecipeError(f"filter: {e}") from None
-    return FilterStep(options=options, rules_file=rules_file)
+    return FilterStep(options=options, rules_file=rules_file, workers=workers)
 
 
 def _decontam(raw: Any, base: Path) -> DecontamStep | None:

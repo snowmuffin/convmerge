@@ -275,7 +275,7 @@ def parse_bracket_calls(text: str, names: set[str]) -> list[ToolCall] | None:
 
     Names may contain spaces and parentheses (``User Feed (Video) V2(...)``):
     the longest listed name followed by ``(`` is taken. Argument names may be
-    Python keywords (``from="2025-01-01"``).
+    Python keywords (``from="2025-01-01"``) or start with ``$`` (``$top=10``).
     """
     s = text.strip()
     if not (s.startswith("[") and s.endswith("]")):
@@ -355,7 +355,7 @@ def _split_arguments(args: str) -> list[str]:
     return parts
 
 
-_KEYWORD = re.compile(r"\s*([^\W\d]\w*)\s*=(?!=)(.*)", re.DOTALL)
+_KEYWORD = re.compile(r"\s*(\$?[^\W\d]\w*)\s*=(?!=)(.*)", re.DOTALL)
 _JSON_NAMES = {"true": True, "false": False, "null": None}
 _NOT_LITERAL = object()
 

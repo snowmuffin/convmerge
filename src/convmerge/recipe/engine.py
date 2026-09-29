@@ -286,10 +286,10 @@ def _filter_step(recipe: Recipe, src: Path, out: Path) -> Step:
     def run(stage: Path) -> dict[str, Any]:
         options = FilterSpec.from_options(**spec.options, rules_file=spec.rules_file)
         st = FilterStats()
-        filter_jsonl(src, spec=options, output=stage, stats=st)
+        filter_jsonl(src, spec=options, output=stage, stats=st, workers=spec.workers)
         return st.to_report()
 
-    options: dict[str, Any] = dict(spec.options)
+    options: dict[str, Any] = dict(spec.options)  # workers never change output
     if spec.rules_file is not None:
         options["rules_file"] = _display(spec.rules_file, recipe.base_dir)
     return Step("filter", "filter", inputs, out, options, run)

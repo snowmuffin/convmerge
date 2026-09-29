@@ -82,6 +82,11 @@ def _add_filter(sub: argparse._SubParsersAction) -> None:
         "--rules-file", type=Path, default=None, metavar="YAML",
         help="Extra refusal / slop phrases and regex rules (see docs/quality.md)",
     )  # fmt: skip
+    p.add_argument(
+        "--workers", type=_positive_int, default=1, metavar="N",
+        help="Check rows with N processes (default 1). Output and report are identical "
+        "to a single-process run",
+    )  # fmt: skip
 
 
 def _cmd_filter(args: argparse.Namespace) -> None:
@@ -102,7 +107,10 @@ def _cmd_filter(args: argparse.Namespace) -> None:
         print(f"error: {e}", file=sys.stderr)
         sys.exit(2)
     stats = FilterStats()
-    filter_jsonl(args.input, spec=spec, output=args.output, rejects=args.rejects, stats=stats)
+    filter_jsonl(
+        args.input, spec=spec, output=args.output, rejects=args.rejects, stats=stats,
+        workers=args.workers,
+    )  # fmt: skip
     report = {"version": REPORT_VERSION, **stats.to_report()}
     print(json.dumps(report, ensure_ascii=False, indent=2))
     hit = {k: v for k, v in stats.rules.items() if v}
