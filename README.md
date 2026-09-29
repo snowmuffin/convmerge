@@ -8,7 +8,7 @@
 [![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-2.1-4baaaa.svg)](CODE_OF_CONDUCT.md)
 
 > **Convert Alpaca, ShareGPT, tool-calling, preference, and mixed chat datasets into one training-ready JSONL.**  
-> Fetch from HuggingFace or GitHub, normalize messy Parquet / JSON / JSONL, convert [50+ popular dataset layouts](#tested-datasets) into `messages` (SFT) or `{prompt, chosen, rejected}` (DPO) rows, weighted-mix multiple domain sources, deduplicate, filter, and decontaminate — one command each, or the whole pipeline from a reproducible recipe.
+> Fetch from HuggingFace or GitHub, normalize messy Parquet / JSON / JSONL, convert [60+ popular dataset layouts](#tested-datasets) into `messages` (SFT) or `{prompt, chosen, rejected}` (DPO) rows, weighted-mix multiple domain sources, deduplicate, filter, and decontaminate — one command each, or the whole pipeline from a reproducible recipe.
 
 `convmerge` is a **data-preparation CLI and library** for LLM supervised fine-tuning (SFT).
 It takes heterogeneous instruction-tuning datasets — **Alpaca**, **ShareGPT**, raw chat JSONL,
@@ -171,7 +171,7 @@ convmerge convert -i raw/HuggingFaceH4_ultrafeedback_binarized.jsonl -o dpo.json
 | [llamafactory/glaive_toolcall_en](https://huggingface.co/datasets/llamafactory/glaive_toolcall_en) | Tool calling | en | LLaMA-Factory function_call | `--from auto --format messages` |
 | [Team-ACE/ToolACE](https://huggingface.co/datasets/Team-ACE/ToolACE) | Tool calling | en | [Func(k=v)] calls, functions in the system prompt | `--from auto --format messages` |
 | [Locutusque/function-calling-chatml](https://huggingface.co/datasets/Locutusque/function-calling-chatml) | Tool calling | en | function-call / function-response turns | `--from auto --format messages` |
-| [younissk/tool-calling-mix](https://huggingface.co/datasets/younissk/tool-calling-mix) | Tool calling | en | `messages_json` / `tools_json` / `target_json` strings | `--from auto --format messages` |
+| [younissk/tool-calling-mix](https://huggingface.co/datasets/younissk/tool-calling-mix) | Tool calling | en | `messages_json` / `tools_json` / `target_json` strings (no-call and ToolBench ReAct rows drop) | `--from auto --format messages` |
 | [ZeroAgency/gemma3-pythonic-function-tool-calling-v1](https://huggingface.co/datasets/ZeroAgency/gemma3-pythonic-function-tool-calling-v1) | Tool calling | en, ru | Gemma-rendered `conversation`, Python-style calls | `--from auto --format messages` |
 | [HuggingFaceH4/ultrafeedback_binarized](https://huggingface.co/datasets/HuggingFaceH4/ultrafeedback_binarized) | Preference | en | prompt + chosen/rejected lists | `--from auto --format preference` |
 | [trl-lib/ultrafeedback_binarized](https://huggingface.co/datasets/trl-lib/ultrafeedback_binarized) | Preference | en | chosen/rejected lists | `--from auto --format preference` |
@@ -362,7 +362,8 @@ convmerge decontam -i ./train/clean.jsonl --against hf:openai/gsm8k:main \
 # Render every row with the model's chat template: length percentiles, rows the
 # template rejects (with line numbers), double-encoded tool arguments, answers
 # that start beyond --max-tokens, answers not followed by a stop token, reasoning
-# the template drops, and {% generation %} support -- with the convert flag that
+# the template drops, {% generation %} support, and the instruction/response
+# markers for Unsloth's train_on_responses_only -- with the convert flag that
 # fixes each ("hints"). -o keeps the rows that render and fit.
 # Needs convmerge[tokens] (transformers, no PyTorch).
 convmerge tokens -i ./train/decontam.jsonl --tokenizer Qwen/Qwen2.5-7B-Instruct \
