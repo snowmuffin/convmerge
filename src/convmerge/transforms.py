@@ -58,9 +58,10 @@ class TransformOptions:
       turn before the last user message (what Qwen3 / gpt-oss templates
       render); ``"all"`` (default) keeps it.
     - ``leading_assistant``: ``"drop"`` removes assistant (and tool) turns
-      before the first user turn, whose prompt is missing (datasets that
-      withhold the first prompt, such as Nemotron chat); ``"keep"`` (default)
-      leaves them, and such examples fail validation as ``assistant_first``.
+      before the first user turn (datasets that withhold the first prompt,
+      such as Nemotron chat, whose examples otherwise fail validation as
+      ``withheld_prompt``; or agent data that opens with a greeting);
+      ``"keep"`` (default) leaves them.
     """
 
     system: SystemMode = "keep"
@@ -103,10 +104,16 @@ def apply_transforms(
             msgs = _merge(msgs, tally)
         return msgs
 
+    messages = fix(example.messages)
+    issues = example.issues
+    if "withheld_prompt" in issues and messages is not example.messages:
+        # The answer to the withheld prompt is gone; the rest is a whole conversation.
+        issues = [i for i in issues if i != "withheld_prompt"]
     example = replace(
         example,
-        messages=fix(example.messages),
+        messages=messages,
         rejected=fix(example.rejected) if example.rejected is not None else None,
+        issues=issues,
     )
     if options.split_turns and example.rejected is None:
         out = _split(example)

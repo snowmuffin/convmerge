@@ -20,10 +20,6 @@ REASONS: dict[str, str] = {
     "empty_message": "a message has neither content nor tool calls",
     "no_user": "there is no user message",
     "no_assistant": "there is no assistant message with content or tool calls",
-    "assistant_first": (
-        "the conversation starts with an assistant turn (its prompt is missing; "
-        "--leading-assistant drop removes it)"
-    ),
     "orphan_tool_message": "a tool message is not preceded by an assistant tool call",
     "tool_call_id_mismatch": "a tool message's tool_call_id matches no earlier tool call",
 }
@@ -33,6 +29,10 @@ REASONS: dict[str, str] = {
 ISSUES: dict[str, str] = {
     "map_path_missing": "a path of the --from map field mapping is missing from the record",
     "no_preference": "the --from map preferred label names no winner (a tie)",
+    "withheld_prompt": (
+        "a user turn is null and the conversation starts with its answer (the dataset "
+        "withholds that prompt; --leading-assistant drop removes the answer)"
+    ),
     "preference_record": (
         "a chosen/rejected preference record: write DPO pairs with --format preference, "
         "or train on one side with --preference chosen"
@@ -48,11 +48,9 @@ def validate_example(example: TrainingExample) -> list[str]:
         # (e.g. ``preference_record``) has already said what is wrong.
         return list(example.issues) or ["no_messages"]
 
-    unknown_role = empty = has_user = has_assistant = has_tool = assistant_first = False
+    unknown_role = empty = has_user = has_assistant = has_tool = False
     for m in msgs:
         role = m.role
-        if role == "assistant" and not has_user:
-            assistant_first = True
         if role not in ALLOWED_ROLES:
             unknown_role = True
         is_empty = _is_empty(m)
@@ -73,8 +71,6 @@ def validate_example(example: TrainingExample) -> list[str]:
         reasons.append("no_user")
     if not has_assistant:
         reasons.append("no_assistant")
-    elif assistant_first and has_user:
-        reasons.append("assistant_first")
     if has_tool:
         reasons.extend(_tool_pairing(msgs))
     reasons.extend(example.issues)

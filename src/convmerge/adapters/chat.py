@@ -175,7 +175,10 @@ def iter_from_chat_line(
                 if answer is not None:
                     msgs.append(answer)
             if msgs:
-                yield build_example(msgs, record, meta={"source": "chat"})
+                example = build_example(msgs, record, meta={"source": "chat"})
+                if _starts_with_answer(msgs) and _null_user_turn(convs, role_keys, content_keys):
+                    example.issues.append("withheld_prompt")
+                yield example
             return
 
     prompt_turns, answer = record.get("input"), record.get("output")
@@ -350,6 +353,28 @@ def _lower_case_keys(record: dict[str, Any], known: tuple[str, ...]) -> dict[str
     if not extra or any(k in record for k in extra):
         return record
     return {**record, **extra}
+
+
+def _starts_with_answer(msgs: list[ChatMessage]) -> bool:
+    for m in msgs:
+        if m.role != "system":
+            return m.role == "assistant"
+    return False
+
+
+def _null_user_turn(
+    convs: list[Any], role_keys: tuple[str, ...], content_keys: tuple[str, ...]
+) -> bool:
+    """A user turn whose content is ``null`` (Nemotron chat withholds prompts that way)."""
+    for item in convs:
+        if not isinstance(item, dict):
+            continue
+        role = next((item[k] for k in role_keys if isinstance(item.get(k), str)), None)
+        if role not in ("user", "human"):
+            continue
+        if all(item.get(k) is None for k in content_keys):
+            return True
+    return False
 
 
 def _has_answer(msgs: list[ChatMessage]) -> bool:

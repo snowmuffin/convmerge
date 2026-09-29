@@ -119,6 +119,11 @@ RAW_ROWS = 0  # --raw: source rows kept in the result (strings clipped)
 
 
 def _clip(value: Any, limit: int = 300) -> Any:
+    if isinstance(value, str) and value[:1] in "[{":
+        try:  # a JSON column (messages_json): clip inside it, not the whole string
+            return {"<json>": _clip(json.loads(value), limit)}
+        except ValueError:
+            pass
     if isinstance(value, str):
         return value if len(value) <= limit else value[:limit] + f"...(+{len(value) - limit})"
     if isinstance(value, dict):
