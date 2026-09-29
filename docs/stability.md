@@ -68,7 +68,7 @@ accepting the previous one for the rest of the major version.
 ### Reproducibility
 
 - The same input, options, and convmerge version give byte-identical output,
-  including `convert --workers N` for any `N`.
+  including `--workers N` for any `N` (`convert`, `filter`, `dedupe --near`).
 - `mix` with the same inputs, weights, seed, and `sampler` picks the same
   rows in every 1.x release. `sampler: v1` reproduces pre-0.7 mixes and is
   kept frozen.

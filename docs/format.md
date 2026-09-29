@@ -385,7 +385,9 @@ mentions `<tool_call>` is left alone; a block that is not valid JSON stays in
 the text. The system prompt itself is kept as written. Bracket calls are
 decoded only when every name is a function listed in the system prompt and
 every argument is a keyword with a literal value (parsed, never evaluated);
-anything else stays text. Tool calls get no invented ids (results pair with
+anything else stays text. Names may contain spaces and parentheses
+(`User Feed (Video Posts) V2(...)`), and argument names may be Python
+keywords or start with `$` (`from="2025-01-01"`, `$top=10`). Tool calls get no invented ids (results pair with
 calls by order).
 
 ### Template-rendered `text`

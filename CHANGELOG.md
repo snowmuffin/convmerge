@@ -7,6 +7,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-09-29
+
+Faster and lighter on large files. Everything is additive: the same input and
+options give the same output as 1.0, except the ToolACE fix under
+"Changed output". Checked byte for byte against 1.0.0 on 1M chat rows
+(`convert`, `filter`) and 200k rows (`dedupe --near`).
+
+### Added
+
+- `filter --workers N` (`filter_jsonl(workers=)`, recipe `filter.workers`):
+  rules checked in N processes, with output, rejects, and report identical
+  to one process (and to 1.0). 1M chat rows: 71.7 s -> 18.3 s with 4
+  workers.
+- `dedupe --near --workers N` (`deduplicate_near_jsonl(workers=)`, recipe
+  `dedupe.workers`): MinHashes computed in N processes, identical output.
+  200k chat rows: 63 s -> 17 s with 4 workers.
+- `scripts/datasets.py check --show-drops N` (and the Datasets workflow's
+  `show_drops` input) prints the rows a catalog dataset drops.
+
+### Changed
+
+- `dedupe --near` keeps a 60-bit digest per LSH band instead of datasketch's
+  hash tables. It uses the same bands, so it keeps the same rows as 1.0
+  (checked against `MinHashLSH` in the tests and on 200k real rows), at a
+  third of the memory: 200k chat rows peaked at 235 MB instead of 733 MB,
+  and 1M rows at 768 MB (89 s with `--workers 4`) where 1.0 needed ~3.5 GB.
+- Like `convert.workers`, the new `filter.workers` and `dedupe.workers`
+  recipe keys never change a step's key, so setting them does not re-run
+  a step.
+
+### Changed output
+
+- ToolACE bracket calls with a keyword argument name (`from="2025-01-01"`),
+  a `$` argument name (`$top=10`), or parentheses in the function name
+  (`User Feed (Video Posts) V2(...)`) are now tool calls. They were left as
+  text, and the tool reply after them was dropped as `orphan_tool_message`:
+  22 of the first 1,000 ToolACE rows. Now the first 5,000 rows all
+  convert. A recipe lock notices the new version and re-runs convert steps.
+
+### Fixed
+
+- `convert --workers N` (N > 1) stopped with a traceback on a line with
+  bytes invalid in the encoding, an unpaired surrogate escape (`"\ud800"`),
+  or nesting too deep to parse (0.15.0 - 1.0.0). It now skips and counts
+  them like a single-process run.
+
 ## [1.0.0] - 2026-09-28
 
 The first stable release. 1.0 removes what 0.9 deprecated and

@@ -9,7 +9,7 @@ This catches the same source translated or reformatted slightly
 differently, which exact ``dedupe`` cannot.
 
 It is approximate (MinHash estimates similarity; LSH finds candidates) and
-keeps its index in memory (a 60-bit digest per LSH band, about 0.6 KB a row
+keeps its index in memory (a 60-bit digest per LSH band, about 0.7 KB a row
 at the defaults), so it suits up to several million rows; for larger corpora
 use a distributed tool such as datatrove. Needs
 ``pip install "convmerge[quality]"`` (datasketch).

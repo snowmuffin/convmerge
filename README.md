@@ -253,6 +253,7 @@ fix table: [docs/guides/troubleshooting.md](docs/guides/troubleshooting.md).
 
 Large files: `--workers N` converts with N processes (same output and
 stats as a single process; ~3.8x faster with 4 workers in our benchmark).
+`filter` and `dedupe --near` take `--workers N` too.
 
 Every example is validated before it is written; ones with no user turn,
 empty messages, or unmatched tool results are dropped and counted by reason
