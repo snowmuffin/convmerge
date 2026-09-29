@@ -55,6 +55,9 @@ A = ChatMessage("assistant", "a")
         # Media-only user turn is not empty.
         (_ex(ChatMessage("user", [ContentPart("image", url="x.png")]), A), []),
         (_ex(U, A, issues=["unresolved_image"]), ["unresolved_image"]),
+        # An agent may speak first.
+        (_ex(ChatMessage("system", "s"), A, U, A), []),
+        (_ex(A), ["no_user"]),
     ],
 )
 def test_validate_example(example: TrainingExample, expected: list[str]) -> None:

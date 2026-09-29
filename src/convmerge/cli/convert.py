@@ -134,6 +134,13 @@ def _add_convert(sub: argparse._SubParsersAction) -> None:
         help='content of assistant turns that only call tools: "" (default; every '
         "common chat template accepts it) or null",
     )
+    p.add_argument(
+        "--train-turns",
+        choices=("all", "last"),
+        default=None,
+        help='last: mark every assistant turn but the last with "train": false '
+        "(messages format; axolotl message_field_training: train)",
+    )
     g = p.add_argument_group("fixes for strict chat templates (all off by default)")
     g.add_argument(
         "--system",
@@ -165,6 +172,13 @@ def _add_convert(sub: argparse._SubParsersAction) -> None:
         default=None,
         help="last: remove reasoning from assistant turns before the last user turn "
         "(what Qwen3 / gpt-oss templates render)",
+    )
+    g.add_argument(
+        "--leading-assistant",
+        choices=("keep", "drop"),
+        default=None,
+        help="drop: remove assistant turns before the first user turn (answers to a "
+        "withheld prompt, which are otherwise dropped as withheld_prompt, or a greeting)",
     )
     _add_progress_flag(p)
 
@@ -313,6 +327,8 @@ def _emit_overrides(args: argparse.Namespace) -> dict[str, object]:
         out["reasoning"] = args.reasoning
     if args.tool_content is not None:
         out["tool_content"] = args.tool_content
+    if args.train_turns is not None:
+        out["train_turns"] = args.train_turns
     return out
 
 
@@ -326,6 +342,8 @@ def _transform_overrides(args: argparse.Namespace) -> dict[str, object]:
         out["split_turns"] = True
     if args.reasoning_turns is not None:
         out["reasoning_turns"] = args.reasoning_turns
+    if args.leading_assistant is not None:
+        out["leading_assistant"] = args.leading_assistant
     return out
 
 
@@ -355,6 +373,10 @@ _DROP_HINTS = {
     "map_path_missing": (
         "map_path_missing: a --from map path matched nothing in these records; check the "
         "paths against a sample row (a.b for keys, a[0] for an item, a[] for every item)"
+    ),
+    "withheld_prompt": (
+        "withheld_prompt: the dataset left these prompts null; --leading-assistant drop "
+        "removes the answer to the missing prompt and keeps the rest of the conversation"
     ),
     "unrepresentable_role_order": (
         "unrepresentable_role_order: --merge-consecutive joins repeated user or "
@@ -415,7 +437,22 @@ def _cmd_validate(args: argparse.Namespace) -> None:
     report["invalid"] = report.pop("dropped")
     for key in ("kept_invalid",):
         report.pop(key)
+    from convmerge.arrow import type_conflicts
+
+    conflicts = type_conflicts(args.input, encoding=args.encoding)
+    if conflicts:
+        report["type_conflicts"] = [c.to_report() for c in conflicts]
     print(json.dumps(report, ensure_ascii=False, indent=2))
+    if conflicts:
+        print(
+            f"warning: {len(conflicts)} field(s) change type between rows; "
+            'datasets.load_dataset("json") fails on them before datasets 4.8 '
+            "(LLaMA-Factory installs 4.0) with ArrowInvalid",
+            file=sys.stderr,
+        )
+        for c in conflicts[:5]:
+            kinds = ", ".join(f"{k} (line {n})" for k, n in c.first_line.items())
+            print(f"  {c.path}: {kinds}; {c.hint()}", file=sys.stderr)
     if stats.dropped or stats.skipped:
         sys.exit(1)
 

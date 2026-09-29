@@ -59,6 +59,10 @@ What the command adapts to:
   `--format messages` instead.
 - **Paths:** with `--config-dir`, paths are written relative to the
   directory that holds your axolotl config.
+- **Last turn only:** files converted with `--train-turns last` carry
+  `"train": false` on earlier answers, and the entry gets
+  `message_field_training: train` so axolotl trains only the final answer
+  of each conversation (checked with `axolotl preprocess`).
 
 ## DPO
 

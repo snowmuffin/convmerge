@@ -27,11 +27,12 @@ def _convert(
 
 
 def _catalog(entry: dict) -> dict:
-    """``_convert`` keywords for a catalog entry's adapter and adapter kwargs."""
+    """``_convert`` keywords for a catalog entry's adapter, adapter kwargs, and fixes."""
     kwargs = entry.get("adapter_kwargs")
     return {
         "adapter": entry.get("adapter", "auto"),
         "adapter_kwargs_json": json.dumps(kwargs) if kwargs else None,
+        "transform_overrides": entry.get("transforms") or None,
     }
 
 

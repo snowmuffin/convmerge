@@ -32,6 +32,11 @@ turns; conversations that cannot be written that way are dropped as
 creating it if needed and keeping other entries. `file_name` is recorded
 relative to the `dataset_info.json` directory, which is your `dataset_dir`.
 
+To train on the last answer of each conversation only (datasets such as
+Nemotron chat, whose earlier answers were not selected), set
+`mask_history: true` in the training config; the `sharegpt` format has no
+per-turn flag, so `--train-turns last` is for `--format messages` (axolotl).
+
 ## DPO (ranking data)
 
 ```bash

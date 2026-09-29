@@ -9,7 +9,7 @@ something the model never sees at inference. :class:`TransformOptions`
 selects the fixes; every fix is off by default and counted when it changes an
 example.
 
-Order: ``system`` → ``merge_consecutive`` → ``split_turns`` →
+Order: ``leading_assistant`` → ``system`` → ``merge_consecutive`` → ``split_turns`` →
 ``reasoning_turns``. Preference pairs get the same fixes on both sides
 (``split_turns`` is not available for pairs).
 """
@@ -24,12 +24,14 @@ from convmerge.models import ChatMessage, ContentPart, TrainingExample
 from convmerge.reasoning import has_reasoning, strip_reasoning
 
 SystemMode = Literal["keep", "fold", "drop"]
+LeadingAssistant = Literal["keep", "drop"]
 ReasoningTurns = Literal["all", "last"]
 
 # Counter names in ``ConvertStats.transforms`` (and the ``convert --report`` JSON).
 TRANSFORM_COUNTERS: dict[str, str] = {
     "system_folded": "system turns folded into the first user turn",
     "system_dropped": "system turns removed",
+    "leading_assistant_dropped": "assistant and tool turns before the first user turn removed",
     "turns_merged": "consecutive same-role turns merged into the one before",
     "reasoning_stripped": "reasoning traces removed from turns before the last user message",
     "split_examples": "examples written by splitting conversations at user turns",
@@ -55,12 +57,18 @@ class TransformOptions:
     - ``reasoning_turns``: ``"last"`` removes the reasoning of every assistant
       turn before the last user message (what Qwen3 / gpt-oss templates
       render); ``"all"`` (default) keeps it.
+    - ``leading_assistant``: ``"drop"`` removes assistant (and tool) turns
+      before the first user turn (datasets that withhold the first prompt,
+      such as Nemotron chat, whose examples otherwise fail validation as
+      ``withheld_prompt``; or agent data that opens with a greeting);
+      ``"keep"`` (default) leaves them.
     """
 
     system: SystemMode = "keep"
     merge_consecutive: bool = False
     split_turns: bool = False
     reasoning_turns: ReasoningTurns = "all"
+    leading_assistant: LeadingAssistant = "keep"
 
     def __post_init__(self) -> None:
         if self.system not in ("keep", "fold", "drop"):
@@ -68,6 +76,10 @@ class TransformOptions:
         if self.reasoning_turns not in ("all", "last"):
             raise ValueError(
                 f"reasoning_turns must be 'all' or 'last', got {self.reasoning_turns!r}"
+            )
+        if self.leading_assistant not in ("keep", "drop"):
+            raise ValueError(
+                f"leading_assistant must be 'keep' or 'drop', got {self.leading_assistant!r}"
             )
 
     @property
@@ -84,16 +96,24 @@ def apply_transforms(
     tally: dict[str, int] = counts if counts is not None else {}
 
     def fix(msgs: list[ChatMessage]) -> list[ChatMessage]:
+        if options.leading_assistant == "drop":
+            msgs = _drop_leading_assistant(msgs, tally)
         if options.system != "keep":
             msgs = _system(msgs, options.system, tally)
         if options.merge_consecutive:
             msgs = _merge(msgs, tally)
         return msgs
 
+    messages = fix(example.messages)
+    issues = example.issues
+    if "withheld_prompt" in issues and messages is not example.messages:
+        # The answer to the withheld prompt is gone; the rest is a whole conversation.
+        issues = [i for i in issues if i != "withheld_prompt"]
     example = replace(
         example,
-        messages=fix(example.messages),
+        messages=messages,
         rejected=fix(example.rejected) if example.rejected is not None else None,
+        issues=issues,
     )
     if options.split_turns and example.rejected is None:
         out = _split(example)
@@ -104,6 +124,17 @@ def apply_transforms(
     if options.reasoning_turns == "last":
         out = [_last_turn_reasoning(ex, tally) for ex in out]
     return out
+
+
+def _drop_leading_assistant(msgs: list[ChatMessage], tally: dict[str, int]) -> list[ChatMessage]:
+    first_user = next((i for i, m in enumerate(msgs) if m.role == "user"), None)
+    if first_user is None:
+        return msgs
+    kept = [m for m in msgs[:first_user] if m.role == "system"]
+    if len(kept) == first_user:
+        return msgs
+    _add(tally, "leading_assistant_dropped")
+    return [*kept, *msgs[first_user:]]
 
 
 def _add(tally: dict[str, int], key: str, n: int = 1) -> None:

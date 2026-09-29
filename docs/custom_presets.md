@@ -37,6 +37,7 @@ output_options:              # optional; CLI flags override each key
   alpaca_multiturn: flatten  # flatten | history | drop
   reasoning: keep            # keep | inline | reasoning_content | thinking | drop
   tool_content: empty        # empty ("") | null
+  train_turns: all           # all | last ("train": false on earlier answers)
   meta:                      # constant fields under meta on every row
     dataset: my_dataset
 
@@ -45,11 +46,13 @@ transforms:                  # optional; fixes for strict chat templates
   merge_consecutive: false
   split_turns: false
   reasoning_turns: all       # all | last
+  leading_assistant: keep    # keep | drop
 ```
 
 CLI flags `--from`, `--format`, `--adapter-kwargs`, `--tool-arguments`, `--keep-meta`,
-`--meta-key`, `--alpaca-multiturn`, `--reasoning`, `--tool-content`, `--system`,
-`--merge-consecutive`, `--split-turns`, and `--reasoning-turns` override the preset
+`--meta-key`, `--alpaca-multiturn`, `--reasoning`, `--tool-content`, `--train-turns`,
+`--system`, `--merge-consecutive`, `--split-turns`, `--reasoning-turns`, and
+`--leading-assistant` override the preset
 when provided.
 
 ## Commands

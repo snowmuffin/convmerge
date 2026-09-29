@@ -29,6 +29,10 @@ REASONS: dict[str, str] = {
 ISSUES: dict[str, str] = {
     "map_path_missing": "a path of the --from map field mapping is missing from the record",
     "no_preference": "the --from map preferred label names no winner (a tie)",
+    "withheld_prompt": (
+        "a user turn is null and the conversation starts with its answer (the dataset "
+        "withholds that prompt; --leading-assistant drop removes the answer)"
+    ),
     "preference_record": (
         "a chosen/rejected preference record: write DPO pairs with --format preference, "
         "or train on one side with --preference chosen"
