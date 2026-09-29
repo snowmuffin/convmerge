@@ -233,6 +233,8 @@ TOOLACE_SYSTEM = (
         {"name": "Market Trends API", "description": "d",
          "parameters": {"type": "dict", "properties": {"trend_type": {"type": "string"}}}},
         {"name": "SEC Filings", "description": "d", "parameters": {"type": "dict"}},
+        {"name": "User Feed (Video Posts) V2", "description": "d"},
+        {"name": "User Feed", "description": "d"},
     ]) + ".  Put it in the format of [func1(params_name=params_value), func2(params)]"
 )  # fmt: skip
 
@@ -260,8 +262,32 @@ def test_toolace_bracket_calls(tmp_path: Path) -> None:
         _call("SEC Filings", {"identifier": "AAPL", "ok": True, "xs": [1, "a,b)"]}),
         _call("Market Trends API", {"trend_type": "LOSERS"}),
     ]
-    assert [t["function"]["name"] for t in row["tools"]] == ["Market Trends API", "SEC Filings"]
+    assert [t["function"]["name"] for t in row["tools"]][:2] == ["Market Trends API", "SEC Filings"]
     assert msgs[0]["content"] == TOOLACE_SYSTEM
+
+
+@pytest.mark.parametrize(
+    ("answer", "calls"),
+    [
+        # Argument names that are Python keywords or OData options (ToolACE).
+        ('[SEC Filings(shareuid=6789, from="2025-01-01", to="2025-12-31", $top=10)]',
+         [_call("SEC Filings", {"shareuid": 6789, "from": "2025-01-01", "to": "2025-12-31",
+                                "$top": 10})]),
+        # Names with parentheses; the longest listed name wins.
+        ('[User Feed (Video Posts) V2(username="sunny"), User Feed (id=1)]',
+         [_call("User Feed (Video Posts) V2", {"username": "sunny"}),
+          _call("User Feed", {"id": 1})]),
+        # JSON values, negative numbers, a trailing comma, no arguments.
+        ('[SEC Filings(q={"a": true, "b": null}, lon=-93.2,), User Feed()]',
+         [_call("SEC Filings", {"q": {"a": True, "b": None}, "lon": -93.2}),
+          _call("User Feed", {})]),
+    ],
+)  # fmt: skip
+def test_toolace_bracket_call_variants(tmp_path: Path, answer: str, calls: list) -> None:
+    record = {"system": TOOLACE_SYSTEM, "conversations": [
+        {"from": "user", "value": "q"}, {"from": "assistant", "value": answer}]}  # fmt: skip
+    (row,), _ = _convert(tmp_path, record)
+    assert row["messages"][-1]["tool_calls"] == calls
 
 
 @pytest.mark.parametrize(
@@ -271,6 +297,8 @@ def test_toolace_bracket_calls(tmp_path: Path) -> None:
         "[SEC Filings(1, 2)]",  # positional arguments
         "[SEC Filings(a=open('x'))]",  # not a literal
         "[SEC Filings(a=1]",  # unbalanced
+        "[SEC Filings(a==1)]",  # not an assignment
+        "[SEC Filings(a=1 2)]",  # not one value
     ],
 )
 def test_bracket_text_that_is_not_a_call_is_left_alone(tmp_path: Path, answer: str) -> None:

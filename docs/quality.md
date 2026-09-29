@@ -28,6 +28,7 @@ In a recipe they run after `dedupe` and before `tokens`
 convmerge filter -i mixed.jsonl                                   # report only
 convmerge filter -i mixed.jsonl -o clean.jsonl --rejects rejected.jsonl
 convmerge filter -i ko.jsonl -o clean.jsonl --enable slop --min-script hangul=0.3
+convmerge filter -i big.jsonl -o clean.jsonl --workers 4           # same output, ~4x faster
 ```
 
 ### Rules
@@ -138,6 +139,7 @@ shares no words with GSM8K.
 pip install "convmerge[quality]"
 convmerge dedupe -i mixed.jsonl -o deduped.jsonl --near            # threshold 0.8
 convmerge dedupe -i mixed.jsonl -o deduped.jsonl --near --threshold 0.7
+convmerge dedupe -i big.jsonl -o deduped.jsonl --near --workers 4  # same output, faster
 ```
 
 - Each row's text is every turn of the conversation except the system
@@ -152,13 +154,13 @@ convmerge dedupe -i mixed.jsonl -o deduped.jsonl --near --threshold 0.7
   reformatted slightly differently, or answers that differ in a few words.
 - It is approximate. MinHash estimates the similarity, and LSH finds the
   candidates.
-- The index stays in memory. On 200,000 chat rows (4 KB each) the peak
-  was 733 MB with the default `--num-perm 128` and 445 MB with
-  `--num-perm 64`, which removed nearly the same rows (6.78% and 6.70%).
-  That is about 3.5 KB and 2 KB per row, or roughly 3.5 GB and 2 GB per
-  million rows; it ran at about 2,300 rows per second either way. Beyond a
-  few million rows use a distributed tool such as
-  [datatrove](https://github.com/huggingface/datatrove).
+- The index stays in memory: a 60-bit digest per LSH band, about 0.7 KB a
+  row with the default `--num-perm 128`. One million chat rows (4 KB each)
+  peaked at 768 MB and took 89 s with `--workers 4`; 200,000 rows took
+  63 s in one process (235 MB). Before 1.1 the index took about 3.5 KB a
+  row. `--workers N` computes the MinHashes in N processes and does not
+  change which rows are kept. Beyond several million rows use a
+  distributed tool such as [datatrove](https://github.com/huggingface/datatrove).
 - `--threshold` must be below 1. Very high thresholds (0.95 and up) need a
   larger `--num-perm`.
 

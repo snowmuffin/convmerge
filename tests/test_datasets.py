@@ -169,3 +169,12 @@ def test_check_script_imports_the_datasets_library(tmp_path: Path) -> None:
     )  # fmt: skip
     assert proc.returncode == 0, proc.stdout + proc.stderr
     assert "ok    tatsu-lab/alpaca: 3/3" in proc.stdout
+
+
+def test_check_entry_shows_dropped_rows(capsys) -> None:
+    alpaca = next(e for e in CATALOG if e["id"] == "tatsu-lab/alpaca")
+    rows = [alpaca["record"], {"instruction": "q", "output": ""}]
+    script.check_entry(alpaca, 2, loader=lambda e, n: rows, show_drops=5)
+    out = capsys.readouterr().out
+    assert "--- tatsu-lab/alpaca line 2: no_assistant" in out
+    assert '"instruction": "q"' in out

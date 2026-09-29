@@ -174,3 +174,18 @@ def test_mix_skips_bad_encoding_lines(tmp_path: Path) -> None:
     out = tmp_path / "o.jsonl"
     mix_files([MixSource(path=src, weight=1.0)], out, total=2, seed=0)
     assert sorted(out.read_text(encoding="utf-8").splitlines()) == ['{"a": 1}', '{"a": 2}']
+
+
+def test_parse_line_agrees_with_iter_jsonl(tmp_path: Path) -> None:
+    from convmerge.io import _parse_line
+
+    lines = [b'{"a": 1}', b"{bad", b'{"a": "\xff"}', b'{"a": "\\ud800"}',
+             b'{"a": "\\ud83d\\ude00"}', b"[" * 100_000 + b"]" * 100_000, b'"s"']  # fmt: skip
+    p = _write_bytes(tmp_path / "a.jsonl", b"\n".join(lines) + b"\n")
+    good = {x.number: x.value for x in iter_jsonl(p)}
+    raw_lines = p.read_bytes().decode("utf-8", "surrogateescape").splitlines()
+    for number, raw in enumerate(raw_lines, 1):
+        value, error = _parse_line(raw, check_bytes=True, encoding="utf-8")
+        assert (error is None) == (number in good), number
+        if error is None:
+            assert value == good[number]

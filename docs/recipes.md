@@ -114,6 +114,7 @@ by path) and concatenated.
 | `dedupe.near` | `false` | Drop rows whose text is a near-copy of an earlier row (MinHash LSH over word 5-grams). Needs `convmerge[quality]`. |
 | `dedupe.threshold` | `0.8` | `near`: estimated Jaccard similarity that makes a duplicate (below 1). |
 | `dedupe.num_perm` | `128` | `near`: MinHash permutations. |
+| `dedupe.workers` | `1` | `near`: processes computing MinHashes. Output does not depend on it (1.1+). |
 
 With several sources and no `mix` block, every record of every source is
 merged and shuffled (seed 42). With one source and no `mix`, the converted
@@ -133,6 +134,7 @@ on the mixed file.
 | `filter.slop_max` | `3` | `slop`: stock phrases per row that drop it. |
 | `filter.min_script` | — | Turn on `script`, e.g. `{hangul: 0.3}`. |
 | `filter.rules_file` | — | Extra phrases and regex rules (a step input). |
+| `filter.workers` | `1` | Processes checking rows. Output does not depend on it (1.1+). |
 | `decontam.against` | *(required)* | Evaluation sets: JSONL files (relative to the recipe; step inputs) or `hf:REPO[:CONFIG[:SPLIT]]` (split defaults to `test`). |
 | `decontam.ngram` | `13` | Words per n-gram. |
 | `decontam.min_tokens` | `8` | Shorter evaluation passages must appear whole; shorter still are skipped. |
