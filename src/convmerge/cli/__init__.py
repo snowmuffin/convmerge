@@ -31,7 +31,8 @@ optional dependencies (pip install "convmerge[EXTRA]"):
   [preset]     YAML presets (convert --preset, preset validate)
   [tokens]     token lengths and chat-template checks (transformers + jinja2, no PyTorch)
   [quality]    near-duplicate removal, dedupe --near (datasketch)
-  [all]        fetch-all + parquet + preset + tokens + quality (full CLI feature set)
+  [xlsx]       Excel .xlsx input for normalize (openpyxl)
+  [all]        fetch-all + parquet + preset + tokens + quality + xlsx (full CLI feature set)
 """.strip()
 
 

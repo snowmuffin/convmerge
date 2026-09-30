@@ -89,6 +89,7 @@ class SourceSpec:
     convert: ConvertSpec
     fetch_auth: AuthConfig | None = None
     license: str | None = None
+    sheet: str | None = None
 
 
 @dataclass(frozen=True)
@@ -271,9 +272,12 @@ def _source(name: str, raw: Any, base: Path) -> SourceSpec:
 
     norm = spec.get("normalize", True)
     array_key = "conversation"
+    sheet: str | None = None
     if isinstance(norm, dict):
-        _only(norm, {"array_key"}, f"{where}.normalize")
+        _only(norm, {"array_key", "sheet"}, f"{where}.normalize")
         array_key = _str(norm.get("array_key", array_key), f"{where}.normalize.array_key")
+        if "sheet" in norm:
+            sheet = _str(norm["sheet"], f"{where}.normalize.sheet")
         norm = True
     elif not isinstance(norm, bool):
         raise RecipeError(f"{where}.normalize: expected true, false, or a mapping")
@@ -289,6 +293,7 @@ def _source(name: str, raw: Any, base: Path) -> SourceSpec:
         convert=_convert(spec["convert"], base, f"{where}.convert"),
         fetch_auth=fetch_auth,
         license=_str(spec["license"], f"{where}.license") if "license" in spec else None,
+        sheet=sheet,
     )
 
 

@@ -39,6 +39,7 @@
   --input, -i required
   --output, -o required
   --array-key default='conversation'
+  --sheet
 [convmerge dedupe]
   --input, -i required
   --output, -o required
