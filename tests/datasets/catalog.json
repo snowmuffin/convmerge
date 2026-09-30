@@ -1103,8 +1103,8 @@
    "difficulty": "simple",
    "valid": true
   },
-  "min_ok": 0.8,
-  "note": "about 15% of rows have no call and no answer"
+  "min_ok": 0.75,
+  "note": "about 22% of rows (on 20,000) have no call and no answer"
  },
  {
   "id": "ZeroAgency/gemma3-pythonic-function-tool-calling-v1",
