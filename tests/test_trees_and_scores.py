@@ -333,3 +333,8 @@ def test_odd_message_rows_are_not_trees() -> None:
     stats = ConvertStats()
     assert list(convert_records(rows, stats=stats)) == []
     assert stats.grouped == 0
+
+
+def test_prompt_only_tree_is_no_assistant() -> None:
+    [ex] = list(SFT({"message_tree_id": "t", "prompt": _nest(FLAT[:1], "a")}))
+    assert validate_example(ex) == ["no_assistant"]
