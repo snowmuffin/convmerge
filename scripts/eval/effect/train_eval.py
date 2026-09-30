@@ -127,6 +127,7 @@ def main() -> None:
     p.add_argument("--steps", type=int, default=400)
     p.add_argument("--gen", type=int, default=100, help="evaluation prompts to generate for")
     p.add_argument("--max-new", type=int, default=256)
+    p.add_argument("--max-length", type=int, default=512, help="training and eval-loss length")
     p.add_argument("--label", default="")
     p.add_argument("--out", type=Path, required=True)
     args = p.parse_args()
@@ -144,11 +145,12 @@ def main() -> None:
     config = SFTConfig(
         output_dir=str(args.out.parent / "trainer"),
         max_steps=args.steps,
-        per_device_train_batch_size=8,
+        per_device_train_batch_size=4,  # x2 accumulation: batch 8 in 16 GB
+        gradient_accumulation_steps=2,
         learning_rate=3e-4,
         lr_scheduler_type="cosine",
         warmup_steps=20,
-        max_length=1024,
+        max_length=args.max_length,
         seed=args.seed,
         data_seed=args.seed,
         logging_steps=20,
@@ -161,7 +163,7 @@ def main() -> None:
     result = trainer.train()
 
     convs = [r["messages"] for r in load_rows(args.eval)]
-    loss = eval_loss(model, tok, convs, 1024)
+    loss = eval_loss(model, tok, convs, args.max_length)
     gens = generate(model, tok, convs, args.gen, args.max_new)
     texts = [t for t, _ in gens]
     metrics = {
