@@ -1395,17 +1395,6 @@
   "config": null,
   "split": "train",
   "format": "preference",
-  "adapter": "map",
-  "adapter_kwargs": {
-   "map": {
-    "user": "prompt",
-    "responses": [
-     "response_0",
-     "response_1"
-    ],
-    "preferred": "better_response_id"
-   }
-  },
   "record": {
    "prompt": "How do I set up a webcam?",
    "response_0": "Plug it in.",
@@ -1426,21 +1415,6 @@
   "config": null,
   "split": "train",
   "format": "preference",
-  "adapter": "map",
-  "adapter_kwargs": {
-   "map": {
-    "user": "history",
-    "responses": [
-     "human_ref_A",
-     "human_ref_B"
-    ],
-    "preferred": "labels",
-    "preferred_values": {
-     "1": 0,
-     "0": 1
-    }
-   }
-  },
   "record": {
    "post_id": "abc123",
    "domain": "askculinary_train",
@@ -1467,25 +1441,6 @@
   "config": "preference",
   "split": "train",
   "format": "preference",
-  "adapter": "map",
-  "adapter_kwargs": {
-   "map": {
-    "turns": "context",
-    "responses": [
-     "response1",
-     "response2"
-    ],
-    "preferred": "overall_preference",
-    "preferred_values": {
-     "-3": 0,
-     "-2": 0,
-     "-1": 0,
-     "1": 1,
-     "2": 1,
-     "3": 1
-    }
-   }
-  },
   "record": {
    "domain": "code",
    "language": "python",
