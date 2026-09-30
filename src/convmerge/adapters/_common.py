@@ -429,8 +429,8 @@ def coerce_messages(
     return out
 
 
-# Per-turn keys that say whether to train on a turn: axolotl's ``train``,
-# ``loss`` (UltraData agent data), ``weight`` 0 / 1 (axolotl ShareGPT).
+# Per-turn keys that say whether to train on a turn: axolotl's ``train``, a
+# boolean ``loss`` mask, ``weight`` 0 / 1 (axolotl ShareGPT).
 TRAIN_KEYS: tuple[str, ...] = ("train", "loss", "weight")
 
 

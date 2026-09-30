@@ -118,7 +118,8 @@ def test_every_sft_and_tool_catalog_dataset_fits_sharegpt(tmp_path: Path) -> Non
     for e in CATALOG.values():
         if e["kind"] == "preference":
             continue
-        _, stats = _convert(tmp_path, [e["record"]], "sharegpt", **_catalog(e))
+        rows = e.get("records") or [e["record"]]
+        _, stats = _convert(tmp_path, rows, "sharegpt", **_catalog(e))
         assert stats.written == 1, (e["id"], stats.drop_reasons)
 
 

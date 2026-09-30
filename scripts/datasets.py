@@ -44,6 +44,12 @@ def load_catalog() -> list[dict[str, Any]]:
     return json.loads(CATALOG.read_text(encoding="utf-8"))
 
 
+def sample_rows(entry: dict[str, Any]) -> list[dict[str, Any]]:
+    """The entry's made-up rows: ``records`` when one example spans several rows
+    (OpenAssistant message tables), else ``[record]``."""
+    return list(entry.get("records") or [entry["record"]])
+
+
 def flags(entry: dict[str, Any]) -> str:
     out = f"--from {entry.get('adapter', 'auto')} --format {entry['format']}"
     if entry.get("preference"):
@@ -155,10 +161,13 @@ def check_entry(
     drops = dict(stats.drop_reasons)
     if stats.skipped:
         drops["skipped_lines"] = stats.skipped
-    result = Result(rid, "ok", stats.lines_read, stats.written, stats.reasoning, drops)
+    records = stats.lines_read - stats.grouped  # message rows of one tree make one record
+    result = Result(rid, "ok", records, stats.written, stats.reasoning, drops)
+    if stats.grouped:
+        result.note = f"{stats.lines_read:,} message rows read as {records:,} trees"
     if not stats.lines_read:
         result.status, result.note = "fail", "no rows"
-    elif stats.written < entry.get("min_ok", min_ok) * stats.lines_read:
+    elif stats.written < entry.get("min_ok", min_ok) * records:
         need = entry.get("min_ok", min_ok)
         result.status, result.note = "fail", f"fewer than {need:.0%} of rows converted"
     elif entry["kind"] == "reasoning" and not stats.reasoning and traced:
@@ -166,7 +175,7 @@ def check_entry(
         result.note = f"{traced} rows carry a reasoning trace, but no converted row does"
     elif entry["kind"] == "reasoning" and not stats.reasoning:
         result.status, result.note = "warn", "these rows carry no reasoning trace"
-    elif stats.written < stats.lines_read:
+    elif stats.written < records:
         result.status = "warn"
     return result
 

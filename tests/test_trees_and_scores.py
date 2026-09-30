@@ -238,7 +238,7 @@ def test_dataset_turn_flags_with_train_turns_data(tmp_path: Path) -> None:
     from convmerge.axolotl import dataset_config
 
     records = [
-        {"messages": [  # UltraData: per-turn "loss"
+        {"messages": [  # a per-turn "loss" mask
             {"role": "user", "content": "q1"},
             {"role": "assistant", "content": "a1", "loss": False},
             {"role": "user", "content": "q2"},
