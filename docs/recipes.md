@@ -93,7 +93,7 @@ and then:
 | `convert.preference` | — | `chosen` / `rejected` for preference data. |
 | `convert.on_invalid` | `drop` | `drop`, `keep`, or `fail`. |
 | `convert.workers` | `1` | Parallel convert. Output does not depend on it, so changing it never re-runs a step. |
-| `convert.tool_arguments`, `keep_meta`, `meta_key`, `alpaca_multiturn`, `reasoning`, `tool_content`, `train_turns` | — | Same as the `convert` flags. |
+| `convert.tool_arguments`, `keep_meta`, `meta_key`, `alpaca_multiturn`, `reasoning`, `tool_content`, `train_turns`, `media` | — | Same as the `convert` flags. |
 | `convert.meta` | — | Constant fields written under `meta` on every row (`--meta`), e.g. `{dataset: kullm}` to keep each row's origin after the mix. |
 | `convert.map` | — | A [field mapping](format.md#field-mapping---from-map) for layouts no adapter knows; implies `from: map`. |
 | `convert.system`, `merge_consecutive`, `split_turns`, `reasoning_turns`, `leading_assistant` | — | The template fixes of `convert` (`--system`, `--merge-consecutive`, `--split-turns`, `--reasoning-turns`, `--leading-assistant`); see [format.md](format.md#fixes-for-strict-chat-templates). |

@@ -20,6 +20,7 @@
   --reasoning choices=keep|inline|reasoning_content|thinking|drop
   --tool-content choices=empty|null
   --train-turns choices=all|last|data
+  --media choices=urls|placeholders
   --system choices=keep|fold|drop
   --merge-consecutive (switch)
   --split-turns (switch)

@@ -38,6 +38,7 @@ output_options:              # optional; CLI flags override each key
   reasoning: keep            # keep | inline | reasoning_content | thinking | drop
   tool_content: empty        # empty ("") | null
   train_turns: all           # all | last ("train": false on earlier answers)
+  media: urls                # urls | placeholders (TRL VLM: {"type": "image"} + images)
   meta:                      # constant fields under meta on every row
     dataset: my_dataset
 
@@ -50,7 +51,7 @@ transforms:                  # optional; fixes for strict chat templates
 ```
 
 CLI flags `--from`, `--format`, `--adapter-kwargs`, `--tool-arguments`, `--keep-meta`,
-`--meta-key`, `--alpaca-multiturn`, `--reasoning`, `--tool-content`, `--train-turns`,
+`--meta-key`, `--alpaca-multiturn`, `--reasoning`, `--tool-content`, `--train-turns`, `--media`,
 `--system`, `--merge-consecutive`, `--split-turns`, `--reasoning-turns`, and
 `--leading-assistant` override the preset
 when provided.

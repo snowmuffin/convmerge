@@ -38,7 +38,12 @@ exactly like the line above; richer data adds only what it needs:
   and `audio_url` / `video_url` in the same shape (vLLM / Qwen-VL
   convention). The URL is whatever reference the source held (URL or path);
   media is never downloaded. An unresolved placeholder stays as
-  `{"type": "image"}` and fails validation.
+  `{"type": "image"}` and fails validation. `--media placeholders` writes
+  the TRL vision-language layout instead: a bare `{"type": "image"}` part
+  where each image goes, the references in order in an `images` column
+  (`videos` / `audios` likewise), every content as a list of parts, and
+  `images` on every row (empty for text-only rows), so the file has one
+  Arrow schema. See the [TRL guide](guides/trl.md#images-vision-language-models).
 - `name` on a message when the source had one.
 
 ```json
@@ -624,7 +629,8 @@ warning on stderr. `datasets.load_dataset("json")` before 4.8 (LLaMA-Factory
 installs 4.0) fails on them with `ArrowInvalid`. The usual causes are tool-call
 arguments written as objects whose values differ between calls
 (`--tool-arguments string` fixes it) and text-only rows mixed with multimodal
-ones. Type conflicts do not change the exit status.
+ones (`--media placeholders` writes both as lists). Type conflicts do not
+change the exit status.
 
 From Python: `convert_file(..., on_invalid="drop", stats=ConvertStats())`,
 `convert_records(records, ...)` for records in memory,

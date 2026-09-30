@@ -15,7 +15,7 @@ class ConvertStats(lines_read: 'int' = 0, written: 'int' = 0, blank: 'int' = 0, 
 class DecontamStats(rows: 'int' = 0, kept: 'int' = 0, contaminated: 'int' = 0, unreadable: 'int' = 0, invalid_json: 'int' = 0, first_invalid_line: 'int | None' = None, ngram: 'int' = 13, check: 'str' = 'prompts', eval_sets: 'dict[str, dict[str, int]]' = <factory>, samples: 'list[dict[str, Any]]' = <factory>) -> None
     def to_report(self) -> 'dict[str, Any]'
 class DedupeStats(total: 'int' = 0, kept: 'int' = 0, duplicates: 'int' = 0, invalid_json: 'int' = 0, first_invalid_line: 'int | None' = None) -> None
-class EmitOptions(tool_arguments: 'ToolArguments' = 'string', keep_meta: 'bool | Sequence[str]' = False, meta_key: 'str' = 'meta', alpaca_multiturn: 'AlpacaMultiturn' = 'flatten', reasoning: 'ReasoningMode' = 'keep', tool_content: 'ToolContent' = 'empty', meta_values: 'Mapping[str, str] | None' = None, train_turns: 'TrainTurns' = 'all') -> None
+class EmitOptions(tool_arguments: 'ToolArguments' = 'string', keep_meta: 'bool | Sequence[str]' = False, meta_key: 'str' = 'meta', alpaca_multiturn: 'AlpacaMultiturn' = 'flatten', reasoning: 'ReasoningMode' = 'keep', tool_content: 'ToolContent' = 'empty', meta_values: 'Mapping[str, str] | None' = None, train_turns: 'TrainTurns' = 'all', media: 'MediaMode' = 'urls') -> None
 class EvalSource(spec: 'str', fields: 'tuple[str, ...] | None' = None) -> None
     hub: property -> tuple[str, str | None, str] | None
     name: property -> str

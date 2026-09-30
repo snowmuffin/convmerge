@@ -40,6 +40,48 @@ as the example does. `convmerge tokens` catches the mismatch: it reports
 encoded twice by the template. Recent `datasets` versions keep the per-row
 argument objects intact (checked with `datasets` 5.0).
 
+### Images (vision-language models)
+
+TRL trains vision-language models on `messages` whose content is a list of
+parts, with a bare `{"type": "image"}` part where each image goes, and an
+`images` column holding the images in the same order. `--media placeholders`
+writes exactly that from any image layout convmerge reads (LLaVA
+`image` + `<image>` tokens, LLaMA-Factory `images`, OpenAI `image_url` parts):
+
+```bash
+convmerge convert -i llava.jsonl -o train/vlm.jsonl --from auto --media placeholders
+```
+
+```json
+{"messages": [{"role": "user", "content": [{"type": "image"}, {"type": "text", "text": "What color is this square?"}]},
+              {"role": "assistant", "content": [{"type": "text", "text": "It is red."}]}],
+ "images": ["imgs/0.png"]}
+```
+
+Every row gets an `images` column (empty for text-only rows) and list-typed
+content, so the file loads as one Arrow schema. The images stay references
+(paths or URLs, as the source gave them); turn them into images when loading:
+
+```python
+import datasets
+from trl import SFTConfig, SFTTrainer
+
+ds = datasets.load_dataset("json", data_files="train/vlm.jsonl", split="train")
+ds = ds.cast_column("images", datasets.Sequence(datasets.Image()))  # paths / URLs -> PIL
+trainer = SFTTrainer(model=model, args=SFTConfig(max_length=None, ...),
+                     train_dataset=ds, processing_class=processor)
+```
+
+Relative paths resolve against the working directory, so run from the
+dataset's folder or write absolute paths. `convmerge validate` drops rows
+whose placeholders and `images` do not match in number.
+
+> Verified with TRL 1.14, transformers 5.17 and `datasets` 5.0: a small
+> Qwen2-VL trained with `SFTTrainer` on 29 converted rows (single-image,
+> two-image, and text-only rows), with every row's image blocks matching its
+> `images` in TRL's collator. Other TRL versions have changed this layout
+> before; check the version you install.
+
 ## DPO
 
 ```bash
