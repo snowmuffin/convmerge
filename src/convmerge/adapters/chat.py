@@ -14,6 +14,8 @@ present. Handles the common messy shapes seen across SFT datasets:
 - Alpaca-style ``instruction`` / ``input`` / ``output`` (delegates to the
   existing alpaca adapter), and ``input`` turns + an ``output`` answer
   (Llama-Nemotron post-training data).
+- OpenAssistant message trees (a ``prompt`` with nested ``replies``): the
+  conversation along the best-ranked reply (see :mod:`convmerge.adapters.oasst`).
 - Tool-calling encodings other than OpenAI's: Hermes tags, Glaive
   ``system`` + ``chat`` transcripts, and xLAM ``query`` / ``answers`` (see
   :mod:`convmerge.adapters.tool_formats`).
@@ -37,6 +39,7 @@ import logging
 from collections.abc import Iterator
 from typing import Any
 
+from convmerge.adapters import oasst
 from convmerge.adapters._common import (
     DEFAULT_REASONING_KEYS,
     build_example,
@@ -204,6 +207,14 @@ def iter_from_chat_line(
         return
     if is_xlam(record):
         yield build_example(xlam_messages(record), record, meta={"source": "chat:xlam"})
+        return
+    if oasst.is_tree(record):
+        if record["prompt"].get("missing_root") is True:
+            yield TrainingExample(meta={"source": "chat:oasst"}, issues=["missing_root"])
+            return
+        msgs = [ChatMessage(t["role"], t["content"]) for t in oasst.best_path(record)]
+        tree = {"id": record.get("message_tree_id")}
+        yield build_example(msgs, tree, meta={"source": "chat:oasst"})
         return
 
     # Resolve Alpaca cues up front so a stray ``text`` field can't silently

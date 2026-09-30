@@ -14,8 +14,11 @@ on:
         description: "space-separated dataset ids (empty: every dataset in the set)"
         default: ""
       raw:
-        description: "source rows to print for datasets that are not ok"
+        description: "dropped source rows to print for datasets that are not ok"
         default: "0"
+      raw_chars:
+        description: "longest string kept in a printed row"
+        default: "300"
   pull_request:
     paths:
       - scripts/eval/coverage.py
@@ -50,8 +53,9 @@ jobs:
           SET: ${{ inputs.set || 'all' }}
           ONLY: ${{ inputs.only }}
           RAW: ${{ inputs.raw || '0' }}
+          RAW_CHARS: ${{ inputs.raw_chars || '300' }}
         run: >-
-          python scripts/eval/coverage.py --rows 200 --set "$SET" --raw "$RAW"
+          python scripts/eval/coverage.py --rows 200 --set "$SET" --raw "$RAW" --raw-chars "$RAW_CHARS"
           ${ONLY:+--only $ONLY}
           --summary "$GITHUB_STEP_SUMMARY" --json coverage.json
       - uses: actions/upload-artifact@v4

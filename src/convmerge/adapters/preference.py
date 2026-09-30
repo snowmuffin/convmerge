@@ -19,6 +19,19 @@ twice — once with each answer folded in — and returns one example holding
 both conversations (``messages`` = chosen, ``rejected`` = rejected). Chatbot
 Arena rows (``conversation_a`` / ``conversation_b`` with a ``winner``) are
 read as a pair too.
+
+Rows that score several candidate answers become a pair of the best and the
+worst one (:func:`ranked_as_preference`):
+
+- UltraFeedback: ``instruction`` plus ``completions[]`` with a ``response``
+  and ``fine-grained_score`` (the mean of the four aspect ratings; the
+  ``overall_score`` critique rating is used only when that is missing).
+- Nectar: an HH ``prompt`` transcript plus ``answers[]`` with an ``answer``
+  and a ``rank`` (1 is best).
+
+When the best and worst scores are equal there is no pair and the row is
+reported as ``no_preference``. OpenAssistant trees (see
+:mod:`convmerge.adapters.oasst`) pair their best- and worst-ranked replies.
 """
 
 from __future__ import annotations
@@ -27,6 +40,7 @@ import re
 from collections.abc import Callable, Iterator
 from typing import Any
 
+from convmerge.adapters import oasst
 from convmerge.models import TrainingExample
 
 PREFERENCES: tuple[str, ...] = ("chosen", "rejected")
@@ -52,9 +66,14 @@ _LIST_KEYS = ("conversations", "messages", "conversation")
 
 def with_preference_keys(record: dict[str, Any]) -> dict[str, Any]:
     """``record`` with ``chosen`` / ``rejected`` taken from an alias pair
-    (``chosen_response`` / ``rejected_response``, ...) when it has neither."""
+    (``chosen_response`` / ``rejected_response``, ...) or from scored
+    candidates (:func:`ranked_as_preference`) when it has neither."""
     if "chosen" in record or "rejected" in record:
         return record
+    if "completions" in record or "answers" in record:
+        ranked = ranked_as_preference(record)
+        if ranked is not None:
+            return ranked
     for chosen, rejected in PREFERENCE_ALIASES:
         if chosen in record and rejected in record:
             rest = {k: v for k, v in record.items() if k not in (chosen, rejected)}
@@ -158,7 +177,86 @@ def is_preference_record(record: dict[str, Any]) -> bool:
     for chosen, rejected in PREFERENCE_ALIASES:
         if chosen in record and rejected in record:
             return True
+    if "completions" in record or "answers" in record:
+        return _candidates(record) is not None
     return False
+
+
+# (list key, answer key, score keys in priority order, lower score is better)
+_SCORED: tuple[tuple[str, str, tuple[str, ...], bool], ...] = (
+    ("completions", "response", ("fine-grained_score", "overall_score"), False),  # UltraFeedback
+    ("answers", "answer", ("rank",), True),  # Nectar
+)
+_PROMPT_KEYS = ("instruction", "prompt")
+
+
+def _candidates(record: dict[str, Any]) -> list[tuple[float, str]] | None:
+    """``(score, answer)`` of every scored candidate, best first; ``None`` when
+    the record has no scored-candidates list."""
+    for list_key, answer_key, score_keys, lower_better in _SCORED:
+        items = record.get(list_key)
+        if not isinstance(items, list) or not items or not isinstance(items[0], dict):
+            continue
+        if answer_key not in items[0]:
+            continue
+        found: list[tuple[float, str]] = []
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            answer = item.get(answer_key)
+            score = _score(item, score_keys)
+            if isinstance(answer, str) and answer.strip() and score is not None:
+                found.append((-score if lower_better else score, answer))
+        if not any(_score(i, score_keys) is not None for i in items if isinstance(i, dict)):
+            continue
+        # Stable: among equal scores the earlier candidate wins.
+        return sorted(found, key=lambda c: -c[0])
+    return None
+
+
+def _score(item: dict[str, Any], keys: tuple[str, ...]) -> float | None:
+    for key in keys:
+        value = item.get(key)
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            return float(value)
+        if isinstance(value, str):
+            try:
+                return float(value)
+            except ValueError:
+                continue
+    return None
+
+
+def ranked_as_preference(record: dict[str, Any]) -> dict[str, Any] | None:
+    """A chosen / rejected record from scored candidates (see the module doc):
+    the best-scored answer against the worst-scored one. ``None`` if the
+    record has no scored candidates; with fewer than two, or when the best and
+    worst scores are equal, the result carries ``no_preference`` instead of
+    a pair."""
+    candidates = _candidates(record)
+    if candidates is None:
+        return None
+    prompt = _first_prompt(record)
+    if len(candidates) < 2 or candidates[0][0] == candidates[-1][0] or prompt is None:
+        return {**record, "no_preference": True}
+    rest = {k: v for k, v in record.items() if k not in ("completions", "answers", *_PROMPT_KEYS)}
+    return {
+        **rest,
+        "prompt": prompt,
+        "chosen": [_assistant(candidates[0][1])],
+        "rejected": [_assistant(candidates[-1][1])],
+    }
+
+
+def _first_prompt(record: dict[str, Any]) -> str | list[dict[str, str]] | None:
+    for key in _PROMPT_KEYS:
+        value = record.get(key)
+        if isinstance(value, str) and value.strip():
+            if _is_hh(value):
+                turns = _parse_hh(value)
+                return turns or None
+            return value
+    return None
 
 
 def iter_pairs(
@@ -169,7 +267,14 @@ def iter_pairs(
     A record that is not a preference record is adapted as-is (the
     ``preference`` format then drops it as ``unrepresentable_not_preference``).
     """
+    if oasst.is_tree(record):
+        pair = oasst.ranked_pair(record)
+        if pair is not None:
+            record = {"id": record.get("message_tree_id"), "chosen": pair[0], "rejected": pair[1]}
     record = with_preference_keys(_arena_as_preference(record))
+    if record.get("no_preference") is True and "chosen" not in record:
+        yield TrainingExample(meta={"source": "preference"}, issues=["no_preference"])
+        return
     if not is_preference_record(record):
         yield from adapter(record)
         return
