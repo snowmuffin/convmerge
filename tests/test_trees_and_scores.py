@@ -300,7 +300,7 @@ def test_toolbench_react_turns_become_tool_calls() -> None:
 
 
 def test_react_text_without_a_tool_answer_stays_text() -> None:
-    text = "Use this format:\nAction: search\nAction Input: {\"q\": 1}"
+    text = 'Use this format:\nAction: search\nAction Input: {"q": 1}'
     record = {"messages": [{"role": "user", "content": "How?"},
                            {"role": "assistant", "content": text}]}  # fmt: skip
     [row] = convert_records([record])

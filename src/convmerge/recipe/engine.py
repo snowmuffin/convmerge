@@ -219,6 +219,8 @@ def _mix_step(recipe: Recipe, converted: dict[str, Path], out: Path) -> Step:
     seed = mix.seed if mix else 42
     oversample = mix.oversample if mix else False
     sampler = mix.sampler if mix else "v2"
+    by = mix.by if mix else "rows"
+    tokenizer = mix.tokenizer if mix else None
 
     def run(stage: Path) -> dict[str, Any]:
         result = mix_files(
@@ -228,6 +230,8 @@ def _mix_step(recipe: Recipe, converted: dict[str, Path], out: Path) -> Step:
             seed=seed,
             oversample=oversample,
             sampler=sampler,  # type: ignore[arg-type]
+            by=by,  # type: ignore[arg-type]
+            tokenizer=tokenizer,
         )
         return {
             "sampler": result.sampler,
@@ -246,6 +250,8 @@ def _mix_step(recipe: Recipe, converted: dict[str, Path], out: Path) -> Step:
 
     options = {"weights": weights, "total": total, "seed": seed, "oversample": oversample,
                "sampler": sampler}  # fmt: skip
+    if by != "rows":  # only then, so recipes written before 1.3 keep their fingerprints
+        options.update(by=by, tokenizer=tokenizer)
     return Step("mix", "mix", [converted[n] for n in weights], out, options, run)
 
 

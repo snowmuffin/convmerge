@@ -72,6 +72,7 @@ mix:                            # optional with one source; merge-all if omitted
   total: 50000
   seed: 42
   weights: { alpaca: 0.7, local_chat: 0.3 }
+  # by: chars                   # weights split rows (default), chars, or tokens (+ tokenizer)
 
 dedupe: true                    # or { keys: [messages], algorithm: md5 }
 

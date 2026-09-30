@@ -338,20 +338,31 @@ def _run(
     transform: Transform | None = None,
 ) -> None:
     read = ReadStats()
+    trees = oasst.TreeBuffer()  # OpenAssistant message rows, one tree at a time
 
-    def records() -> Iterator[tuple[int, Any]]:
+    def flush(done: tuple[int, Any, int] | None) -> None:
+        if done is not None:
+            st.grouped += done[2]
+            for row in _process(done[1], done[0], adapter, emitter, st, on_invalid, notes,
+                                transform):  # fmt: skip
+                if fout is not None:
+                    fout.write(row)
+
+    try:
         for line in iter_jsonl(input_path, encoding=encoding, stats=read):
             if reporter is not None:
                 reporter.update()
-            yield line.number, line.value
-
-    try:
-        for number, value, grouped in oasst.group_messages(records()):
-            st.grouped += grouped
-            rows = _process(value, number, adapter, emitter, st, on_invalid, notes, transform)
+            value = line.value
+            if type(value) is dict and "message_tree_id" in value and oasst.is_message(value):
+                flush(trees.add(line.number, value))
+                continue
+            if trees.rows:
+                flush(trees.flush())
+            rows = _process(value, line.number, adapter, emitter, st, on_invalid, notes, transform)
             for row in rows:
                 if fout is not None:
                     fout.write(row)
+        flush(trees.flush())
     finally:
         st.lines_read = read.lines_read
         st.blank = read.blank
