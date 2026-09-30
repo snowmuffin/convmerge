@@ -94,6 +94,8 @@ def _hermes_calls(m: ChatMessage) -> ChatMessage:
 
     def take(match: re.Match[str]) -> str:
         obj = _json(match.group(1))
+        if obj is None:  # a Python dict ({'name': ...}; smolagents traces)
+            obj = _literal(match.group(1).strip())
         if isinstance(obj, dict) and isinstance(obj.get("name"), str):
             calls.append(ToolCall.from_any(obj["name"], obj.get("arguments")))
             return ""
@@ -228,6 +230,44 @@ def rewrite_ai_to_calls(messages: list[ChatMessage]) -> list[ChatMessage]:
                     call = ToolCall.from_any(match.group(1), args)
                     last_call = call.name
                     out.append(replace(m, content=text or None, tool_calls=(call,)))
+                    continue
+        if m.role == "tool" and m.name is None and last_call is not None:
+            m = replace(m, name=last_call)
+        elif m.role != "tool":
+            last_call = None
+        out.append(m)
+    return out
+
+
+# ToolBench / ReAct: "Thought: ...\nAction: name\nAction Input: {...}".
+_REACT = re.compile(
+    r"\A\s*(?:Thought:[ \t]*(?P<thought>.*?)\s*)?\n?[ \t]*Action:[ \t]*(?P<name>[^\n]+?)[ \t]*\n"
+    r"[ \t]*Action Input:[ \t]*(?P<args>.*?)\s*\Z",
+    re.S,
+)
+
+
+def rewrite_react_calls(messages: list[ChatMessage]) -> list[ChatMessage]:
+    """ToolBench's ReAct turns (``Thought:`` / ``Action:`` / ``Action Input:``
+    text) become tool calls when a tool turn answers them, or when the action
+    is ToolBench's closing ``Finish``; the thought stays as content and the
+    answering tool turns get the function's name when they have none."""
+    out: list[ChatMessage] = []
+    last_call: str | None = None
+    for i, m in enumerate(messages):
+        if m.role == "assistant" and not m.tool_calls and isinstance(m.content, str):
+            match = _REACT.match(m.content) if "Action Input:" in m.content else None
+            answered = i + 1 < len(messages) and messages[i + 1].role == "tool"
+            if match is not None and (answered or match["name"] == "Finish"):
+                raw = match["args"]
+                args = _json(raw) if raw else {}
+                if args is None:
+                    args = _literal(raw)
+                if isinstance(args, dict):
+                    call = ToolCall.from_any(match["name"], args)
+                    last_call = call.name
+                    thought = (match["thought"] or "").strip()
+                    out.append(replace(m, content=thought or None, tool_calls=(call,)))
                     continue
         if m.role == "tool" and m.name is None and last_call is not None:
             m = replace(m, name=last_call)

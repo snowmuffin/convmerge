@@ -19,7 +19,7 @@
   --alpaca-multiturn choices=flatten|history|drop
   --reasoning choices=keep|inline|reasoning_content|thinking|drop
   --tool-content choices=empty|null
-  --train-turns choices=all|last
+  --train-turns choices=all|last|data
   --system choices=keep|fold|drop
   --merge-consecutive (switch)
   --split-turns (switch)

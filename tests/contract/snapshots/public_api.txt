@@ -1,13 +1,13 @@
 [convmerge]
 class AdapterOptions(chat: 'ChatAdapterOptions | None' = None, sharegpt: 'SharegptAdapterOptions | None' = None, preference: 'str | None' = None, map: 'MapSpec | None' = None) -> None
 class ChatAdapterOptions(conversation_keys: 'tuple[str, ...]' = ('messages', 'conversation', 'conversations'), role_keys: 'tuple[str, ...]' = ('role', 'from'), content_keys: 'tuple[str, ...]' = ('content', 'value', 'text'), role_map: 'dict[str, str] | None' = None, pairwise_mode: 'str' = 'winner', instruction_keys: 'tuple[str, ...]' = ('instruction', 'question', 'prompt', 'problem', 'query', 'inputs'), output_keys: 'tuple[str, ...]' = ('output', 'response', 'completion', 'solution', 'answer', 'generated_solution', 'generation', 'targets'), input_keys: 'tuple[str, ...]' = ('input', 'context'), reasoning_keys: 'tuple[str, ...]' = ('reasoning_content', 'thinking', 'reasoning'), record_reasoning_keys: 'tuple[str, ...]' = ()) -> None
-class ChatMessage(role: 'str', content: 'str | Sequence[ContentPart] | None', tool_calls: 'Sequence[ToolCall]' = (), tool_call_id: 'str | None' = None, name: 'str | None' = None, reasoning: 'str | None' = None) -> None
+class ChatMessage(role: 'str', content: 'str | Sequence[ContentPart] | None', tool_calls: 'Sequence[ToolCall]' = (), tool_call_id: 'str | None' = None, name: 'str | None' = None, reasoning: 'str | None' = None, train: 'bool | None' = None) -> None
     media: property -> tuple[ContentPart, ...]
     text: property -> str
 class ContentPart(type: 'str', text: 'str | None' = None, url: 'str | None' = None) -> None
     is_media: property -> bool
 class ConvertConfig(adapter: 'str', output_format: 'str', encoding: 'str' = 'utf-8', adapter_options: 'AdapterOptions | None' = None, emit_options: 'EmitOptions | None' = None, transform_options: 'TransformOptions | None' = None) -> None
-class ConvertStats(lines_read: 'int' = 0, written: 'int' = 0, blank: 'int' = 0, invalid_json: 'int' = 0, non_object: 'int' = 0, no_example: 'int' = 0, first_invalid_line: 'int | None' = None, dropped: 'int' = 0, kept_invalid: 'int' = 0, drop_reasons: 'dict[str, int]' = <factory>, drop_lines: 'dict[str, list[int]]' = <factory>, lossy: 'dict[str, int]' = <factory>, transforms: 'dict[str, int]' = <factory>, reasoning: 'int' = 0) -> None
+class ConvertStats(lines_read: 'int' = 0, written: 'int' = 0, blank: 'int' = 0, invalid_json: 'int' = 0, non_object: 'int' = 0, no_example: 'int' = 0, first_invalid_line: 'int | None' = None, dropped: 'int' = 0, kept_invalid: 'int' = 0, drop_reasons: 'dict[str, int]' = <factory>, drop_lines: 'dict[str, list[int]]' = <factory>, lossy: 'dict[str, int]' = <factory>, transforms: 'dict[str, int]' = <factory>, reasoning: 'int' = 0, grouped: 'int' = 0) -> None
     def merge(self, other: 'ConvertStats') -> 'None'
     def note(self, reasons: 'list[str]', line_number: 'int') -> 'None'
     skipped: property -> int
@@ -29,7 +29,7 @@ class FilterStats(rows: 'int' = 0, kept: 'int' = 0, rejected: 'int' = 0, unreada
 class InvalidExampleError(ValueError)(line_number: 'int', reasons: 'list[str]')
 class JsonlDecodeError(ValueError)(path: 'str | Path', line_number: 'int', error: 'json.JSONDecodeError | str', raw: 'str')
 class JsonlLine(number: 'int', raw: 'str', value: 'Any') -> None
-class MapSpec(turns: 'Path | None' = None, role: 'Path | None' = None, content: 'Path | None' = None, name: 'Path | None' = None, role_map: 'Mapping[str, str] | None' = None, system: 'Path | None' = None, user: 'Path | None' = None, assistant: 'Path | None' = None, reasoning: 'Path | None' = None, chosen: 'Path | None' = None, rejected: 'Path | None' = None, tools: 'Path | None' = None, responses: 'tuple[Path, ...] | None' = None, preferred: 'Path | None' = None, preferred_values: 'Mapping[str, int] | None' = None) -> None
+class MapSpec(turns: 'Path | None' = None, role: 'Path | None' = None, content: 'Path | None' = None, name: 'Path | None' = None, role_map: 'Mapping[str, str] | None' = None, system: 'Path | None' = None, user: 'Path | None' = None, assistant: 'Path | None' = None, reasoning: 'Path | None' = None, chosen: 'Path | None' = None, rejected: 'Path | None' = None, tools: 'Path | None' = None, responses: 'tuple[Path, ...] | None' = None, preferred: 'Path | None' = None, preferred_values: 'Mapping[str, int] | None' = None, candidates: 'Path | None' = None, candidate: 'Path | None' = None, score: 'Path | None' = None, better: 'str | None' = None) -> None
     @classmethod from_mapping(cls, data: 'Any') -> 'MapSpec'
     def to_mapping(self) -> 'dict[str, Any]'
 class MixResult(total_written: 'int', seed: 'int', output: 'Path', sources: 'list[SourceStats]' = <factory>, sampler: 'str' = 'v2') -> None

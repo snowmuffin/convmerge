@@ -213,10 +213,11 @@ def check(dataset: str, kind: str, config: str | None, n: int) -> dict[str, Any]
             return result
         first = dst.read_text(encoding="utf-8").splitlines()[:1]
     result.update(read=stats.lines_read, written=stats.written, reasoning=stats.reasoning,
-                  drops=dict(stats.drop_reasons))  # fmt: skip
+                  grouped=stats.grouped, drops=dict(stats.drop_reasons))  # fmt: skip
     result["first"] = first[0][:400] if first else None
     result["raw"] = [_clip(r) for r in _dropped(data, fmt, RAW_ROWS)]
-    ok = stats.lines_read and stats.written >= 0.9 * stats.lines_read
+    records = stats.lines_read - stats.grouped  # message rows of one tree make one record
+    ok = records and stats.written >= 0.9 * records
     result["status"] = "ok" if ok else ("partial" if stats.written else "fail")
     return result
 

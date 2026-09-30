@@ -4,6 +4,7 @@
   "drop_reasons": {},
   "dropped": 0,
   "first_invalid_line": null,
+  "grouped": 0,
   "invalid_json": 0,
   "kept_invalid": 0,
   "lines_read": 2,

@@ -136,10 +136,12 @@ def _add_convert(sub: argparse._SubParsersAction) -> None:
     )
     p.add_argument(
         "--train-turns",
-        choices=("all", "last"),
+        choices=("all", "last", "data"),
         default=None,
-        help='last: mark every assistant turn but the last with "train": false '
-        "(messages format; axolotl message_field_training: train)",
+        help='last: mark every assistant turn but the last with "train": false; '
+        "data: write the flag the dataset gives each assistant turn (train / loss / "
+        "weight keys, metadata.train_turns) (messages format; axolotl "
+        "message_field_training: train)",
     )
     g = p.add_argument_group("fixes for strict chat templates (all off by default)")
     g.add_argument(
