@@ -66,6 +66,14 @@ def _add_mix(sub: argparse._SubParsersAction) -> None:
         help="Hugging Face tokenizer for --by tokens (needs transformers)",
     )
     p.add_argument(
+        "--by-sample",
+        type=_positive_int,
+        default=None,
+        metavar="N",
+        help="with --by chars / tokens: measure N random rows per source and scale "
+        "(an estimate; much faster for tokens on large sources). Default: every row",
+    )
+    p.add_argument(
         "--no-recipe",
         action="store_true",
         help="Skip writing the .mix.json sidecar file",
@@ -74,6 +82,16 @@ def _add_mix(sub: argparse._SubParsersAction) -> None:
         "--encoding", default="utf-8",
         help="Encoding of the source files (default: utf-8); output is always UTF-8",
     )  # fmt: skip
+
+
+def _positive_int(value: str) -> int:
+    try:
+        n = int(value)
+    except ValueError:
+        n = 0
+    if n < 1:
+        raise argparse.ArgumentTypeError(f"expected a positive integer, got {value!r}")
+    return n
 
 
 def mix_summary(result, *, oversample: bool) -> list[str]:
@@ -97,6 +115,12 @@ def mix_summary(result, *, oversample: bool) -> list[str]:
             extra += f" reasoning={share:.0%}"
         lines.append(f"  {s.path}: weight={s.weight:.4f} written={s.written:,}{extra}{note}")
     lines.append(f"total written: {result.total_written:,} -> {result.output}")
+    sampled = [s for s in result.sources if s.measured is not None and s.measured < s.available]
+    if sampled:
+        lines.append(
+            f"{result.by} per row estimated from {result.by_sample:,} random "
+            f"rows of {len(sampled)} source(s)"
+        )
     if traces and result.total_written:
         lines.append(
             f"rows with a reasoning trace: about {traces / result.total_written:.0%} "
@@ -147,6 +171,7 @@ def _cmd_mix(args: argparse.Namespace) -> None:
     sampler = args.sampler or options.get("sampler", "v2")
     by = args.by or options.get("by", "rows")
     tokenizer = args.tokenizer or options.get("tokenizer")
+    by_sample = args.by_sample if args.by_sample is not None else options.get("by_sample")
 
     if output is None:
         print("error: --output / -o is required (or set 'output' in config)", file=sys.stderr)
@@ -163,6 +188,7 @@ def _cmd_mix(args: argparse.Namespace) -> None:
             sampler=sampler,
             by=by,
             tokenizer=tokenizer,
+            by_sample=by_sample,
         )
     except ImportError as e:
         print(f"error: {e}", file=sys.stderr)

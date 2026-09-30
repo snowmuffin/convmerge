@@ -137,6 +137,7 @@
   --sampler choices=v1|v2
   --by choices=rows|chars|tokens
   --tokenizer
+  --by-sample
   --no-recipe (switch)
   --encoding default='utf-8'
 [convmerge run]

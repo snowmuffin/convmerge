@@ -352,7 +352,10 @@ Weights count rows by default. Sources whose rows differ a lot in length
 `--by chars`, or `--by tokens --tokenizer Qwen/Qwen2.5-7B-Instruct`, splits
 the `--total` rows so each source's share of the characters or tokens is its
 weight. `mix` prints each source's share, and the share of rows with a
-reasoning trace, so the mix you get is the mix you meant.
+reasoning trace, so the mix you get is the mix you meant. `--by chars` is
+fast and enough when the sources share a language; `--by tokens` tokenizes
+every row, so on large sources add `--by-sample 5000` to measure 5,000
+random rows per source and scale (an estimate, the same for the same seed).
 
 ### 5. `dedupe` / `filter` / `decontam` / `tokens` / `split` — ready for training
 
