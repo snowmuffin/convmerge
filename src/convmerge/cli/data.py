@@ -58,12 +58,13 @@ def _add_normalize(sub: argparse._SubParsersAction) -> None:
     p = sub.add_parser(
         "normalize",
         help=(
-            "Normalize parquet/json/jsonl files in a directory (or one csv/tsv table) "
-            "into clean JSONL (install convmerge[parquet] for .parquet inputs)"
+            "Normalize parquet/json/jsonl files in a directory (or one csv/tsv/xlsx table) "
+            "into clean JSONL (install convmerge[parquet] for .parquet, convmerge[xlsx] "
+            "for .xlsx inputs)"
         ),
         description="Normalize parquet/json/jsonl files in a directory into clean JSONL. "
-        "A .csv or .tsv file given as --input becomes one object per row, keyed by the "
-        "header. Parquet inputs require convmerge[parquet].",
+        "A .csv, .tsv, or .xlsx file given as --input becomes one object per row, keyed "
+        "by the header. Parquet inputs require convmerge[parquet], .xlsx convmerge[xlsx].",
     )
     p.add_argument("--input", "-i", type=Path, required=True, help="Input file or directory")
     p.add_argument(
@@ -79,6 +80,12 @@ def _add_normalize(sub: argparse._SubParsersAction) -> None:
         help="Key that wraps records which are JSON arrays, e.g. one conversation "
         "per line as a list of turns (default: conversation)",
     )
+    p.add_argument(
+        "--sheet",
+        default=None,
+        metavar="NAME",
+        help="Sheet of an .xlsx input to read (default: the first)",
+    )
 
 
 def _cmd_normalize(args: argparse.Namespace) -> None:
@@ -91,7 +98,10 @@ def _cmd_normalize(args: argparse.Namespace) -> None:
         sys.exit(1)
     if src.is_file():
         try:
-            n = normalize_path(src, dst, array_key=args.array_key).records
+            n = normalize_path(src, dst, array_key=args.array_key, sheet=args.sheet).records
+        except ImportError as e:
+            print(f"error: {e}", file=sys.stderr)
+            sys.exit(2)
         except ValueError as e:
             print(f"error: {e}", file=sys.stderr)
             sys.exit(1)
@@ -104,6 +114,9 @@ def _cmd_normalize(args: argparse.Namespace) -> None:
         else:
             print(f"[ok] {in_path} -> {out_path} ({n} records)", file=sys.stderr)
 
+    if args.sheet is not None:
+        print("error: --sheet applies to one .xlsx file, not a directory", file=sys.stderr)
+        sys.exit(2)
     result = normalize_path(src, dst, array_key=args.array_key, on_file=report)
     print(f"[done] {len(result.files)} files, {result.records} records", file=sys.stderr)
 

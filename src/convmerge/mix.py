@@ -34,6 +34,10 @@ class SourceStats:
     reasoning: int = 0
     """Valid rows whose answers carry a reasoning trace (a ``reasoning_content``
     / ``thinking`` / ``reasoning`` field or an inline ``<think>`` block)."""
+    measured: int | None = None
+    """Rows whose length was measured for ``units``: every valid row, or the
+    random sample of ``by_sample`` rows (``units`` is then an estimate);
+    ``None`` when mixing by rows."""
 
     @property
     def mean_units(self) -> float | None:
@@ -52,6 +56,8 @@ class MixResult:
     sampler: str = "v2"
     by: str = "rows"
     """What the weights measured: ``rows``, ``chars`` or ``tokens``."""
+    by_sample: int | None = None
+    """Rows per source measured to estimate its length (``None``: all rows)."""
 
 
 Sampler = Literal["v1", "v2"]
@@ -76,6 +82,7 @@ def mix_files(
     sampler: Sampler = "v2",
     by: MixUnit = "rows",
     tokenizer: Any = None,
+    by_sample: int | None = None,
 ) -> MixResult:
     """Sample from each source at its weight and write a merged JSONL file.
 
@@ -104,7 +111,10 @@ def mix_files(
     weight, using each source's mean row length. ``"tokens"`` needs
     *tokenizer*: a Hugging Face tokenizer name or path (``transformers`` is
     then required) or an object with ``encode``. Both need *total* and the
-    v2 sampler.
+    v2 sampler. *by_sample* measures only that many random rows of each
+    source (the same ones for the same *seed*) and scales their mean length
+    by the row count: much faster for ``"tokens"`` on large sources, at the
+    cost of an estimate. ``None`` (default) measures every row.
 
     Returns a :class:`MixResult` with per-source statistics.
     """
@@ -124,6 +134,11 @@ def mix_files(
             raise ValueError(f"by={by!r} needs the v2 sampler")
         if by == "tokens" and tokenizer is None:
             raise ValueError("by='tokens' needs a tokenizer (name, path, or object)")
+    if by_sample is not None:
+        if by == "rows":
+            raise ValueError("by_sample needs by='chars' or 'tokens'")
+        if isinstance(by_sample, bool) or not isinstance(by_sample, int) or by_sample < 1:
+            raise ValueError(f"by_sample must be a positive integer, got {by_sample!r}")
 
     total_weight = sum(s.weight for s in sources)
     if total_weight <= 0:
@@ -137,7 +152,9 @@ def mix_files(
 
     if sampler == "v2":
         measure = _measure(by, tokenizer)
-        return _mix_v2(normalized, output_path, total, seed, oversample, encoding, by, measure)
+        return _mix_v2(
+            normalized, output_path, total, seed, oversample, encoding, by, measure, by_sample
+        )
     return _mix_v1(normalized, output_path, total, seed, oversample, encoding)
 
 
@@ -295,10 +312,14 @@ def _mix_v2(
     encoding: str,
     by: str = "rows",
     measure: Any = None,
+    by_sample: int | None = None,
 ) -> MixResult:
     # Pass 1: count valid lines and remember where the invalid ones are, so
     # pass 2 can pick lines by ordinal without parsing JSON again.
-    scans = [_scan(src.path, encoding, measure) for src in normalized]
+    scans = [
+        _scan(src.path, encoding, measure, by_sample, random.Random(f"{seed}:{i}"))
+        for i, src in enumerate(normalized)
+    ]
     available = [scan.rows for scan in scans]
     if total is None:
         targets = list(available)
@@ -321,8 +342,10 @@ def _mix_v2(
         plan = _plan(rng, scan.rows, target, oversample)
         plans.append(plan)
         units = None if measure is None else scan.units
+        measured = None if measure is None else scan.measured
         stats.append(SourceStats(src.path, src.weight, target, scan.rows, plan.size,
-                                 units=units, reasoning=scan.reasoning))  # fmt: skip
+                                 units=units, reasoning=scan.reasoning,
+                                 measured=measured))  # fmt: skip
 
     n_out = sum(p.size for p in plans)
     n_buckets = max(1, -(-n_out // _BUCKET_LINES))
@@ -358,9 +381,8 @@ def _mix_v2(
                 out.writelines(lines)
                 del lines
 
-    return MixResult(
-        total_written=n_out, seed=seed, output=output_path, sources=stats, sampler="v2", by=by
-    )
+    return MixResult(total_written=n_out, seed=seed, output=output_path, sources=stats,
+                     sampler="v2", by=by, by_sample=by_sample)  # fmt: skip
 
 
 @dataclass
@@ -402,22 +424,47 @@ class _Scan:
     invalid: frozenset[int]
     units: float
     reasoning: int
+    measured: int = 0
 
 
-def _scan(path: Path, encoding: str, measure: Any = None) -> _Scan:
+def _scan(
+    path: Path,
+    encoding: str,
+    measure: Any = None,
+    sample: int | None = None,
+    rng: random.Random | None = None,
+) -> _Scan:
     """Count valid JSONL lines (and their length in ``measure`` units, and those
-    with a reasoning trace); remember the invalid line numbers."""
+    with a reasoning trace); remember the invalid line numbers.
+
+    With ``sample``, only a uniform random sample of that many rows (reservoir
+    sampling with ``rng``) is measured, and ``units`` is their mean length
+    times the row count.
+    """
     invalid: list[int] = []
     rows = units = reasoning = 0
+    reservoir: list[Any] = []
     for line in iter_jsonl(
         path, encoding=encoding, on_invalid=lambda e: invalid.append(e.line_number)
     ):
         rows += 1
         if _may_have_trace(line.value, line.raw) and _has_trace(line.value):
             reasoning += 1
-        if measure is not None:
+        if measure is None:
+            continue
+        if sample is None:
             units += measure(line.value)
-    return _Scan(rows, frozenset(invalid), units, reasoning)
+        elif len(reservoir) < sample:
+            reservoir.append(line.value)
+        else:
+            j = (rng or random).randrange(rows)
+            if j < sample:
+                reservoir[j] = line.value
+    measured = rows if measure is not None else 0
+    if sample is not None and reservoir:
+        measured = len(reservoir)
+        units = sum(measure(v) for v in reservoir) * rows / measured
+    return _Scan(rows, frozenset(invalid), units, reasoning, measured)
 
 
 def _valid_raw_lines(path: Path, encoding: str, invalid: frozenset[int]):
@@ -442,6 +489,7 @@ def write_mix_recipe(result: MixResult, *, encoding: str = "utf-8") -> Path:
         "version": 1,
         "sampler": result.sampler,
         "by": result.by,
+        "by_sample": result.by_sample,
         "seed": result.seed,
         "total_written": result.total_written,
         "output": str(result.output),
@@ -454,6 +502,7 @@ def write_mix_recipe(result: MixResult, *, encoding: str = "utf-8") -> Path:
                 "written": s.written,
                 "units": s.units,
                 "reasoning": s.reasoning,
+                "measured": s.measured,
             }
             for s in result.sources
         ],
@@ -468,8 +517,8 @@ def load_mix_config(path: Path) -> tuple[list[MixSource], dict]:
     """Parse a YAML or JSON mix config file.
 
     Returns ``(sources, options)`` where *options* may contain
-    ``total``, ``seed``, ``output``, ``oversample``, ``sampler``, ``by``, and
-    ``tokenizer``.
+    ``total``, ``seed``, ``output``, ``oversample``, ``sampler``, ``by``,
+    ``tokenizer``, and ``by_sample``.
 
     YAML support requires ``pyyaml`` (``pip install 'convmerge[preset]'``).
     """
@@ -526,6 +575,8 @@ def load_mix_config(path: Path) -> tuple[list[MixSource], dict]:
         options["by"] = raw["by"]
     if "tokenizer" in raw:
         options["tokenizer"] = str(raw["tokenizer"])
+    if raw.get("by_sample") is not None:
+        options["by_sample"] = int(raw["by_sample"])
 
     return sources, options
 

@@ -143,6 +143,14 @@ def _add_convert(sub: argparse._SubParsersAction) -> None:
         "weight keys, metadata.train_turns) (messages format; axolotl "
         "message_field_training: train)",
     )
+    p.add_argument(
+        "--media",
+        choices=("urls", "placeholders"),
+        default=None,
+        help="messages format: urls (default) keeps image / video / audio references in "
+        'their content parts; placeholders writes the TRL vision-language layout ({"type": '
+        '"image"} parts plus an images column)',
+    )
     g = p.add_argument_group("fixes for strict chat templates (all off by default)")
     g.add_argument(
         "--system",
@@ -180,7 +188,8 @@ def _add_convert(sub: argparse._SubParsersAction) -> None:
         choices=("keep", "drop"),
         default=None,
         help="drop: remove assistant turns before the first user turn (answers to a "
-        "withheld prompt, which are otherwise dropped as withheld_prompt, or a greeting)",
+        "withheld prompt, which are otherwise dropped as withheld_prompt, or a greeting) "
+        "and tool results right after it that answer no call (orphan_tool_message)",
     )
     _add_progress_flag(p)
 
@@ -339,6 +348,8 @@ def _emit_overrides(args: argparse.Namespace) -> dict[str, object]:
         out["tool_content"] = args.tool_content
     if args.train_turns is not None:
         out["train_turns"] = args.train_turns
+    if args.media is not None:
+        out["media"] = args.media
     return out
 
 

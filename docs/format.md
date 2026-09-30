@@ -38,7 +38,12 @@ exactly like the line above; richer data adds only what it needs:
   and `audio_url` / `video_url` in the same shape (vLLM / Qwen-VL
   convention). The URL is whatever reference the source held (URL or path);
   media is never downloaded. An unresolved placeholder stays as
-  `{"type": "image"}` and fails validation.
+  `{"type": "image"}` and fails validation. `--media placeholders` writes
+  the TRL vision-language layout instead: a bare `{"type": "image"}` part
+  where each image goes, the references in order in an `images` column
+  (`videos` / `audios` likewise), every content as a list of parts, and
+  `images` on every row (empty for text-only rows), so the file has one
+  Arrow schema. See the [TRL guide](guides/trl.md#images-vision-language-models).
 - `name` on a message when the source had one.
 
 ```json
@@ -178,7 +183,7 @@ Off by default; each one is counted in the report's `transforms`:
 | `--merge-consecutive` | Consecutive user turns, or consecutive assistant turns without tool calls, are joined with a blank line. Turns from different named speakers and tool turns are left alone. | "Conversation roles must alternate" (Mistral, Gemma, Llama 2); LLaMA-Factory's `unrepresentable_role_order`. |
 | `--reasoning-turns last` | Removes the reasoning of assistant turns before the last user turn. | Qwen3 / gpt-oss / DeepSeek-R1 templates, which drop those traces at inference. |
 | `--split-turns` | One example per user turn (the conversation up to the next user turn); earlier answers keep their text but lose their reasoning; `meta.turn` records the position. Not for preference formats. | Training every turn of a multi-turn reasoning conversation the way the model sees it. |
-| `--leading-assistant drop` | Assistant (and tool) turns before the first user turn are removed; system turns stay. | Datasets that withhold the first prompt (Nemotron chat: `null` user turn, otherwise dropped as `withheld_prompt`), or agent data that opens with a greeting when the template requires a user turn first. |
+| `--leading-assistant drop` | Assistant (and tool) turns before the first user turn are removed, and so are tool results right after it that answer no call; system turns stay. | Datasets that withhold the first prompt (Nemotron chat: `null` user turn, otherwise dropped as `withheld_prompt`), agent data that opens with a greeting when the template requires a user turn first, or agent traces whose first call was not recorded (smolagents rows that open with a tool error, otherwise dropped as `orphan_tool_message`). |
 
 Order: leading assistant, system, merge, split, reasoning turns. The same options exist in
 presets (`transforms:`), recipes (source `convert` keys), and the API
@@ -584,7 +589,7 @@ that would train badly are **dropped by default** and counted by reason:
 | `empty_message` | a message has neither content nor tool calls |
 | `no_user` | there is no user message (e.g. a plain `text` record) |
 | `no_assistant` | there is no assistant message with content or tool calls |
-| `orphan_tool_message` | a `tool` message is not preceded by an assistant tool call |
+| `orphan_tool_message` | a `tool` message is not preceded by an assistant tool call. When it comes right after the first user turn (the first call was not recorded), `--leading-assistant drop` removes it and keeps the rest |
 | `tool_call_id_mismatch` | a `tool_call_id` matches no earlier tool call id |
 | `unresolved_image` / `_video` / `_audio` | a media placeholder has no matching reference in the record |
 | `unused_image` / `_video` / `_audio` | the record lists more media references than placeholders |
@@ -624,7 +629,8 @@ warning on stderr. `datasets.load_dataset("json")` before 4.8 (LLaMA-Factory
 installs 4.0) fails on them with `ArrowInvalid`. The usual causes are tool-call
 arguments written as objects whose values differ between calls
 (`--tool-arguments string` fixes it) and text-only rows mixed with multimodal
-ones. Type conflicts do not change the exit status.
+ones (`--media placeholders` writes both as lists). Type conflicts do not
+change the exit status.
 
 From Python: `convert_file(..., on_invalid="drop", stats=ConvertStats())`,
 `convert_records(records, ...)` for records in memory,
@@ -641,7 +647,14 @@ cleanup step:
 - `convmerge normalize -i table.csv -o out.jsonl` (or `.tsv`) — one object per
   row keyed by the header row: quoted cells may span lines, a byte order mark
   is ignored, empty rows are skipped, and empty or repeated header cells get
-  unique names (`column_3`, `output_2`). Values stay strings. Tables are read
+  unique names (`column_3`, `output_2`). Values stay strings. Excel
+  workbooks (`.xlsx`, needs `convmerge[xlsx]`) work the same way on one
+  sheet (`--sheet NAME`, default the first): numbers keep Excel's 15
+  significant digits (`3`, `0.3`), dates become ISO 8601, booleans
+  `TRUE` / `FALSE`, the value of a merged cell goes to its first cell, and
+  formula cells take the value Excel saved (files generated by a program
+  and never opened in Excel have none: those cells are empty, and a warning
+  counts them). `.xls` is not read; save it as `.xlsx` or `.csv`. Tables are read
   when named directly (also as a recipe source `path`); directory walks
   keep to parquet / JSON / JSONL, so a stray metadata CSV is not converted.
   Parquet requires the `parquet` extra. Records that are themselves arrays —

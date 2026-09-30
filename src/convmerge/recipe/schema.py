@@ -36,6 +36,7 @@ _CONVERT_KEYS = {
     "reasoning",
     "tool_content",
     "train_turns",
+    "media",
     "system",
     "merge_consecutive",
     "split_turns",
@@ -89,6 +90,7 @@ class SourceSpec:
     convert: ConvertSpec
     fetch_auth: AuthConfig | None = None
     license: str | None = None
+    sheet: str | None = None
 
 
 @dataclass(frozen=True)
@@ -100,6 +102,7 @@ class MixSpec:
     sampler: str = "v2"
     by: str = "rows"
     tokenizer: str | None = None
+    by_sample: int | None = None
 
 
 @dataclass(frozen=True)
@@ -270,9 +273,12 @@ def _source(name: str, raw: Any, base: Path) -> SourceSpec:
 
     norm = spec.get("normalize", True)
     array_key = "conversation"
+    sheet: str | None = None
     if isinstance(norm, dict):
-        _only(norm, {"array_key"}, f"{where}.normalize")
+        _only(norm, {"array_key", "sheet"}, f"{where}.normalize")
         array_key = _str(norm.get("array_key", array_key), f"{where}.normalize.array_key")
+        if "sheet" in norm:
+            sheet = _str(norm["sheet"], f"{where}.normalize.sheet")
         norm = True
     elif not isinstance(norm, bool):
         raise RecipeError(f"{where}.normalize: expected true, false, or a mapping")
@@ -288,6 +294,7 @@ def _source(name: str, raw: Any, base: Path) -> SourceSpec:
         convert=_convert(spec["convert"], base, f"{where}.convert"),
         fetch_auth=fetch_auth,
         license=_str(spec["license"], f"{where}.license") if "license" in spec else None,
+        sheet=sheet,
     )
 
 
@@ -356,7 +363,7 @@ def _convert(raw: Any, base: Path, where: str) -> ConvertSpec:
     emit: dict[str, Any] = {}
     for key in (
         "tool_arguments", "meta_key", "alpaca_multiturn", "reasoning", "tool_content",
-        "train_turns",
+        "train_turns", "media",
     ):  # fmt: skip
         if key in spec:
             emit[key] = _str(spec[key], f"{where}.{key}")
@@ -436,7 +443,8 @@ def _mix(raw: Any, sources: dict[str, SourceSpec]) -> MixSpec | None:
     if raw is None:
         return None
     spec = _mapping(raw, "mix")
-    _only(spec, {"weights", "total", "seed", "oversample", "sampler", "by", "tokenizer"}, "mix")
+    _only(spec, {"weights", "total", "seed", "oversample", "sampler", "by", "tokenizer",
+                 "by_sample"}, "mix")  # fmt: skip
     weights_raw = spec.get("weights")
     if weights_raw is None:
         weights = {name: 1.0 for name in sources}
@@ -471,6 +479,12 @@ def _mix(raw: Any, sources: dict[str, SourceSpec]) -> MixSpec | None:
         raise RecipeError(f"mix.by: {by} needs mix.total")
     if by == "tokens" and tokenizer is None:
         raise RecipeError("mix.by: tokens needs mix.tokenizer")
+    by_sample = spec.get("by_sample")
+    if by_sample is not None:
+        if isinstance(by_sample, bool) or not isinstance(by_sample, int) or by_sample < 1:
+            raise RecipeError("mix.by_sample: expected a positive integer")
+        if by == "rows":
+            raise RecipeError("mix.by_sample: needs mix.by chars or tokens")
     return MixSpec(
         weights=weights,
         total=total,
@@ -479,6 +493,7 @@ def _mix(raw: Any, sources: dict[str, SourceSpec]) -> MixSpec | None:
         sampler=sampler,
         by=by,
         tokenizer=tokenizer,
+        by_sample=by_sample,
     )
 
 

@@ -72,12 +72,14 @@ pip install "convmerge[parquet]"         # Parquet input for ``normalize``
 pip install "convmerge[preset]"          # YAML convert presets (`--preset`, `preset validate`)
 pip install "convmerge[tokens]"          # `tokens`: lengths + chat-template checks (transformers, no PyTorch)
 pip install "convmerge[quality]"         # `dedupe --near`: near-duplicate removal (datasketch)
+pip install "convmerge[xlsx]"            # Excel (.xlsx) input for ``normalize`` (openpyxl)
 ```
 
 | Command / feature | Extra |
 |-------------------|--------|
 | `convert`, `dedupe`, `filter`, `decontam` (local eval files), `turns`, `split`, `llamafactory-info`, `axolotl-config` | *(core)* |
 | `normalize` on `.parquet` | `[parquet]` |
+| `normalize` on `.xlsx` | `[xlsx]` |
 | `fetch` with YAML manifest or GitHub | `[fetch]` |
 | `fetch` with HuggingFace manifest entries | `[fetch-all]` or `[fetch-hf]` |
 | `convert --preset`, `preset` | `[preset]` |
@@ -174,7 +176,7 @@ convmerge convert -i raw/HuggingFaceH4_ultrafeedback_binarized.jsonl -o dpo.json
 | [Locutusque/function-calling-chatml](https://huggingface.co/datasets/Locutusque/function-calling-chatml) | Tool calling | en | function-call / function-response turns | `--from auto --format messages` |
 | [younissk/tool-calling-mix](https://huggingface.co/datasets/younissk/tool-calling-mix) | Tool calling | en | `messages_json` / `tools_json` / `target_json` strings, ToolBench ReAct turns | `--from auto --format messages` |
 | [ZeroAgency/gemma3-pythonic-function-tool-calling-v1](https://huggingface.co/datasets/ZeroAgency/gemma3-pythonic-function-tool-calling-v1) | Tool calling | en, ru | Gemma-rendered `conversation`, Python-style calls | `--from auto --format messages` |
-| [smolagents/toolcalling](https://huggingface.co/datasets/smolagents/toolcalling) | Tool calling | en | answer turns only (question in `original_question`), `<tool_call>` Python dicts | `--from auto --format messages` |
+| [smolagents/toolcalling](https://huggingface.co/datasets/smolagents/toolcalling) | Tool calling | en | answer turns only (question in `original_question`), `<tool_call>` Python dicts | `--from auto --format messages --leading-assistant drop` |
 | [HuggingFaceH4/ultrafeedback_binarized](https://huggingface.co/datasets/HuggingFaceH4/ultrafeedback_binarized) | Preference | en | prompt + chosen/rejected lists | `--from auto --format preference` |
 | [trl-lib/ultrafeedback_binarized](https://huggingface.co/datasets/trl-lib/ultrafeedback_binarized) | Preference | en | chosen/rejected lists | `--from auto --format preference` |
 | [Anthropic/hh-rlhf](https://huggingface.co/datasets/Anthropic/hh-rlhf) | Preference | en | Human:/Assistant: transcripts | `--from auto --format preference` |
@@ -241,9 +243,10 @@ convmerge normalize -i ./raw -o ./jsonl
 Handles parquet (streamed via `pyarrow`), top-level JSON arrays, concatenated
 single-line JSON (`{...}{...}{...}`), JSONL whose lines are arrays (wrapped as
 `{"conversation": [...]}`), and already-valid JSONL. A directory input is
-walked recursively and mirrored under the output directory. A `.csv` or
-`.tsv` file given as `-i` becomes one object per row, keyed by the header
-(`instruction,input,output` spreadsheets convert with `--from auto` next).
+walked recursively and mirrored under the output directory. A `.csv`,
+`.tsv`, or `.xlsx` file given as `-i` becomes one object per row, keyed by the
+header (`instruction,input,output` spreadsheets convert with `--from auto`
+next; `.xlsx` needs `convmerge[xlsx]`, `--sheet NAME` picks a sheet).
 
 ### 3. `convert` — adapter + emitter pipeline
 
@@ -270,7 +273,9 @@ Output formats: `messages`, `alpaca`, `preference` (DPO pairs), `sharegpt` and
 > `function_call` / `observation` turns, Hermes `<tool_call>` tags, Glaive and
 > xLAM layouts all come out as standard `tool_calls` / `tools`, and image /
 > audio / video references (`image_url` parts, `images` columns with `<image>`
-> tokens) are preserved in the `messages` output. Media is kept by reference only — convmerge never
+> tokens) are preserved in the `messages` output (`--media placeholders` writes
+> TRL's vision-language layout: `{"type": "image"}` parts plus an `images`
+> column). Media is kept by reference only — convmerge never
 > downloads or decodes it. `--from sharegpt` keeps whole conversations since
 > 0.6.0 (`turn_mode: pairs` restores the old split). See
 > [docs/format.md](docs/format.md#sharegpt).
@@ -352,7 +357,10 @@ Weights count rows by default. Sources whose rows differ a lot in length
 `--by chars`, or `--by tokens --tokenizer Qwen/Qwen2.5-7B-Instruct`, splits
 the `--total` rows so each source's share of the characters or tokens is its
 weight. `mix` prints each source's share, and the share of rows with a
-reasoning trace, so the mix you get is the mix you meant.
+reasoning trace, so the mix you get is the mix you meant. `--by chars` is
+fast and enough when the sources share a language; `--by tokens` tokenizes
+every row, so on large sources add `--by-sample 5000` to measure 5,000
+random rows per source and scale (an estimate, the same for the same seed).
 
 ### 5. `dedupe` / `filter` / `decontam` / `tokens` / `split` — ready for training
 
@@ -458,6 +466,13 @@ To keep the package lean and dependency-free at its core, `convmerge` does
   gave them; fetching and preprocessing the files is the trainer's job.
 - **Scraping HTML pages or running browser automation.** Structured JSON /
   JSONL / Parquet inputs only.
+- **Removing personal information (PII).** convmerge does not detect or mask
+  names, emails, phone numbers, or IDs. Rules that rewrite training text are
+  easy to get wrong without notice (version numbers taken for IP addresses,
+  long numbers for card numbers) and still miss names and addresses, so use
+  a dedicated tool such as [Presidio](https://github.com/microsoft/presidio)
+  before converting. `convmerge filter` with your own `patterns` can find or
+  drop rows that match a pattern you choose.
 
 If any of these are important to your workflow, wire `convmerge` in as one
 step of a larger pipeline rather than expecting it to grow into those areas.

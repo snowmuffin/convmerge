@@ -85,7 +85,7 @@ and then:
 | Key | Default | Meaning |
 |-----|---------|---------|
 | `license` | the dataset card's | The source's license, recorded in the report. Hugging Face sources without one get the `license` of their dataset card at fetch time. Non-commercial, research-only, `other`, and unknown licenses are warned about (`[license]` lines). |
-| `normalize` | `true` | Normalize before converting; `false` if the data is already clean JSONL; `{array_key: ...}` to rename the wrapper for array records. |
+| `normalize` | `true` | Normalize before converting; `false` if the data is already clean JSONL; `{array_key: ...}` to rename the wrapper for array records; `{sheet: ...}` to read that sheet of an `.xlsx` path (default: the first). |
 | `convert.from` | — | Adapter (`alpaca`, `sharegpt`, `chat`/`auto`, or a plugin). Required unless a preset sets it. |
 | `convert.format` | `messages` | Output format: `messages`, `alpaca`, or `preference` (DPO pairs; mix and dedupe work on them as on any JSONL). |
 | `convert.preset` | — | A [preset](custom_presets.md) file; its contents are part of the step's inputs, so editing it re-runs the step. |
@@ -93,7 +93,7 @@ and then:
 | `convert.preference` | — | `chosen` / `rejected` for preference data. |
 | `convert.on_invalid` | `drop` | `drop`, `keep`, or `fail`. |
 | `convert.workers` | `1` | Parallel convert. Output does not depend on it, so changing it never re-runs a step. |
-| `convert.tool_arguments`, `keep_meta`, `meta_key`, `alpaca_multiturn`, `reasoning`, `tool_content`, `train_turns` | — | Same as the `convert` flags. |
+| `convert.tool_arguments`, `keep_meta`, `meta_key`, `alpaca_multiturn`, `reasoning`, `tool_content`, `train_turns`, `media` | — | Same as the `convert` flags. |
 | `convert.meta` | — | Constant fields written under `meta` on every row (`--meta`), e.g. `{dataset: kullm}` to keep each row's origin after the mix. |
 | `convert.map` | — | A [field mapping](format.md#field-mapping---from-map) for layouts no adapter knows; implies `from: map`. |
 | `convert.system`, `merge_consecutive`, `split_turns`, `reasoning_turns`, `leading_assistant` | — | The template fixes of `convert` (`--system`, `--merge-consecutive`, `--split-turns`, `--reasoning-turns`, `--leading-assistant`); see [format.md](format.md#fixes-for-strict-chat-templates). |
@@ -112,6 +112,7 @@ by path) and concatenated.
 | `mix.sampler` | `v2` | `v1` reproduces pre-0.7 mixes. |
 | `mix.by` | `rows` | What the weights measure: `rows`, `chars`, or `tokens` (needs `total`; `tokens` needs `tokenizer`). `total` stays a row count, split so each source's share of the characters or tokens is its weight. |
 | `mix.tokenizer` | — | Hugging Face tokenizer name or path for `by: tokens` (needs `convmerge[tokens]`). |
+| `mix.by_sample` | — | With `by: chars` / `tokens`: measure this many random rows per source and scale, instead of every row (an estimate; see `mix --by-sample`). |
 
 | `dedupe.near` | `false` | Drop rows whose text is a near-copy of an earlier row (MinHash LSH over word 5-grams). Needs `convmerge[quality]`. |
 | `dedupe.threshold` | `0.8` | `near`: estimated Jaccard similarity that makes a duplicate (below 1). |

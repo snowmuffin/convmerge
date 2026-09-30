@@ -66,6 +66,67 @@ def test_by_tokens_uses_the_tokenizer(tmp_path: Path) -> None:
     assert [s.units for s in result.sources] == [5000, 20000]
 
 
+def test_by_sample_estimates_from_a_seeded_sample(tmp_path: Path) -> None:
+    short = _rows(tmp_path / "short.jsonl", 3000, 100)
+    long = _rows(tmp_path / "long.jsonl", 3000, 400)
+    sources = [MixSource(short, 0.7), MixSource(long, 0.3)]
+    exact = mix_files(sources, tmp_path / "e.jsonl", total=1000, by="chars")
+    est = mix_files(sources, tmp_path / "s.jsonl", total=1000, by="chars", by_sample=200)
+    mix_files(sources, tmp_path / "t.jsonl", total=1000, by="chars", by_sample=200)
+    assert [s.measured for s in exact.sources] == [3000, 3000]
+    assert [s.measured for s in est.sources] == [200, 200] and est.by_sample == 200
+    for e, s in zip(exact.sources, est.sources):
+        assert s.units == pytest.approx(e.units, rel=0.01)
+        assert abs(s.written - e.written) <= 5
+    assert (tmp_path / "s.jsonl").read_text() == (tmp_path / "t.jsonl").read_text()
+    lines = mix_summary(est, oversample=False)
+    assert lines[-1] == "chars per row estimated from 200 random rows of 2 source(s)"
+    # a sample as large as the source measures every row: no estimate
+    whole = mix_files(sources, tmp_path / "w.jsonl", total=1000, by="chars", by_sample=5000)
+    assert [s.units for s in whole.sources] == [s.units for s in exact.sources]
+    assert not mix_summary(whole, oversample=False)[-1].startswith("chars per row")
+    from convmerge.mix import write_mix_recipe
+
+    sidecar = json.loads(write_mix_recipe(est).read_text())
+    assert sidecar["by_sample"] == 200 and sidecar["sources"][0]["measured"] == 200
+
+
+@pytest.mark.parametrize(
+    "kwargs, message",
+    [({"by_sample": 5}, "needs by='chars'"), ({"by": "chars", "by_sample": 0}, "positive")],
+)
+def test_by_sample_errors(tmp_path: Path, kwargs, message) -> None:
+    src = _rows(tmp_path / "s.jsonl", 3, 5)
+    with pytest.raises(ValueError, match=message):
+        mix_files([MixSource(src, 1)], tmp_path / "o.jsonl", total=2, **kwargs)
+
+
+def test_by_sample_cli_config_and_recipe(tmp_path: Path, capsys) -> None:
+    from convmerge.cli import main
+    from convmerge.recipe import RecipeError
+    from convmerge.recipe.schema import parse_recipe
+
+    src = _rows(tmp_path / "a.jsonl", 300, 50)
+    main(["mix", "-i", f"{src}:1", "-o", str(tmp_path / "o.jsonl"), "-n", "10", "--by", "chars",
+          "--by-sample", "20", "--no-recipe"])  # fmt: skip
+    assert "estimated from 20 random rows" in capsys.readouterr().err
+    with pytest.raises(SystemExit) as e:
+        main(["mix", "-i", f"{src}:1", "-o", str(tmp_path / "p.jsonl"), "--by-sample", "0"])
+    assert e.value.code == 2
+    cfg = tmp_path / "mix.json"
+    cfg.write_text(json.dumps({"sources": [{"path": str(src), "weight": 1}], "total": 5,
+                               "by": "chars", "by_sample": 7}))  # fmt: skip
+    assert load_mix_config(cfg)[1]["by_sample"] == 7
+    base = {"version": 1, "output": "o.jsonl",
+            "sources": {"a": {"path": "a.jsonl", "convert": {"from": "auto"}}}}  # fmt: skip
+    mix = {"total": 10, "by": "chars", "by_sample": 50}
+    assert parse_recipe({**base, "mix": mix}, path=tmp_path / "r.yaml").mix.by_sample == 50
+    with pytest.raises(RecipeError, match="needs mix.by chars or tokens"):
+        parse_recipe({**base, "mix": {"total": 10, "by_sample": 5}}, path=tmp_path / "r.yaml")
+    with pytest.raises(RecipeError, match="positive integer"):
+        parse_recipe({**base, "mix": {**mix, "by_sample": True}}, path=tmp_path / "r.yaml")
+
+
 def test_reasoning_count_sees_keys_and_escaped_tags(tmp_path: Path) -> None:
     rows = [
         {"messages": [{"role": "assistant", "content": "a", "reasoning_content": "r"}]},

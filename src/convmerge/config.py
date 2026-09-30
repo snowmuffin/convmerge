@@ -82,6 +82,7 @@ _EMIT_OPTION_KEYS = (
     "tool_content",
     "meta",
     "train_turns",
+    "media",
 )
 _TRANSFORM_OPTION_KEYS = (
     "system",
@@ -111,7 +112,7 @@ def emit_options_from_mapping(data: dict[str, Any]) -> EmitOptions:
     kw: dict[str, Any] = {}
     for key in (
         "tool_arguments", "meta_key", "alpaca_multiturn", "reasoning", "tool_content",
-        "train_turns",
+        "train_turns", "media",
     ):  # fmt: skip
         if key in data:
             kw[key] = str(data[key])
@@ -382,6 +383,11 @@ def build_convert_config(
                 f"train_turns: {cfg_emit.train_turns} writes per-turn train flags, which only "
                 "the messages format has (for LLaMA-Factory, mask_history: true trains on the "
                 "last turn only)"
+            )
+        if cfg_emit.media != "urls" and cfg_format != "messages":
+            raise ValueError(
+                f"media: {cfg_emit.media} is a layout of the messages format (the sharegpt "
+                "format already writes images / videos / audios columns)"
             )
     if cfg_transforms is not None:
         _check_split_turns(cfg_transforms, cfg_format)
