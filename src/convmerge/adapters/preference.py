@@ -26,12 +26,13 @@ worst one (:func:`ranked_as_preference`):
 - UltraFeedback: ``instruction`` plus ``completions[]`` with a ``response``
   and ``fine-grained_score`` (the mean of the four aspect ratings, which
   Argilla's cleaned binarization ranks by; the ``overall_score`` critique
-  rating is used only when that is missing).
+  rating breaks ties, and is used alone when ``fine-grained_score`` is
+  missing).
 - Nectar: an HH ``prompt`` transcript plus ``answers[]`` with an ``answer``
   and a ``rank`` (1 is best).
 
-When the best and worst scores are equal there is no pair and the row is
-reported as ``no_preference``. OpenAssistant trees (see
+When the best and worst scores (tie-break included) are equal there is no
+pair and the row is reported as ``no_preference``. OpenAssistant trees (see
 :mod:`convmerge.adapters.oasst`) pair their best- and worst-ranked replies.
 """
 
@@ -184,34 +185,44 @@ def is_preference_record(record: dict[str, Any]) -> bool:
 
 
 # (list key, answer key, score keys in priority order, lower score is better)
-_SCORED: tuple[tuple[str, str, tuple[str, ...], bool], ...] = (
-    ("completions", "response", ("fine-grained_score", "overall_score"), False),  # UltraFeedback
-    ("answers", "answer", ("rank",), True),  # Nectar
-)
+# (list key, answer key, score keys, tie-break keys, lower is better)
+_SCORED: tuple[tuple[str, str, tuple[str, ...], tuple[str, ...], bool], ...] = (
+    ("completions", "response", ("fine-grained_score", "overall_score"), ("overall_score",),
+     False),  # UltraFeedback
+    ("answers", "answer", ("rank",), (), True),  # Nectar
+)  # fmt: skip
 _PROMPT_KEYS = ("instruction", "prompt")
 
 
-def _candidates(record: dict[str, Any]) -> list[tuple[float, str]] | None:
+def _candidates(record: dict[str, Any]) -> list[tuple[tuple[float, ...], str]] | None:
     """``(score, answer)`` of every scored candidate, best first; ``None`` when
-    the record has no scored-candidates list."""
-    for list_key, answer_key, score_keys, lower_better in _SCORED:
+    the record has no scored-candidates list. A score is ``(score,)``, or
+    ``(score, tie-break)`` when every candidate has the tie-break score."""
+    for list_key, answer_key, score_keys, tie_keys, lower_better in _SCORED:
         items = record.get(list_key)
         if not isinstance(items, list) or not items or not isinstance(items[0], dict):
             continue
         if answer_key not in items[0]:
             continue
-        found: list[tuple[float, str]] = []
+        sign = -1.0 if lower_better else 1.0
+        found: list[tuple[float, float | None, str]] = []
         for item in items:
             if not isinstance(item, dict):
                 continue
             answer = item.get(answer_key)
             score = _score(item, score_keys)
             if isinstance(answer, str) and answer.strip() and score is not None:
-                found.append((-score if lower_better else score, answer))
+                tie = _score(item, tie_keys) if tie_keys else None
+                found.append((sign * score, None if tie is None else sign * tie, answer))
         if not any(_score(i, score_keys) is not None for i in items if isinstance(i, dict)):
             continue
+        tie_break = all(tie is not None for _, tie, _ in found)
+        keyed: list[tuple[tuple[float, ...], str]] = [
+            ((score, tie) if tie_break and tie is not None else (score,), answer)
+            for score, tie, answer in found
+        ]
         # Stable: among equal scores the earlier candidate wins.
-        return sorted(found, key=lambda c: -c[0])
+        return sorted(keyed, key=lambda c: tuple(-x for x in c[0]))
     return None
 
 
@@ -232,8 +243,8 @@ def ranked_as_preference(record: dict[str, Any]) -> dict[str, Any] | None:
     """A chosen / rejected record from scored candidates (see the module doc):
     the best-scored answer against the worst-scored one. ``None`` if the
     record has no scored candidates; with fewer than two, or when the best and
-    worst scores are equal, the result carries ``no_preference`` instead of
-    a pair."""
+    worst scores (tie-break included) are equal, the result carries
+    ``no_preference`` instead of a pair."""
     candidates = _candidates(record)
     if candidates is None:
         return None

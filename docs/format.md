@@ -560,7 +560,7 @@ adapter and these shapes:
 | TRL prompt + continuation | `prompt` (string or messages) + `chosen: [assistant ...]` | prompt followed by the continuation |
 | Orca DPO pairs | `system` + `question` + `chosen: "..."` | chosen used as the answer |
 | Chatbot Arena (`--format preference` only) | `conversation_a` / `conversation_b` + `winner` | the winner is chosen, the other side rejected; ties are skipped |
-| UltraFeedback (raw) | `instruction` + `completions[]` with `response` and `fine-grained_score` | the best-scored completion is chosen, the worst rejected (`overall_score` when `fine-grained_score` is missing); all scores equal → `no_preference` |
+| UltraFeedback (raw) | `instruction` + `completions[]` with `response` and `fine-grained_score` | the best-scored completion is chosen, the worst rejected; `overall_score` breaks ties (and is used alone when `fine-grained_score` is missing); all scores equal → `no_preference` |
 | Nectar | HH `prompt` + `answers[]` with `answer` and `rank` | rank 1 is chosen, the last rank rejected |
 | OpenAssistant trees | see [above](#openassistant-message-trees) | the best- and worst-ranked answers at the deepest ranked step |
 

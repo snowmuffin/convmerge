@@ -230,3 +230,21 @@ def test_cli_suggests_encoding_for_undecodable_input(tmp_path: Path, capsys) -> 
     main(["convert", "-i", str(broken), "-o", str(tmp_path / "o2.jsonl"), "--from", "auto"])
     err = capsys.readouterr().err
     assert "normalize" in err and "--encoding" not in err
+
+
+@pytest.mark.parametrize(
+    "raw",
+    ['{"a": [1, 2.5, null, true]}', ' {"a": 1}', '{"a": 1} ', '{"a": 1} x', "﻿{}",
+     "{bad", "", '"\\ud800"', "[" * 100_000 + "]" * 100_000, '{"a": 1}{"b": 2}'],
+)  # fmt: skip
+def test_fast_loads_matches_json_loads(raw: str) -> None:
+    from convmerge.io import _loads
+
+    try:
+        expected = json.loads(raw)
+    except (ValueError, RecursionError) as e:
+        with pytest.raises(type(e)) as got:
+            _loads(raw)
+        assert str(got.value) == str(e)
+    else:
+        assert _loads(raw) == expected

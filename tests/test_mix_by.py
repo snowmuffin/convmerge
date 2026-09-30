@@ -66,6 +66,26 @@ def test_by_tokens_uses_the_tokenizer(tmp_path: Path) -> None:
     assert [s.units for s in result.sources] == [5000, 20000]
 
 
+def test_reasoning_count_sees_keys_and_escaped_tags(tmp_path: Path) -> None:
+    rows = [
+        {"messages": [{"role": "assistant", "content": "a", "reasoning_content": "r"}]},
+        {"conversations": [{"from": "gpt", "value": "a", "thinking": "t"}]},
+        {"messages": [{"role": "assistant", "content": "a", "reasoning": "  "}]},  # blank
+        {"messages": [{"role": "assistant", "content": "<think>t</think>a"}]},
+        {"messages": [{"role": "assistant", "content": "a <b>"}]},
+        {"output": "<think>t</think>a"},
+        {"messages": ["reasoning", 1]},
+    ]
+    text = "".join(json.dumps(r) + "\n" for r in rows)
+    text += '{"messages": [{"role": "assistant", "content": "\\u003Cthink>t</think>a"}]}\n'
+    text += '{"messages": [{"role": "assistant", "content": "a", "\\u0074hinking": "t"}]}\n'
+    src = tmp_path / "a.jsonl"
+    src.write_text(text, encoding="utf-8")
+    for sampler in ("v2", "v1"):
+        result = mix_files([MixSource(src, 1.0)], tmp_path / "o.jsonl", total=9, sampler=sampler)
+        assert result.sources[0].reasoning == 6
+
+
 @pytest.mark.parametrize(
     "kwargs, message",
     [
