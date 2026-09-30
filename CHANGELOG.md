@@ -7,6 +7,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-09-30
+
+Three more preference layouts read without a mapping, a warning when a mix
+cannot meet its weights, and documentation on when the package helps, with
+complete example recipes and a measured comparison against hand-written
+conversion scripts. All additive; see "Changed output".
+
+### Added
+
+- `--from auto` reads preference data given as two answers and a label
+  naming the better one: `response_0` / `response_1` + `better_response_id`
+  (PKU-SafeRLHF), `human_ref_A` / `human_ref_B` + `labels` (SHP, whose
+  `history` is the prompt), and `response1` / `response2` +
+  `overall_preference` (HelpSteer3, with `context` as the conversation).
+  Only these exact key sets are recognised. Ties (`overall_preference` 0),
+  labels outside the expected values, and empty answers are dropped as
+  `no_preference`. On 5,000 real rows each: PKU-SafeRLHF 5,000, SHP 5,000,
+  HelpSteer3 4,928 (72 ties or blank answers).
+- `mix` warns when a source has too few rows for its weight and the result
+  is more than 5 points off the weights (by rows, or by chars / tokens with
+  `--by`), naming the short sources and the ways out (`--oversample`, a
+  smaller total, other weights). `.mix.json` records each source's written
+  `share`.
+
+### Changed output
+
+- PKU-SafeRLHF, SHP, and HelpSteer3 rows converted with `--from auto` become
+  preference pairs; before 1.5 they were dropped as unrecognised. The output
+  equals the `--from map` configurations the README gave for them, which
+  still work.
+- `mix` may log the warning above, and `.mix.json` sources have a new
+  `share` key. The mixed rows are unchanged.
+
+### Documentation
+
+- README: when convmerge helps and when it does not; the out-of-scope list no
+  longer says preference conversion and token-length filtering are missing.
+- `examples/recipes`: a Korean SFT mix, a DPO mix of three preference
+  layouts, and a tool-calling mix checked against a Qwen chat template, each
+  parsed and planned in the test suite.
+
 ## [1.4.0] - 2026-09-30
 
 Vision-language training data for TRL, Excel input, and a fast estimate for
