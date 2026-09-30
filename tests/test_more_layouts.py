@@ -142,6 +142,34 @@ def test_leading_assistant(tmp_path: Path) -> None:
                                         {"role": "assistant", "content": "a1"}]}]  # fmt: skip
 
 
+def test_leading_assistant_drops_orphan_tool_results_after_the_question(tmp_path: Path) -> None:
+    # smolagents/toolcalling: the question is a column, the trace opens with a
+    # tool error whose call was not recorded.
+    error = {"role": "tool", "content": "Error:\nError executing tool 'web_search'"}
+    call = "<tool_call>{'name': 'final_answer', 'arguments': {'answer': '1960'}}</tool_call>"
+    rows = [
+        {"original_question": "Q?", "messages": [error, dict(error),
+                                                 {"role": "assistant", "content": call}]},
+        {"original_question": "Q?", "messages": [{"role": "assistant", "content": call}]},
+    ]  # fmt: skip
+    src = tmp_path / "in.jsonl"
+    src.write_text("".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8")
+    out = tmp_path / "out.jsonl"
+    assert convert_file(src, out, adapter_name="auto", output_format="messages") == (2, 1)
+    kept = _rows(out)
+    assert convert_file(
+        src,
+        out,
+        adapter_name="auto",
+        output_format="messages",
+        transform_options=TransformOptions(leading_assistant="drop"),
+    ) == (2, 2)
+    first, second = _rows(out)  # fmt: skip
+    assert [m["role"] for m in first["messages"]] == ["user", "assistant"]
+    assert first["messages"][1]["tool_calls"][0]["function"]["name"] == "final_answer"
+    assert second == kept[0]  # rows without an orphan are unchanged
+
+
 def test_leading_assistant_cli_and_recipe_keys(tmp_path: Path, capsys) -> None:
     from convmerge.cli import main
     from convmerge.config import transform_options_from_mapping

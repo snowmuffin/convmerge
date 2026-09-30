@@ -180,7 +180,8 @@ def _add_convert(sub: argparse._SubParsersAction) -> None:
         choices=("keep", "drop"),
         default=None,
         help="drop: remove assistant turns before the first user turn (answers to a "
-        "withheld prompt, which are otherwise dropped as withheld_prompt, or a greeting)",
+        "withheld prompt, which are otherwise dropped as withheld_prompt, or a greeting) "
+        "and tool results right after it that answer no call (orphan_tool_message)",
     )
     _add_progress_flag(p)
 

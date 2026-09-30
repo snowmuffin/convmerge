@@ -1126,6 +1126,9 @@
   "config": null,
   "split": "train",
   "format": "messages",
+  "transforms": {
+   "leading_assistant": "drop"
+  },
   "record": {
    "model_id": "deepseek-ai/DeepSeek-V3-0324",
    "source": "Frames",
