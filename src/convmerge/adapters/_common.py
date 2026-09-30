@@ -421,7 +421,9 @@ def coerce_messages(
                 tool_call_id=tool_call_id if isinstance(tool_call_id, str) else None,
                 name=name if isinstance(name, str) and name else None,
                 reasoning=first_text(item, reasoning_keys) if answer else None,
-                train=train_flag(item) if answer else None,
+                train=train_flag(item)
+                if answer and ("train" in item or "loss" in item or "weight" in item)
+                else None,
             )
         )
     return out

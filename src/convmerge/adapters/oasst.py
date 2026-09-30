@@ -43,6 +43,32 @@ def is_message(record: Any) -> bool:
     )
 
 
+class TreeBuffer:
+    """Collects consecutive message rows of one tree (see :func:`group_messages`)."""
+
+    def __init__(self) -> None:
+        self.rows: list[dict[str, Any]] = []
+        self.first = 0
+
+    def add(self, number: int, row: dict[str, Any]) -> tuple[int, Any, int] | None:
+        """Add a message row; returns the previous tree when this row starts a new one."""
+        rows = self.rows
+        if rows and row["message_tree_id"] == rows[0]["message_tree_id"]:
+            rows.append(row)
+            return None
+        done = self.flush()
+        self.rows, self.first = [row], number
+        return done
+
+    def flush(self) -> tuple[int, Any, int] | None:
+        """The collected tree as ``(first line number, tree record, rows folded)``."""
+        if not self.rows:
+            return None
+        done = (self.first, build_tree(self.rows), len(self.rows) - 1)
+        self.rows = []
+        return done
+
+
 def group_messages(
     items: Iterable[tuple[int, Any]],
 ) -> Iterator[tuple[int, Any, int]]:
@@ -52,24 +78,20 @@ def group_messages(
     tree's first row, record, rows folded into it beyond the first)``. Rows
     that are not OpenAssistant messages pass through unchanged (folded 0).
     """
-    tree_id: Any = None
-    rows: list[dict[str, Any]] = []
-    first = 0
+    buffer = TreeBuffer()
     for number, obj in items:
-        if is_message(obj):
-            if rows and obj["message_tree_id"] == tree_id:
-                rows.append(obj)
-                continue
-            if rows:
-                yield first, build_tree(rows), len(rows) - 1
-            tree_id, rows, first = obj["message_tree_id"], [obj], number
+        if type(obj) is dict and "message_tree_id" in obj and is_message(obj):
+            done = buffer.add(number, obj)
+            if done is not None:
+                yield done
             continue
-        if rows:
-            yield first, build_tree(rows), len(rows) - 1
-            rows = []
+        done = buffer.flush()
+        if done is not None:
+            yield done
         yield number, obj, 0
-    if rows:
-        yield first, build_tree(rows), len(rows) - 1
+    done = buffer.flush()
+    if done is not None:
+        yield done
 
 
 def build_tree(rows: list[dict[str, Any]]) -> dict[str, Any]:

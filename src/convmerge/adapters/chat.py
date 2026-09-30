@@ -179,10 +179,13 @@ def iter_from_chat_line(
                 answer = _answer_turn(record, (*output_keys, "target", "target_json"))
                 if answer is not None:
                     msgs.append(answer)
-            if msgs and not any(m.role == "user" for m in msgs):
+            for m in msgs:
+                if m.role == "user":
+                    break
+            else:
                 # The answer turns, with the question in its own column (smolagents).
                 question = _first_string(record, _QUESTION_KEYS)
-                if question is not None:
+                if msgs and question is not None:
                     at = next((i for i, m in enumerate(msgs) if m.role != "system"), len(msgs))
                     msgs.insert(at, ChatMessage("user", question))
             if msgs:
@@ -216,7 +219,7 @@ def iter_from_chat_line(
     if is_xlam(record):
         yield build_example(xlam_messages(record), record, meta={"source": "chat:xlam"})
         return
-    if oasst.is_tree(record):
+    if type(record.get("prompt")) is dict and oasst.is_tree(record):
         if record["prompt"].get("missing_root") is True:
             yield TrainingExample(meta={"source": "chat:oasst"}, issues=["missing_root"])
             return
