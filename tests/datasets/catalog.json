@@ -599,6 +599,136 @@
   }
  },
  {
+  "id": "OpenAssistant/oasst2",
+  "kind": "sft",
+  "shape": "one message per row (`message_id` / `parent_id` / `rank`), read as trees along the best-ranked reply",
+  "lang": "multi",
+  "config": null,
+  "split": "train",
+  "format": "messages",
+  "record": {
+   "message_id": "a",
+   "parent_id": null,
+   "user_id": "ua",
+   "created_date": "2023-02-05T22:44:05+00:00",
+   "text": "¿Qué debo aprender para hacer videojuegos?",
+   "role": "prompter",
+   "lang": "es",
+   "review_count": 3,
+   "review_result": true,
+   "deleted": false,
+   "rank": null,
+   "synthetic": false,
+   "model_name": null,
+   "message_tree_id": "t-002c",
+   "tree_state": "ready_for_export"
+  },
+  "records": [
+   {
+    "message_id": "a",
+    "parent_id": null,
+    "user_id": "ua",
+    "created_date": "2023-02-05T22:44:05+00:00",
+    "text": "¿Qué debo aprender para hacer videojuegos?",
+    "role": "prompter",
+    "lang": "es",
+    "review_count": 3,
+    "review_result": true,
+    "deleted": false,
+    "rank": null,
+    "synthetic": false,
+    "model_name": null,
+    "message_tree_id": "t-002c",
+    "tree_state": "ready_for_export"
+   },
+   {
+    "message_id": "b",
+    "parent_id": "a",
+    "user_id": "ub",
+    "created_date": "2023-02-05T22:44:05+00:00",
+    "text": "Aprende C# y Unity.",
+    "role": "assistant",
+    "lang": "es",
+    "review_count": 3,
+    "review_result": true,
+    "deleted": false,
+    "rank": 1,
+    "synthetic": false,
+    "model_name": null,
+    "message_tree_id": "t-002c",
+    "tree_state": "ready_for_export"
+   },
+   {
+    "message_id": "c",
+    "parent_id": "a",
+    "user_id": "uc",
+    "created_date": "2023-02-05T22:44:05+00:00",
+    "text": "Un lenguaje, un motor y matemáticas básicas.",
+    "role": "assistant",
+    "lang": "es",
+    "review_count": 3,
+    "review_result": true,
+    "deleted": false,
+    "rank": 0,
+    "synthetic": false,
+    "model_name": null,
+    "message_tree_id": "t-002c",
+    "tree_state": "ready_for_export"
+   },
+   {
+    "message_id": "d",
+    "parent_id": "c",
+    "user_id": "ud",
+    "created_date": "2023-02-05T22:44:05+00:00",
+    "text": "¿Qué motor recomiendas?",
+    "role": "prompter",
+    "lang": "es",
+    "review_count": 3,
+    "review_result": true,
+    "deleted": false,
+    "rank": null,
+    "synthetic": false,
+    "model_name": null,
+    "message_tree_id": "t-002c",
+    "tree_state": "ready_for_export"
+   },
+   {
+    "message_id": "e",
+    "parent_id": "d",
+    "user_id": "ue",
+    "created_date": "2023-02-05T22:44:05+00:00",
+    "text": "Godot es gratuito y sencillo.",
+    "role": "assistant",
+    "lang": "es",
+    "review_count": 3,
+    "review_result": true,
+    "deleted": false,
+    "rank": 0,
+    "synthetic": false,
+    "model_name": null,
+    "message_tree_id": "t-002c",
+    "tree_state": "ready_for_export"
+   },
+   {
+    "message_id": "f",
+    "parent_id": "a",
+    "user_id": "uf",
+    "created_date": "2023-02-05T22:44:05+00:00",
+    "text": "spam",
+    "role": "assistant",
+    "lang": "es",
+    "review_count": 3,
+    "review_result": false,
+    "deleted": true,
+    "rank": null,
+    "synthetic": false,
+    "model_name": null,
+    "message_tree_id": "t-002c",
+    "tree_state": "ready_for_export"
+   }
+  ]
+ },
+ {
   "id": "open-thoughts/OpenThoughts3-1.2M",
   "kind": "reasoning",
   "shape": "ShareGPT, inline `<think>`",
@@ -958,7 +1088,7 @@
  {
   "id": "younissk/tool-calling-mix",
   "kind": "tools",
-  "shape": "`messages_json` / `tools_json` / `target_json` strings (no-call and ToolBench ReAct rows drop)",
+  "shape": "`messages_json` / `tools_json` / `target_json` strings, ToolBench ReAct turns",
   "config": null,
   "split": "train",
   "format": "messages",
@@ -971,8 +1101,8 @@
    "difficulty": "simple",
    "valid": true
   },
-  "min_ok": 0.55,
-  "note": "about 19% of rows have no call and no answer; about 22% are ToolBench trajectories with ReAct text calls"
+  "min_ok": 0.8,
+  "note": "about 15% of rows have no call and no answer"
  },
  {
   "id": "ZeroAgency/gemma3-pythonic-function-tool-calling-v1",
@@ -985,6 +1115,37 @@
   "record": {
    "conversation": "<bos><start_of_turn>system\nYou are a helpful assistant.\n\nTools (functions) are available. If you decide to invoke one or more of the tools, you must respond with a python list of the function calls.\n[{\"name\": \"get_weather\", \"description\": \"Weather for a city\", \"parameters\": {\"type\": \"object\", \"properties\": {\"city\": {\"type\": \"string\"}}}}]<end_of_turn>\n<start_of_turn>user\nWhat is the weather in Paris?<end_of_turn>\n<start_of_turn>model\n[get_weather(city='Paris')]<end_of_turn>\n<start_of_turn>user\nThanks!<end_of_turn>\n<start_of_turn>model\nYou're welcome.<end_of_turn>\n",
    "source": "Vikhrmodels/tool-plannings-v0.2:full_dataset"
+  }
+ },
+ {
+  "id": "smolagents/toolcalling",
+  "kind": "tools",
+  "shape": "answer turns only (question in `original_question`), `<tool_call>` Python dicts",
+  "config": null,
+  "split": "train",
+  "format": "messages",
+  "record": {
+   "model_id": "deepseek-ai/DeepSeek-V3-0324",
+   "source": "Frames",
+   "original_question": "In which year did the Belgian Congo become independent?",
+   "messages": [
+    {
+     "content": "<tool_call>{'name': 'web_search', 'arguments': {'query': 'Belgian Congo independence year'}}</tool_call>",
+     "role": "assistant"
+    },
+    {
+     "content": "Observation:\n## Search Results\n0. The Congo became independent on 30 June 1960.",
+     "role": "tool"
+    },
+    {
+     "content": "<tool_call>{'name': 'final_answer', 'arguments': {'answer': '1960'}}</tool_call>",
+     "role": "assistant"
+    }
+   ],
+   "true_answer": "1960",
+   "prediction": "1960",
+   "is_correct": true,
+   "is_thinking": false
   }
  },
  {
@@ -1402,6 +1563,110 @@
    "chosen_response_ko": "4입니다.",
    "rejected_response": "5",
    "rejected_response_ko": "5입니다."
+  }
+ },
+ {
+  "id": "openbmb/UltraFeedback",
+  "kind": "preference",
+  "shape": "`instruction` + scored `completions` (best vs worst `fine-grained_score`)",
+  "config": null,
+  "split": "train",
+  "format": "preference",
+  "record": {
+   "source": "truthful_qa",
+   "instruction": "What are contrails made of?",
+   "models": [
+    "llama-2-13b-chat",
+    "llama-2-7b-chat",
+    "ultralm-65b"
+   ],
+   "completions": [
+    {
+     "annotations": {
+      "helpfulness": {
+       "Rating": "4",
+       "Rationale": "Clear."
+      }
+     },
+     "critique": "Good.",
+     "custom_system_prompt": "Be truthful.",
+     "fine-grained_score": 4.5,
+     "model": "llama-2-13b-chat",
+     "overall_score": 7.5,
+     "principle": "truthfulness",
+     "response": "Water vapour that freezes into ice crystals."
+    },
+    {
+     "annotations": {
+      "helpfulness": {
+       "Rating": "2",
+       "Rationale": "Confused."
+      }
+     },
+     "critique": "Wrong.",
+     "custom_system_prompt": "Be truthful.",
+     "fine-grained_score": 2.25,
+     "model": "llama-2-7b-chat",
+     "overall_score": 6.0,
+     "principle": "truthfulness",
+     "response": "Aircraft cannot leave trails."
+    },
+    {
+     "annotations": {
+      "helpfulness": {
+       "Rating": "5",
+       "Rationale": "Complete."
+      }
+     },
+     "critique": "Great.",
+     "custom_system_prompt": "Be honest.",
+     "fine-grained_score": 4.75,
+     "model": "ultralm-65b",
+     "overall_score": 9.0,
+     "principle": "honesty",
+     "response": "Ice crystals, water vapour and some soot."
+    }
+   ],
+   "correct_answers": [
+    "Water vapour"
+   ],
+   "incorrect_answers": [
+    "Chemicals"
+   ]
+  }
+ },
+ {
+  "id": "berkeley-nest/Nectar",
+  "kind": "preference",
+  "shape": "HH `prompt` + ranked `answers` (rank 1 vs the last)",
+  "config": null,
+  "split": "train",
+  "format": "preference",
+  "record": {
+   "prompt": "\n\nHuman: What is the capital of France?\n\nAssistant: ",
+   "answers": [
+    {
+     "answer": "Paris.",
+     "model": "gpt-4",
+     "rank": 1.0
+    },
+    {
+     "answer": "It is Paris, on the Seine.",
+     "model": "gpt-3.5-turbo",
+     "rank": 2.0
+    },
+    {
+     "answer": "Lyon.",
+     "model": "llama-2-7b-chat",
+     "rank": 3.0
+    }
+   ],
+   "turns": 1,
+   "num_responses": 3,
+   "source": [
+    "sharegpt"
+   ],
+   "good_natured": true
   }
  }
 ]

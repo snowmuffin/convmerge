@@ -158,6 +158,7 @@ convmerge convert -i raw/HuggingFaceH4_ultrafeedback_binarized.jsonl -o dpo.json
 | [CohereLabs/aya_dataset](https://huggingface.co/datasets/CohereLabs/aya_dataset) | SFT | multi | inputs / targets | `--from auto --format messages` |
 | [CertifiedJoon/Korean-Instruction](https://huggingface.co/datasets/CertifiedJoon/Korean-Instruction) | SFT | ko | Instruction / Response (capitalised) | `--from auto --format messages` |
 | [heegyu/open-korean-instructions-v20231020](https://huggingface.co/datasets/heegyu/open-korean-instructions-v20231020) | SFT | ko | ShareGPT, `input` turn = system prompt | `--from auto --format messages` |
+| [OpenAssistant/oasst2](https://huggingface.co/datasets/OpenAssistant/oasst2) | SFT | multi | one message per row (`message_id` / `parent_id` / `rank`), read as trees along the best-ranked reply | `--from auto --format messages` |
 | [open-r1/OpenR1-Math-220k](https://huggingface.co/datasets/open-r1/OpenR1-Math-220k) | Reasoning | en | messages, inline `<think>` | `--from auto --format messages` |
 | [open-thoughts/OpenThoughts3-1.2M](https://huggingface.co/datasets/open-thoughts/OpenThoughts3-1.2M) | Reasoning | en | ShareGPT, inline `<think>` | `--from auto --format messages` |
 | [simplescaling/s1K-1.1](https://huggingface.co/datasets/simplescaling/s1K-1.1) | Reasoning | en | question / trace / attempt columns | `--from auto --format messages --adapter-kwargs '{"chat":{"output_keys":["deepseek_attempt"],"record_reasoning_keys":["deepseek_thinking_trajectory"]}}'` |
@@ -171,8 +172,9 @@ convmerge convert -i raw/HuggingFaceH4_ultrafeedback_binarized.jsonl -o dpo.json
 | [llamafactory/glaive_toolcall_en](https://huggingface.co/datasets/llamafactory/glaive_toolcall_en) | Tool calling | en | LLaMA-Factory function_call | `--from auto --format messages` |
 | [Team-ACE/ToolACE](https://huggingface.co/datasets/Team-ACE/ToolACE) | Tool calling | en | [Func(k=v)] calls, functions in the system prompt | `--from auto --format messages` |
 | [Locutusque/function-calling-chatml](https://huggingface.co/datasets/Locutusque/function-calling-chatml) | Tool calling | en | function-call / function-response turns | `--from auto --format messages` |
-| [younissk/tool-calling-mix](https://huggingface.co/datasets/younissk/tool-calling-mix) | Tool calling | en | `messages_json` / `tools_json` / `target_json` strings (no-call and ToolBench ReAct rows drop) | `--from auto --format messages` |
+| [younissk/tool-calling-mix](https://huggingface.co/datasets/younissk/tool-calling-mix) | Tool calling | en | `messages_json` / `tools_json` / `target_json` strings, ToolBench ReAct turns | `--from auto --format messages` |
 | [ZeroAgency/gemma3-pythonic-function-tool-calling-v1](https://huggingface.co/datasets/ZeroAgency/gemma3-pythonic-function-tool-calling-v1) | Tool calling | en, ru | Gemma-rendered `conversation`, Python-style calls | `--from auto --format messages` |
+| [smolagents/toolcalling](https://huggingface.co/datasets/smolagents/toolcalling) | Tool calling | en | answer turns only (question in `original_question`), `<tool_call>` Python dicts | `--from auto --format messages` |
 | [HuggingFaceH4/ultrafeedback_binarized](https://huggingface.co/datasets/HuggingFaceH4/ultrafeedback_binarized) | Preference | en | prompt + chosen/rejected lists | `--from auto --format preference` |
 | [trl-lib/ultrafeedback_binarized](https://huggingface.co/datasets/trl-lib/ultrafeedback_binarized) | Preference | en | chosen/rejected lists | `--from auto --format preference` |
 | [Anthropic/hh-rlhf](https://huggingface.co/datasets/Anthropic/hh-rlhf) | Preference | en | Human:/Assistant: transcripts | `--from auto --format preference` |
@@ -188,6 +190,8 @@ convmerge convert -i raw/HuggingFaceH4_ultrafeedback_binarized.jsonl -o dpo.json
 | [argilla/distilabel-math-preference-dpo](https://huggingface.co/datasets/argilla/distilabel-math-preference-dpo) | Preference | en | instruction + chosen_response / rejected_response | `--from auto --format preference` |
 | [shibing624/DPO-En-Zh-20k-Preference](https://huggingface.co/datasets/shibing624/DPO-En-Zh-20k-Preference) | Preference | en, zh | history pairs + question + response_chosen / response_rejected | `--from auto --format preference` |
 | [ChuGyouk/argilla-distilabel-math-preference-dpo-korean](https://huggingface.co/datasets/ChuGyouk/argilla-distilabel-math-preference-dpo-korean) | Preference | ko | English + `_ko` columns, chosen_response / rejected_response | `--from map --format preference --adapter-kwargs '{"map":{"user":"instruction_ko","chosen":"chosen_response_ko","rejected":"rejected_response_ko"}}'` |
+| [openbmb/UltraFeedback](https://huggingface.co/datasets/openbmb/UltraFeedback) | Preference | en | `instruction` + scored `completions` (best vs worst `fine-grained_score`) | `--from auto --format preference` |
+| [berkeley-nest/Nectar](https://huggingface.co/datasets/berkeley-nest/Nectar) | Preference | en | HH `prompt` + ranked `answers` (rank 1 vs the last) | `--from auto --format preference` |
 <!-- datasets:end -->
 
 A preference dataset can also feed SFT: `--format messages --preference chosen`
