@@ -466,6 +466,13 @@ To keep the package lean and dependency-free at its core, `convmerge` does
   gave them; fetching and preprocessing the files is the trainer's job.
 - **Scraping HTML pages or running browser automation.** Structured JSON /
   JSONL / Parquet inputs only.
+- **Removing personal information (PII).** convmerge does not detect or mask
+  names, emails, phone numbers, or IDs. Rules that rewrite training text are
+  easy to get wrong without notice (version numbers taken for IP addresses,
+  long numbers for card numbers) and still miss names and addresses, so use
+  a dedicated tool such as [Presidio](https://github.com/microsoft/presidio)
+  before converting. `convmerge filter` with your own `patterns` can find or
+  drop rows that match a pattern you choose.
 
 If any of these are important to your workflow, wire `convmerge` in as one
 step of a larger pipeline rather than expecting it to grow into those areas.
