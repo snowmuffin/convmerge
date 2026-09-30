@@ -36,6 +36,7 @@ _CONVERT_KEYS = {
     "reasoning",
     "tool_content",
     "train_turns",
+    "media",
     "system",
     "merge_consecutive",
     "split_turns",
@@ -362,7 +363,7 @@ def _convert(raw: Any, base: Path, where: str) -> ConvertSpec:
     emit: dict[str, Any] = {}
     for key in (
         "tool_arguments", "meta_key", "alpaca_multiturn", "reasoning", "tool_content",
-        "train_turns",
+        "train_turns", "media",
     ):  # fmt: skip
         if key in spec:
             emit[key] = _str(spec[key], f"{where}.{key}")

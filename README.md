@@ -273,7 +273,9 @@ Output formats: `messages`, `alpaca`, `preference` (DPO pairs), `sharegpt` and
 > `function_call` / `observation` turns, Hermes `<tool_call>` tags, Glaive and
 > xLAM layouts all come out as standard `tool_calls` / `tools`, and image /
 > audio / video references (`image_url` parts, `images` columns with `<image>`
-> tokens) are preserved in the `messages` output. Media is kept by reference only — convmerge never
+> tokens) are preserved in the `messages` output (`--media placeholders` writes
+> TRL's vision-language layout: `{"type": "image"}` parts plus an `images`
+> column). Media is kept by reference only — convmerge never
 > downloads or decodes it. `--from sharegpt` keeps whole conversations since
 > 0.6.0 (`turn_mode: pairs` restores the old split). See
 > [docs/format.md](docs/format.md#sharegpt).
