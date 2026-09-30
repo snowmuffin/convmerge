@@ -24,8 +24,9 @@ Rows that score several candidate answers become a pair of the best and the
 worst one (:func:`ranked_as_preference`):
 
 - UltraFeedback: ``instruction`` plus ``completions[]`` with a ``response``
-  and ``fine-grained_score`` (the mean of the four aspect ratings; the
-  ``overall_score`` critique rating is used only when that is missing).
+  and ``fine-grained_score`` (the mean of the four aspect ratings, which
+  Argilla's cleaned binarization ranks by; the ``overall_score`` critique
+  rating is used only when that is missing).
 - Nectar: an HH ``prompt`` transcript plus ``answers[]`` with an ``answer``
   and a ``rank`` (1 is best).
 

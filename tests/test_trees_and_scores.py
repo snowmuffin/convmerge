@@ -322,3 +322,14 @@ def test_answer_turns_with_the_question_in_a_column() -> None:
     assert [m["role"] for m in row["messages"]] == ["user", "assistant", "tool", "assistant"]
     assert row["messages"][0]["content"] == "Which year?"
     assert row["messages"][1]["tool_calls"][0]["function"]["arguments"] == '{"query": "year"}'
+
+
+def test_odd_message_rows_are_not_trees() -> None:
+    rows = [
+        {"message_id": {"x": 1}, "parent_id": None, "message_tree_id": "t", "role": "prompter"},
+        {"message_id": "a", "parent_id": None, "message_tree_id": "t", "role": {"r": 1}},
+        {"message_tree_id": "t", "prompt": {"role": ["x"], "text": "hi", "replies": []}},
+    ]
+    stats = ConvertStats()
+    assert list(convert_records(rows, stats=stats)) == []
+    assert stats.grouped == 0

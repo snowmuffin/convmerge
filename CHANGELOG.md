@@ -7,6 +7,70 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-09-30
+
+Datasets that keep their conversations as trees or their preferences as
+scores convert with `--from auto`, and `mix` can weigh sources by text
+instead of rows. On the 29 unseen Hub datasets of the evaluation set, 25 now
+convert with no options (1.2: 20 of 25 loadable; the evaluation harness now
+also reads the 4 that `datasets` could not load). The catalog grows from 61
+to 65 datasets, each checked on 1,000 real rows. All additive; see "Changed
+output" for the rows that convert differently.
+
+### Added
+
+- OpenAssistant message trees (oasst1, oasst2), in both layouts: one tree
+  per row (`*.trees.jsonl`) and one message per row (`*.messages.jsonl`, the
+  Hub's parquet splits). SFT formats follow the best-ranked reply at every
+  step; `--format preference` pairs the best- and worst-ranked answers.
+  Message rows of one tree are read together (`ConvertStats.grouped` counts
+  them; a tree cut at the start of a file drops as `missing_root`), and
+  `--workers` falls back to one process for such files.
+- Preference pairs from scored answers: UltraFeedback `completions` (by
+  `fine-grained_score`, the mean of the aspect ratings) and Nectar `answers`
+  (by `rank`) become the best against the worst answer; all-equal scores drop
+  as `no_preference`. `--from map` does the same for any layout with
+  `candidates` / `candidate` / `score` / `better`.
+- ToolBench ReAct turns (`Thought:` / `Action:` / `Action Input:`) become
+  tool calls when a tool turn answers them; Hermes `<tool_call>` blocks
+  written as Python dicts are read as literals (`smolagents/toolcalling`).
+- Turns without a user turn take the question from a `prompt` / `question`
+  / `original_question` / `instruction` / `query` column.
+- `--train-turns data` (`EmitOptions.train_turns="data"`) writes the flag a
+  dataset gives each assistant turn: a `train`, `loss`, or `weight` key on
+  the turn, or Nemotron's `metadata.train_turns` list
+  (`ChatMessage.train`); `axolotl-config` adds `message_field_training`.
+- `mix --by chars|tokens` (`mix_files(by=, tokenizer=)`, mix config and
+  recipe keys `by` / `tokenizer`): `--total` rows are split so each source's
+  share of the characters or tokens is its weight. `mix` prints each source's
+  share and the share of rows with a reasoning trace; `SourceStats` gains
+  `units`, `mean_units`, and `reasoning`, `MixResult` gains `by`, and the
+  `.mix.json` sidecar records them.
+- `normalize` reads `.csv` and `.tsv` files given as input (one object per
+  row, keyed by the header). Directory walks still read only parquet / JSON
+  / JSONL.
+- Catalog: `OpenAssistant/oasst2`, `openbmb/UltraFeedback`,
+  `berkeley-nest/Nectar`, `smolagents/toolcalling`. Entries may give several
+  rows (`records`) for layouts that span rows.
+
+### Changed output
+
+- Rows in the layouts above that were dropped before are now written:
+  OpenAssistant message rows and trees, UltraFeedback and Nectar rows (with
+  `--format preference` or `--preference chosen`), ToolBench trajectories
+  (`younissk/tool-calling-mix` converts 809 of 1,000 sample rows; 1.2: 593),
+  and answer-only turns with a question column (`smolagents/toolcalling`,
+  999 of 1,000).
+- A `tool` turn whose content is a JSON object or list (ToolBench) was
+  dropped from the conversation; it is now kept as JSON text.
+- A Hermes `<tool_call>` block written as a Python dict stayed in the
+  assistant's text; it is now a tool call.
+- `convert --report` and `validate` JSON gain `grouped` (0 unless
+  OpenAssistant message rows were read).
+
+Every other catalog dataset converts exactly as in 1.2 (the pinned outputs
+are unchanged), and `convert` is within 3% of 1.2's speed.
+
 ## [1.2.0] - 2026-09-29
 
 More datasets convert with `--from auto`, and the checks before training

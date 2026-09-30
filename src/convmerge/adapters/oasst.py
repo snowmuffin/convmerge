@@ -24,11 +24,12 @@ from collections.abc import Iterable, Iterator
 from typing import Any
 
 _ROLES = {"prompter": "user", "assistant": "assistant"}
+_ID_TYPES = (str, int)
 
 
 def is_tree(record: dict[str, Any]) -> bool:
     """A ``*.trees.jsonl`` row: the root message under ``prompt``, replies nested."""
-    root = record.get("prompt")
+    root: Any = record.get("prompt")
     return type(root) is dict and "replies" in root and "message_tree_id" in record
 
 
@@ -37,9 +38,10 @@ def is_message(record: Any) -> bool:
     return (
         type(record) is dict
         and "message_tree_id" in record
-        and "parent_id" in record
-        and "message_id" in record
-        and record.get("role") in _ROLES
+        and type(record.get("message_id")) in _ID_TYPES
+        and type(record.get("parent_id", False)) in (*_ID_TYPES, type(None))
+        and type(record.get("role")) is str
+        and record["role"] in _ROLES
     )
 
 
@@ -113,7 +115,8 @@ def build_tree(rows: list[dict[str, Any]]) -> dict[str, Any]:
 def _usable(node: Any) -> bool:
     return (
         type(node) is dict
-        and node.get("role") in _ROLES
+        and type(node.get("role")) is str
+        and node["role"] in _ROLES
         and isinstance(node.get("text"), str)
         and bool(node["text"].strip())
         and node.get("deleted") is not True
@@ -145,10 +148,10 @@ def best_path(record: dict[str, Any]) -> list[dict[str, str]]:
     A trailing prompter turn with no usable reply is left out, so the path
     ends on an answer when there is one.
     """
-    root = record.get("prompt")
+    root: Any = record.get("prompt")
     if not _usable(root):
         return []
-    path = [root]
+    path: list[dict[str, Any]] = [root]
     while True:
         replies = _replies(path[-1])
         if not replies:
@@ -164,10 +167,10 @@ def ranked_pair(record: dict[str, Any]) -> tuple[list[dict[str, str]], list[dict
     where at least two assistant replies carry different ranks: the
     best-ranked reply against the worst-ranked one. ``None`` if no step has two.
     """
-    root = record.get("prompt")
+    root: Any = record.get("prompt")
     if not _usable(root):
         return None
-    path = [root]
+    path: list[dict[str, Any]] = [root]
     found = None
     while True:
         replies = _replies(path[-1])

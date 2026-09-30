@@ -27,6 +27,9 @@ convmerge tokens -i train.jsonl --tokenizer <model> --max-tokens <trainer max le
 | LLaMA-Factory `KeyError` / `Unsupported cast from struct to utf8` | — | Register the file with `convmerge llamafactory-info` instead of writing `dataset_info.json` by hand |
 | `ArrowInvalid: ... changed from string to object` when loading the file with `datasets` | `convmerge validate` reports `type_conflicts` | `--tool-arguments string` for tool-call arguments; keep text-only and multimodal rows in separate files |
 | Only the last answer of each conversation should be trained (Nemotron chat) | — | `--train-turns last` with axolotl (`message_field_training: train`); `mask_history: true` with LLaMA-Factory |
+| The dataset marks which turns to train (`train` / `loss` / `weight` per turn, `metadata.train_turns`) but every turn is trained | — | `--train-turns data` with axolotl |
+| OpenAssistant rows convert to nothing, or `missing_root` drops | `convert` prints "read OpenAssistant message rows as trees" | Keep each tree's rows together and in file order (as the Hub files are); a file cut mid-tree loses that tree |
+| A mix by rows is dominated by one source's long answers | `mix` prints each source's `chars=` / `tokens=` share with `--by` | `mix --by chars -n N` or `--by tokens --tokenizer NAME` |
 | LLaMA-Factory drops or misreads rows with two user turns in a row | `convert` drop reason `unrepresentable_role_order` | `--merge-consecutive`, `--system fold` |
 | A reasoning dataset converts with no traces | `convert` prints no "carry a reasoning trace" line | Name the key: `--adapter-kwargs '{"chat": {"reasoning_keys": [...]}}'` (turn key) or `record_reasoning_keys` (column) |
 

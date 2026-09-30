@@ -196,6 +196,15 @@ labels. TRL's `assistant_only_loss` ignores the flag (it trains every
 assistant turn). Other formats reject the option; for LLaMA-Factory set
 `mask_history: true` in the training config instead.
 
+Datasets that mark the turns to train on themselves keep their marks with
+`--train-turns data`: every assistant turn gets `"train"` from the turn's own
+`train` (axolotl), `loss` (a boolean mask), or `weight` (0 / 1, axolotl
+ShareGPT) key, or from a row-level list with one flag per turn
+(`metadata.train_turns`, Nemotron chat); a turn the dataset says nothing
+about is trained (`true`). The flags follow the turns through the fixes
+below (merged turns train when either did). Without the option the flags
+are not written, as before.
+
 ### Provenance (`--keep-meta`)
 
 `--keep-meta` adds the example's provenance under `meta` (`--meta-key` to
@@ -320,6 +329,11 @@ Tries, in order:
    - A user turn that is `null` while the conversation starts with an answer
      marks the example `withheld_prompt` (Nemotron chat leaves prompts from
      other datasets out that way); `--leading-assistant drop` keeps the rest.
+   - Turns with no user turn at all take the question from a `prompt`,
+     `question`, `original_question`, `instruction`, or `query` column
+     (`smolagents/toolcalling`).
+   - A `tool` turn whose content is a JSON object or list (ToolBench) keeps
+     it as JSON text.
    - OpenAI-style content arrays are kept as content parts (text, and media by
      reference: `image_url`, `{"type": "image"}` placeholders, audio, video);
      text-only arrays collapse to a string. `tool_calls` (and the legacy
@@ -329,7 +343,8 @@ Tries, in order:
    - Hermes-style tool calling is decoded ([below](#tool-calling-encodings)).
 3. Tool-calling records in other layouts: Glaive `system` + `chat`
    transcripts and xLAM `query` / `answers` / `tools`
-   ([below](#tool-calling-encodings)).
+   ([below](#tool-calling-encodings)); OpenAssistant message trees
+   ([below](#openassistant-message-trees)).
 4. A `text` column rendered with a known chat template is split back into
    turns ([below](#template-rendered-text)). Any other `text` → emitted as a
    single assistant message (and then dropped as `no_user`) — **but only when the
@@ -406,6 +421,8 @@ top-level `tools` list — whatever the source used:
 | `function-call` / `function-response` turns | `Locutusque/function-calling-chatml` | Glaive-style `{"name": ..., "arguments": '...'}` becomes a call; the function JSON in the system turn moves to `tools` |
 | `AI to=name: {...}` as the last line of an assistant turn | `glaiveai/glaive-function-calling-v2`, `Locutusque/function-calling-chatml` (some rows) | the line becomes a call (the text before it stays); the next tool turns get the function name |
 | `messages_json` + `tools_json` + `target_json` (`{"tool_calls": [...]}`) | `younissk/tool-calling-mix` | the target becomes the assistant turn with its calls |
+| ToolBench ReAct text: `Thought: ...` / `Action: name` / `Action Input: {...}` | `younissk/tool-calling-mix` (ToolBench rows) | a call when a `tool` turn answers it or the action is `Finish`; the thought stays as content, the tool turns get the name |
+| Hermes `<tool_call>` blocks written as Python dicts (`{'name': ..., 'arguments': {...}}`) | `smolagents/toolcalling` | read as literals, never evaluated |
 
 Hermes tags are decoded only in conversations that have a `tools` column, a
 `tool` turn, or a `<tools>` block in the system prompt, so ordinary text that
@@ -438,6 +455,30 @@ A trailing user turn without an answer is dropped (Guanaco often ends with
 one). Records that also have Alpaca `instruction` / `output` keys use those
 instead.
 
+### OpenAssistant message trees
+
+OpenAssistant (oasst1, oasst2) publishes conversations as trees: a prompt,
+several ranked answers, follow-ups under each answer. Both layouts convert
+with `--from auto`:
+
+- `*.trees.jsonl`: one tree per row (`message_tree_id` and the root message
+  under `prompt`, replies nested in `replies`).
+- `*.messages.jsonl` and the Hub's parquet splits (what `convmerge fetch hf
+  OpenAssistant/oasst2` downloads): one message per row with `message_id`,
+  `parent_id`, `message_tree_id`, `role` (`prompter` / `assistant`), `text`,
+  and `rank`. Consecutive rows of one tree (the files keep them together)
+  are read as one tree; `convert` reports how many rows it joined this way
+  (`ConvertStats.grouped`), and `--workers` falls back to one process for
+  such files. A tree whose first rows are missing (a file that starts
+  mid-tree) is dropped as `missing_root`.
+
+SFT formats get the conversation along the best-ranked reply at every step
+(`rank` 0, as in OpenAssistant's own top-1 exports), skipping deleted replies
+and replies that failed review; a trailing prompt without an answer is left
+out. `--format preference` pairs the best- and worst-ranked answers at the
+deepest step of that path with two ranked answers; a tree without one is not
+a pair.
+
 ### Field mapping (`--from map`)
 
 For records no adapter above recognizes, such as AI Hub exports, in-house
@@ -462,6 +503,8 @@ convmerge convert -i aihub.jsonl -o out.jsonl --from map -f messages --adapter-k
 | `chosen`, `rejected` | Instead of `assistant`: a preference pair (`--format preference`, or `--preference chosen` for SFT). With `turns`, the pair answers the last turn. |
 | `responses`, `preferred` | Instead of `chosen` / `rejected`, when a label says which answer won: two answer paths and the path to the label. The label is the winner's index (0 or 1) unless `preferred_values` says otherwise. |
 | `preferred_values` | Label value (as written in JSON: `"1"`, `"-2"`, `"true"`) → index of the winning answer. A value not listed (a tie) drops the row as `no_preference`. |
+| `candidates`, `candidate`, `score` | Instead of the above, when several answers carry a score: the path to the list, and the paths to the answer and its score inside each item. The best-scored answer is chosen, the worst rejected; fewer than two scored answers, or all scores equal, drops the row as `no_preference`. |
+| `better` | `higher` (default) or `lower` (ranks): which scores win. |
 | `turns` | Path to the list of turns (turns mode). |
 | `role`, `content`, `name` | Paths inside each turn (defaults `role`, `content`). |
 | `role_map` | Extra role names: `{label: user \| assistant \| system \| tool}`. `human` / `gpt` / `bot` / `model` are known already. |
@@ -484,6 +527,11 @@ Preference data where a label picks the winner:
 --from map -f preference --adapter-kwargs '{"map": {"turns": "context",
   "responses": ["response1", "response2"], "preferred": "overall_preference",
   "preferred_values": {"-3": 0, "-2": 0, "-1": 0, "1": 1, "2": 1, "3": 1}}}'
+
+# UltraFeedback, ranked by the helpfulness rating alone
+--from map -f preference --adapter-kwargs '{"map": {"user": "instruction",
+  "candidates": "completions", "candidate": "response",
+  "score": "annotations.helpfulness.Rating"}}'
 ```
 
 Path syntax: `a.b` (keys), `a[0]` / `a[-1]` (one item), `a[]` (every
@@ -512,6 +560,17 @@ adapter and these shapes:
 | TRL prompt + continuation | `prompt` (string or messages) + `chosen: [assistant ...]` | prompt followed by the continuation |
 | Orca DPO pairs | `system` + `question` + `chosen: "..."` | chosen used as the answer |
 | Chatbot Arena (`--format preference` only) | `conversation_a` / `conversation_b` + `winner` | the winner is chosen, the other side rejected; ties are skipped |
+| UltraFeedback (raw) | `instruction` + `completions[]` with `response` and `fine-grained_score` | the best-scored completion is chosen, the worst rejected (`overall_score` when `fine-grained_score` is missing); all scores equal → `no_preference` |
+| Nectar | HH `prompt` + `answers[]` with `answer` and `rank` | rank 1 is chosen, the last rank rejected |
+| OpenAssistant trees | see [above](#openassistant-message-trees) | the best- and worst-ranked answers at the deepest ranked step |
+
+UltraFeedback's `fine-grained_score` is the mean of its four aspect ratings,
+what `argilla/ultrafeedback-binarized-preferences-cleaned` ranks by; Argilla
+found that the critique `overall_score`, which
+`HuggingFaceH4/ultrafeedback_binarized` ranks by, mislabels a few hundred
+completions. Both of those take a random other answer as rejected; convmerge
+takes the worst, so the pair is the same on every run. To pair by a
+different score, map it with `candidates` / `score` ([above](#field-mapping---from-map)).
 
 ## Validation
 
@@ -579,6 +638,12 @@ cleanup step:
 
 - `normalize_to_jsonl(src, dst)` — rewrites parquet, JSON arrays, concatenated
   single-line JSON, or already-valid JSONL into clean newline-delimited JSONL.
+- `convmerge normalize -i table.csv -o out.jsonl` (or `.tsv`) — one object per
+  row keyed by the header row: quoted cells may span lines, a byte order mark
+  is ignored, empty rows are skipped, and empty or repeated header cells get
+  unique names (`column_3`, `output_2`). Values stay strings. Tables are read
+  when named directly (also as a recipe source `path`); directory walks
+  keep to parquet / JSON / JSONL, so a stray metadata CSV is not converted.
   Parquet requires the `parquet` extra. Records that are themselves arrays —
   e.g. JSONL with one conversation per line stored as a list of turns — are
   wrapped as `{"conversation": [...]}` (`--array-key` / `array_key=` to
