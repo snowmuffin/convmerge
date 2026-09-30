@@ -361,6 +361,9 @@ reasoning trace, so the mix you get is the mix you meant. `--by chars` is
 fast and enough when the sources share a language; `--by tokens` tokenizes
 every row, so on large sources add `--by-sample 5000` to measure 5,000
 random rows per source and scale (an estimate, the same for the same seed).
+A source with too few rows is written whole and the others keep their
+counts, so the mix moves off its weights; `mix` warns when a share ends more
+than 5 points from its weight (`--oversample` repeats the short source).
 
 ### 5. `dedupe` / `filter` / `decontam` / `tokens` / `split` — ready for training
 
