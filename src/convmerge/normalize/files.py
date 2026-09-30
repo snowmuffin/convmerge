@@ -27,16 +27,29 @@ class NormalizeResult:
         return sum(n for _, _, n in self.files)
 
 
-def normalize_file(src: Path, dst: Path, *, array_key: str = "conversation") -> int:
+def normalize_file(
+    src: Path, dst: Path, *, array_key: str = "conversation", sheet: str | None = None
+) -> int:
     """Normalize one ``.parquet`` / ``.json`` / ``.jsonl`` file, or a ``.csv`` /
-    ``.tsv`` table (one object per row, see :mod:`convmerge.normalize.tabular`);
-    return records written. Directory walks (:func:`iter_data_files`) skip
-    tables: pass a table file directly."""
+    ``.tsv`` table or ``.xlsx`` workbook sheet (one object per row, see
+    :mod:`convmerge.normalize.tabular`; ``sheet`` picks the sheet, default the
+    first); return records written. Directory walks (:func:`iter_data_files`)
+    skip tables: pass a table file directly."""
     # Imported lazily so that convert works without the parquet extra.
     from convmerge.normalize.jsonl import normalize_to_jsonl
-    from convmerge.normalize.tabular import TABLE_EXTENSIONS, table_to_jsonl
+    from convmerge.normalize.tabular import (
+        TABLE_EXTENSIONS,
+        XLSX_EXTENSIONS,
+        table_to_jsonl,
+        xlsx_to_jsonl,
+    )
 
-    if src.suffix.lower() in TABLE_EXTENSIONS:
+    suffix = src.suffix.lower()
+    if suffix in XLSX_EXTENSIONS or suffix == ".xls":
+        return xlsx_to_jsonl(src, dst, sheet=sheet)
+    if sheet is not None:
+        raise ValueError(f"{src}: sheet applies to .xlsx workbooks only")
+    if suffix in TABLE_EXTENSIONS:
         return table_to_jsonl(src, dst)
     if src.suffix.lower() == ".parquet":
         from convmerge.normalize.parquet import parquet_to_jsonl
@@ -65,21 +78,25 @@ def normalize_path(
     *,
     array_key: str = "conversation",
     on_file: Callable[[Path, Path, int | None, str | None], None] | None = None,
+    sheet: str | None = None,
 ) -> NormalizeResult:
     """Normalize ``src`` (a file, written to ``dst``) or a directory (mirrored under ``dst``).
 
     In a directory, a file that fails is recorded in ``result.failed`` and the
     walk continues. ``on_file(src, dst, records, error)`` is called per file.
+    ``sheet`` names the sheet of an ``.xlsx`` file given as ``src``.
     """
     result = NormalizeResult()
     if src.is_file():
-        n = normalize_file(src, dst, array_key=array_key)
+        n = normalize_file(src, dst, array_key=array_key, sheet=sheet)
         result.files.append((src, dst, n))
         if on_file:
             on_file(src, dst, n, None)
         return result
     if not src.is_dir():
         raise FileNotFoundError(f"input not found: {src}")
+    if sheet is not None:
+        raise ValueError("sheet applies to one .xlsx file, not a directory")
     for in_path in iter_data_files(src):
         out_path = dst / in_path.relative_to(src).with_suffix(".jsonl")
         try:

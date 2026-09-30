@@ -72,12 +72,14 @@ pip install "convmerge[parquet]"         # Parquet input for ``normalize``
 pip install "convmerge[preset]"          # YAML convert presets (`--preset`, `preset validate`)
 pip install "convmerge[tokens]"          # `tokens`: lengths + chat-template checks (transformers, no PyTorch)
 pip install "convmerge[quality]"         # `dedupe --near`: near-duplicate removal (datasketch)
+pip install "convmerge[xlsx]"            # Excel (.xlsx) input for ``normalize`` (openpyxl)
 ```
 
 | Command / feature | Extra |
 |-------------------|--------|
 | `convert`, `dedupe`, `filter`, `decontam` (local eval files), `turns`, `split`, `llamafactory-info`, `axolotl-config` | *(core)* |
 | `normalize` on `.parquet` | `[parquet]` |
+| `normalize` on `.xlsx` | `[xlsx]` |
 | `fetch` with YAML manifest or GitHub | `[fetch]` |
 | `fetch` with HuggingFace manifest entries | `[fetch-all]` or `[fetch-hf]` |
 | `convert --preset`, `preset` | `[preset]` |
@@ -241,9 +243,10 @@ convmerge normalize -i ./raw -o ./jsonl
 Handles parquet (streamed via `pyarrow`), top-level JSON arrays, concatenated
 single-line JSON (`{...}{...}{...}`), JSONL whose lines are arrays (wrapped as
 `{"conversation": [...]}`), and already-valid JSONL. A directory input is
-walked recursively and mirrored under the output directory. A `.csv` or
-`.tsv` file given as `-i` becomes one object per row, keyed by the header
-(`instruction,input,output` spreadsheets convert with `--from auto` next).
+walked recursively and mirrored under the output directory. A `.csv`,
+`.tsv`, or `.xlsx` file given as `-i` becomes one object per row, keyed by the
+header (`instruction,input,output` spreadsheets convert with `--from auto`
+next; `.xlsx` needs `convmerge[xlsx]`, `--sheet NAME` picks a sheet).
 
 ### 3. `convert` — adapter + emitter pipeline
 

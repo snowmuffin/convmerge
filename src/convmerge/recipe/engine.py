@@ -154,9 +154,10 @@ def _normalize_step(src: SourceSpec, raw: Path, out: Path) -> Step:
     def run(stage: Path) -> dict[str, Any]:
         if raw.is_file():
             stage.mkdir(parents=True)
-            result = normalize_path(raw, stage / raw.with_suffix(".jsonl").name, array_key=key)
+            dst = stage / raw.with_suffix(".jsonl").name
+            result = normalize_path(raw, dst, array_key=key, sheet=src.sheet)
         else:
-            result = normalize_path(raw, stage, array_key=key)
+            result = normalize_path(raw, stage, array_key=key, sheet=src.sheet)
             stage.mkdir(parents=True, exist_ok=True)
         if result.failed:
             detail = "; ".join(f"{p.name}: {e}" for p, e in result.failed[:3])
@@ -164,7 +165,10 @@ def _normalize_step(src: SourceSpec, raw: Path, out: Path) -> Step:
         return {"files": len(result.files), "records": result.records}
 
     key = src.array_key
-    return Step(f"{src.name}.normalize", "normalize", [raw], out, {"array_key": key}, run, src.name)
+    options: dict[str, Any] = {"array_key": key}
+    if src.sheet is not None:  # only then, so recipes written before 1.4 keep their fingerprints
+        options["sheet"] = src.sheet
+    return Step(f"{src.name}.normalize", "normalize", [raw], out, options, run, src.name)
 
 
 def _convert_step(recipe: Recipe, src: SourceSpec, data: Path, out: Path) -> Step:

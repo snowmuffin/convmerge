@@ -85,7 +85,7 @@ and then:
 | Key | Default | Meaning |
 |-----|---------|---------|
 | `license` | the dataset card's | The source's license, recorded in the report. Hugging Face sources without one get the `license` of their dataset card at fetch time. Non-commercial, research-only, `other`, and unknown licenses are warned about (`[license]` lines). |
-| `normalize` | `true` | Normalize before converting; `false` if the data is already clean JSONL; `{array_key: ...}` to rename the wrapper for array records. |
+| `normalize` | `true` | Normalize before converting; `false` if the data is already clean JSONL; `{array_key: ...}` to rename the wrapper for array records; `{sheet: ...}` to read that sheet of an `.xlsx` path (default: the first). |
 | `convert.from` | — | Adapter (`alpaca`, `sharegpt`, `chat`/`auto`, or a plugin). Required unless a preset sets it. |
 | `convert.format` | `messages` | Output format: `messages`, `alpaca`, or `preference` (DPO pairs; mix and dedupe work on them as on any JSONL). |
 | `convert.preset` | — | A [preset](custom_presets.md) file; its contents are part of the step's inputs, so editing it re-runs the step. |
