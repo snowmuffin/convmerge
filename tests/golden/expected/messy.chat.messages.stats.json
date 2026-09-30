@@ -10,6 +10,7 @@
   },
   "dropped": 1,
   "first_invalid_line": 3,
+  "grouped": 0,
   "invalid_json": 1,
   "kept_invalid": 0,
   "lines_read": 8,

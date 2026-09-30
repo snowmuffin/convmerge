@@ -165,6 +165,8 @@ def iter_from_chat_line(
                     yield build_example(turns, record, meta={"source": "chat:text"})
                     return
         if isinstance(convs, list) and convs:
+            if "metadata" in record:
+                convs = _with_turn_flags(convs, record["metadata"])
             msgs = coerce_messages(
                 convs,
                 role_keys=role_keys,
@@ -177,6 +179,12 @@ def iter_from_chat_line(
                 answer = _answer_turn(record, (*output_keys, "target", "target_json"))
                 if answer is not None:
                     msgs.append(answer)
+            if msgs and not any(m.role == "user" for m in msgs):
+                # The answer turns, with the question in its own column (smolagents).
+                question = _first_string(record, _QUESTION_KEYS)
+                if question is not None:
+                    at = next((i for i, m in enumerate(msgs) if m.role != "system"), len(msgs))
+                    msgs.insert(at, ChatMessage("user", question))
             if msgs:
                 example = build_example(msgs, record, meta={"source": "chat"})
                 if _starts_with_answer(msgs) and _null_user_turn(convs, role_keys, content_keys):
@@ -393,6 +401,24 @@ def _has_answer(msgs: list[ChatMessage]) -> bool:
         if m.role == "assistant":
             return True
     return False
+
+
+# Columns holding the question when the turns have no user turn at all.
+_QUESTION_KEYS = ("prompt", "question", "original_question", "instruction", "query")
+
+
+def _with_turn_flags(convs: list[Any], metadata: Any) -> list[Any]:
+    """Turns with ``train`` set from a row-level flag list: Nemotron's
+    ``metadata.train_turns``, one bool per turn (only when the lengths match)."""
+    flags = metadata.get("train_turns") if isinstance(metadata, dict) else None
+    if not isinstance(flags, list) or len(flags) != len(convs):
+        return convs
+    if not all(type(f) is bool for f in flags):
+        return convs
+    return [
+        {**t, "train": f} if isinstance(t, dict) and "train" not in t else t
+        for t, f in zip(convs, flags)
+    ]
 
 
 def _json_columns(record: dict[str, Any], keys: tuple[str, ...]) -> dict[str, Any]:

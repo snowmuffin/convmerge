@@ -199,7 +199,8 @@ def _joined(a: ChatMessage, b: ChatMessage) -> ChatMessage:
     else:
         content = (*_parts(a), *_parts(b))
     reasoning = "\n\n".join(r for r in (a.reasoning, b.reasoning) if r) or None
-    return replace(a, content=content, reasoning=reasoning)
+    train = None if a.train is None and b.train is None else bool(a.train or b.train)
+    return replace(a, content=content, reasoning=reasoning, train=train)
 
 
 def _parts(m: ChatMessage) -> tuple[ContentPart, ...]:

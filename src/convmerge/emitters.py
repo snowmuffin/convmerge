@@ -31,7 +31,7 @@ class UnrepresentableExample(ValueError):
 ToolArguments = Literal["string", "object"]
 AlpacaMultiturn = Literal["flatten", "history", "drop"]
 ToolContent = Literal["empty", "null"]
-TrainTurns = Literal["all", "last"]
+TrainTurns = Literal["all", "last", "data"]
 
 
 @dataclass(frozen=True)
@@ -66,7 +66,9 @@ class EmitOptions:
     - ``train_turns``: ``"last"`` writes ``"train": false`` on every assistant
       turn but the last (``messages`` only), for datasets meant to train on
       the final answer alone (axolotl reads the flag with
-      ``message_field_training: train``); ``"all"`` (default) writes no flag.
+      ``message_field_training: train``); ``"data"`` writes the flag the
+      dataset gives each assistant turn (:attr:`ChatMessage.train`, ``true``
+      where it gives none); ``"all"`` (default) writes no flag.
     """
 
     tool_arguments: ToolArguments = "string"
@@ -94,8 +96,10 @@ class EmitOptions:
             )
         if self.tool_content not in ("empty", "null"):
             raise ValueError(f"tool_content must be 'empty' or 'null', got {self.tool_content!r}")
-        if self.train_turns not in ("all", "last"):
-            raise ValueError(f"train_turns must be 'all' or 'last', got {self.train_turns!r}")
+        if self.train_turns not in ("all", "last", "data"):
+            raise ValueError(
+                f"train_turns must be 'all', 'last', or 'data', got {self.train_turns!r}"
+            )
         if not isinstance(self.keep_meta, bool):
             object.__setattr__(self, "keep_meta", tuple(self.keep_meta))
         if self.meta_values is not None:
@@ -129,6 +133,10 @@ def emit_messages(
     row: dict[str, Any] = {"messages": _message_dicts(example.messages, opts)}
     if opts.train_turns == "last":
         _train_last_turn_only(row["messages"])
+    elif opts.train_turns == "data":
+        for m, d in zip(example.messages, row["messages"]):
+            if m.role == "assistant":
+                d["train"] = m.train is not False
     if example.tools:
         row["tools"] = example.tools
     return _with_meta(row, example, options)
