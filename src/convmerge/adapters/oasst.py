@@ -146,7 +146,8 @@ def best_path(record: dict[str, Any]) -> list[dict[str, str]]:
     """The conversation along the best-ranked reply at every step.
 
     A trailing prompter turn with no usable reply is left out, so the path
-    ends on an answer when there is one.
+    ends on an answer when there is one; a tree that is only a prompt keeps
+    it (and is then dropped as ``no_assistant``).
     """
     root: Any = record.get("prompt")
     if not _usable(root):
@@ -157,8 +158,8 @@ def best_path(record: dict[str, Any]) -> list[dict[str, str]]:
         if not replies:
             break
         path.append(_best(replies))
-    if path[-1].get("role") == "prompter":
-        path.pop()
+    if len(path) > 1 and path[-1].get("role") == "prompter":
+        path.pop()  # a prompt with no answer yet (a lone prompt stays: no_assistant)
     return [_turn(n) for n in path]
 
 
