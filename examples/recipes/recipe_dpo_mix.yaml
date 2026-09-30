@@ -1,0 +1,21 @@
+# DPO pairs from three preference layouts: scored completions (UltraFeedback),
+# HH transcripts (hh-rlhf), and a label naming the better answer (PKU-SafeRLHF).
+# Run: convmerge run examples/recipes/recipe_dpo_mix.yaml   (needs convmerge[all])
+version: 1
+output: train/dpo.jsonl                 # {prompt, chosen, rejected}; validation -> train/dpo.val.jsonl
+workdir: build/dpo
+sources:
+  ultrafeedback:                        # best vs worst fine-grained score
+    fetch: { hf: openbmb/UltraFeedback, max_rows: 10000 }
+    convert: { from: auto, format: preference }
+  hh:
+    fetch: { hf: Anthropic/hh-rlhf, max_rows: 10000 }
+    convert: { from: auto, format: preference }
+  pku:                                  # better_response_id picks the chosen answer
+    fetch: { hf: PKU-Alignment/PKU-SafeRLHF, max_rows: 10000 }
+    convert: { from: auto, format: preference }
+mix:
+  weights: { ultrafeedback: 2, hh: 1, pku: 1 }
+dedupe: true
+filter: true                            # drops identical and empty pairs among others
+split: { val: 0.02 }

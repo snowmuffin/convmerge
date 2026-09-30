@@ -55,6 +55,35 @@ convmerge convert -i raw/tatsu-lab_alpaca.jsonl -o train.jsonl --from auto
 A file saved in another encoding (cp949 on Korean Windows, for example) is
 read with `--encoding cp949`; the output is always UTF-8.
 
+## When it helps, and when it doesn't
+
+convmerge is worth adding when **several datasets in different layouts** go into
+one training run. Of the 65 datasets in the [catalog](#tested-datasets), 10 load
+into TRL's `SFTTrainer` / `DPOTrainer` as they are; the other 55 need a
+conversion script of their own (ShareGPT roles, Alpaca columns, message trees,
+tool calls in five encodings, scored or labeled preference pairs). Once there
+are several sources, the steps after conversion come up too: weighting the mix
+by text rather than rows, removing copies across sources, keeping evaluation
+prompts out, and checking each row against the target model's chat template.
+Each of those is one command here, or one recipe for the whole pipeline.
+
+It adds little when:
+
+- **You train on one dataset that is already in `messages` or `{prompt, chosen, rejected}`.**
+  `datasets.load_dataset` plus the trainer is enough.
+- **You need model-based cleaning:** quality classifiers, LLM judges, topic or
+  safety labels. convmerge's `filter` is rule-based only (see
+  [Out of scope](#out-of-scope)).
+- **You process web-scale corpora.** convmerge streams line by line on one
+  machine; for billions of documents use a distributed pipeline such as
+  [datatrove](https://github.com/huggingface/datatrove).
+- **You need personal information removed.** Use a dedicated tool first (see
+  [Out of scope](#out-of-scope)).
+
+Three complete recipes with real datasets are in
+[examples/recipes](examples/recipes): a Korean SFT mix, a DPO mix of three
+preference layouts, and a tool-calling mix checked against a Qwen chat template.
+
 ## Install
 
 ```bash
@@ -456,14 +485,14 @@ To keep the package lean and dependency-free at its core, `convmerge` does
   LLM-as-judge or classifier quality scores, safety classification). These
   are left to upstream tools or private pipelines; `filter` covers the
   deterministic, rule-based checks.
-- **RLHF / DPO / preference-dataset construction** beyond passing through
-  existing pairwise rows via the `chat` adapter's `pairwise_mode`.
+- **Building preference data.** Existing pairs, rankings, scores, and labels
+  are converted to `{prompt, chosen, rejected}`; generating or judging new
+  answers is not.
 - **Training-job orchestration** (SkyPilot, RunPod, Modal, K8s operators).
-- **Prompt templating / chat-template rendering** for specific model
-  families. Output JSONL uses the standard `messages` / `alpaca` shapes;
-  downstream trainers apply their own template.
-- **Tokenizer-aware length filtering, packing, or curriculum scheduling.**
-  Those live in the training stack, not here.
+- **Writing chat-template-rendered text.** Output JSONL uses the standard
+  `messages` / `alpaca` shapes and the trainer applies its own template;
+  `tokens` renders the template only to measure and check rows.
+- **Packing or curriculum scheduling.** Those live in the training stack.
 - **Downloading, decoding, or transforming media.** Images, audio, and video
   are carried through as references (URLs or paths) exactly as the source
   gave them; fetching and preprocessing the files is the trainer's job.
