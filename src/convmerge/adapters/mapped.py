@@ -33,6 +33,16 @@ SHP, HelpSteer3) names both answers and the label::
 ``preferred_values`` maps a label value (as written in JSON: ``"1"``,
 ``"-2"``, ``"true"``) to the index of the winning answer; a value it does not
 list (a tie) yields the ``no_preference`` issue.
+
+Data that scores several candidate answers names the list, the answer and
+score inside each candidate, and whether a higher or a lower score wins; the
+best candidate becomes ``chosen`` and the worst ``rejected``::
+
+    {"user": "instruction", "candidates": "completions", "candidate": "response",
+     "score": "annotations.helpfulness.Rating", "better": "higher"}
+
+Candidates without an answer or a numeric score are skipped; fewer than two,
+or a best and a worst with the same score, yield ``no_preference``.
 """
 
 from __future__ import annotations
@@ -64,7 +74,10 @@ _ROLES: dict[str, str] = {
     "tool": "tool",
 }
 
-_PAIR_KEYS = ("chosen", "rejected", "responses", "preferred", "preferred_values")
+_PAIR_KEYS = (
+    "chosen", "rejected", "responses", "preferred", "preferred_values",
+    "candidates", "candidate", "score", "better",
+)  # fmt: skip
 _FLAT_KEYS = ("system", "user", "assistant", "reasoning", *_PAIR_KEYS, "tools")
 _TURN_KEYS = (
     "turns", "role", "content", "name", "reasoning", "role_map", "system", *_PAIR_KEYS, "tools",
@@ -144,7 +157,9 @@ class MapSpec:
     answers the last turn). ``responses`` (two paths) with ``preferred`` (the
     path to a label) do the same when a label says which answer won; the
     label is the winner's index unless ``preferred_values`` maps label values
-    to indices.
+    to indices. ``candidates`` (a path to a list) with ``candidate`` and
+    ``score`` (paths inside each item) pair the best-scored answer with the
+    worst; ``better`` is ``"higher"`` (default) or ``"lower"`` (ranks).
     """
 
     turns: Path | None = None
@@ -162,6 +177,10 @@ class MapSpec:
     responses: tuple[Path, ...] | None = None
     preferred: Path | None = None
     preferred_values: Mapping[str, int] | None = None
+    candidates: Path | None = None
+    candidate: Path | None = None
+    score: Path | None = None
+    better: str | None = None
 
     @classmethod
     def from_mapping(cls, data: Any) -> MapSpec:
@@ -194,13 +213,17 @@ class MapSpec:
                 "map.preferred_values: expected label values mapped to 0 or 1, "
                 'e.g. {"1": 0, "0": 1}'
             )
-        special = ("role_map", "responses", "preferred_values")
+        better = data.get("better")
+        if better is not None and better not in ("higher", "lower"):
+            raise ValueError('map.better: expected "higher" or "lower"')
+        special = ("role_map", "responses", "preferred_values", "better")
         paths = {k: Path.parse(v) for k, v in data.items() if k not in special}
         spec = cls(
             **paths,
             role_map=dict(role_map) if role_map else None,
             responses=tuple(Path.parse(r) for r in responses) if responses else None,
             preferred_values=dict(values) if values else None,
+            better=better,
         )
         spec._check()
         return spec
@@ -212,9 +235,18 @@ class MapSpec:
             raise ValueError("map: 'responses' and 'preferred' go together")
         if self.preferred_values is not None and self.preferred is None:
             raise ValueError("map: 'preferred_values' needs 'responses' and 'preferred'")
-        if self.chosen is not None and self.responses is not None:
-            raise ValueError("map: give 'chosen'/'rejected' or 'responses'/'preferred', not both")
-        pair = self.chosen is not None or self.responses is not None
+        scored = (self.candidates, self.candidate, self.score)
+        if any(p is not None for p in scored) and any(p is None for p in scored):
+            raise ValueError("map: 'candidates', 'candidate' and 'score' go together")
+        if self.better is not None and self.candidates is None:
+            raise ValueError("map: 'better' needs 'candidates', 'candidate' and 'score'")
+        kinds = [self.chosen is not None, self.responses is not None, self.candidates is not None]
+        if sum(kinds) > 1:
+            raise ValueError(
+                "map: give one of 'chosen'/'rejected', 'responses'/'preferred', or "
+                "'candidates'/'candidate'/'score'"
+            )
+        pair = any(kinds)
         if self.turns is not None:
             flat = [k for k in ("user", "assistant") if getattr(self, k)]
             if flat:
@@ -239,6 +271,8 @@ class MapSpec:
                 out[key] = value.text
             elif isinstance(value, tuple):
                 out[key] = [p.text for p in value]
+            elif isinstance(value, str):
+                out[key] = value
             elif value is not None:
                 out[key] = dict(value)
         return out
@@ -256,7 +290,7 @@ def iter_from_mapped_line(
         if spec.turns is not None:
             msgs = _turns(record, spec)
             rejected = None
-            if spec.chosen is not None or spec.responses is not None:
+            if spec.chosen is not None or spec.responses is not None or spec.candidates is not None:
                 chosen, rejected = _pair(record, spec, reasoning=None)
                 msgs, rejected = _pick(msgs, chosen, rejected, preference)
         else:
@@ -319,7 +353,7 @@ def _flat(
     user = _text(spec.user, record, required=True)
     reasoning = _reasoning(spec.reasoning, record)
     msgs = [*_system(record, spec), ChatMessage("user", user)]
-    if spec.chosen is None and spec.responses is None:
+    if spec.chosen is None and spec.responses is None and spec.candidates is None:
         assert spec.assistant is not None
         answer = _text(spec.assistant, record, required=True)
         return [*msgs, ChatMessage("assistant", answer, reasoning=reasoning)], None
@@ -341,6 +375,9 @@ def _pair(
     record: dict[str, Any], spec: MapSpec, *, reasoning: str | None
 ) -> tuple[ChatMessage, ChatMessage]:
     """The (chosen, rejected) answers, from fixed paths or a label."""
+    if spec.candidates is not None:
+        best, worst = _scored(record, spec)
+        return ChatMessage("assistant", best, reasoning=reasoning), ChatMessage("assistant", worst)
     if spec.chosen is not None:
         assert spec.rejected is not None
         chosen_path, rejected_path = spec.chosen, spec.rejected
@@ -353,6 +390,40 @@ def _pair(
     )
     rejected = ChatMessage("assistant", _text(rejected_path, record, required=True))
     return chosen, rejected
+
+
+def _scored(record: dict[str, Any], spec: MapSpec) -> tuple[Any, Any]:
+    """The best and the worst candidate answers (see the module docstring)."""
+    assert spec.candidates is not None and spec.candidate is not None and spec.score is not None
+    items = spec.candidates.values(record)
+    if len(items) == 1 and isinstance(items[0], list) and not spec.candidates.many:
+        items = items[0]
+    if not items:
+        raise _Missing(spec.candidates.text)
+    found: list[tuple[float, Any]] = []
+    for item in items:
+        answer = _text(spec.candidate, item, required=False)
+        score = _number(spec.score.get(item))
+        if answer is not None and (not isinstance(answer, str) or answer.strip()):
+            if score is not None:
+                found.append((-score if spec.better == "lower" else score, answer))
+    found.sort(key=lambda c: -c[0])  # stable: the earlier of equal candidates wins
+    if len(found) < 2 or found[0][0] == found[-1][0]:
+        raise _Tie(f"{len(found)} scored candidates" if len(found) < 2 else "all tied")
+    return found[0][1], found[-1][1]
+
+
+def _number(value: Any) -> float | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        try:
+            return float(value)
+        except ValueError:
+            return None
+    return None
 
 
 def _winner(record: dict[str, Any], path: Path, values: Mapping[str, int] | None) -> int:

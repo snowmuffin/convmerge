@@ -47,7 +47,12 @@ def resolve_adapter(name: str, opts: AdapterOptions | None, *, pairs: bool = Fal
 
 
 def _with_preference(record, *, adapter, which):
-    return adapter(apply_preference(record, which))
+    folded = apply_preference(record, which)
+    if folded.get("no_preference") is True and which not in folded:
+        # Scored candidates without a best and a worst answer (all tied).
+        yield TrainingExample(meta={"source": "preference"}, issues=["no_preference"])
+        return
+    yield from adapter(folded)
 
 
 def _flag_preference(record, *, adapter):
