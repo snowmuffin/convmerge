@@ -87,6 +87,28 @@ def _encoding_problem(raw: str, value: Any, *, check_bytes: bool, encoding: str)
     return None
 
 
+# The scanner json.loads runs (set in JSONDecoder.__init__; the stubs omit it).
+_scan_once: Callable[[str, int], tuple[Any, int]] = json.JSONDecoder().scan_once  # type: ignore[attr-defined]
+
+
+def _loads(raw: str) -> Any:
+    """``json.loads(raw)``, calling the C scanner directly.
+
+    Skips the Python layers of ``json.loads`` (type and BOM checks, two
+    whitespace regexes), which cost about a third of the parse on typical
+    rows. Anything the scanner does not accept whole (leading or trailing
+    whitespace, a BOM, invalid JSON) goes through ``json.loads`` so the value
+    or error is exactly the same.
+    """
+    try:
+        value, end = _scan_once(raw, 0)
+    except Exception:
+        return json.loads(raw)
+    if end != len(raw):
+        return json.loads(raw)
+    return value
+
+
 def _parse_line(
     raw: str, *, check_bytes: bool, encoding: str
 ) -> tuple[Any, json.JSONDecodeError | str | None]:
@@ -97,7 +119,7 @@ def _parse_line(
     had bytes invalid in ``encoding`` (only then is the line scanned for them).
     """
     try:
-        value = json.loads(raw)
+        value = _loads(raw)
     except json.JSONDecodeError as e:
         return None, e
     except RecursionError:
@@ -165,7 +187,7 @@ def iter_jsonl(
             # (tests/test_io.py checks that the two agree).
             error: json.JSONDecodeError | str | None = None
             try:
-                value = json.loads(raw)
+                value = _loads(raw)
             except json.JSONDecodeError as e:
                 error = e
             except RecursionError:

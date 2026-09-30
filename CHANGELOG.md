@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.1] - 2026-09-30
+
+Fixes from the 1.3 evaluation: `mix` speed, UltraFeedback ties, and a
+release check.
+
+### Fixed
+
+- `mix` is as fast as in 1.2 again. 1.3's per-row reasoning-trace count made
+  it about 25% slower (1M rows sampled to 500k: 13.5 s → 16.8 s); the count
+  now skips rows that cannot hold a trace, and the JSONL reader behind every
+  command calls the JSON scanner directly, so each line parses faster. Parsed
+  values, skipped lines, and error messages are the same as before.
+- UltraFeedback completions with equal `fine-grained_score` are now ranked by
+  `overall_score`. In 1.3 about 0.5% of rows had all fine-grained scores
+  equal and dropped as `no_preference` although their `overall_score`s
+  differed.
+
+### Changed output
+
+- UltraFeedback rows whose best or worst `fine-grained_score` is shared by
+  several completions now pick among them by `overall_score` (before: the
+  first or last in the list). Rows where all fine-grained scores were equal
+  now become pairs when the overall scores differ; rows equal on both still
+  drop as `no_preference`.
+
+### Internal
+
+- The publish workflow fails when the pushed tag is not `v` plus the version
+  in `pyproject.toml` and `convmerge/__init__.py`, so a tag on the wrong
+  commit no longer republishes an older build under a new tag.
+- Catalog: `younissk/tool-calling-mix` passes at 75% converted (was 80%);
+  22% of its rows have neither a tool call nor an answer.
+
 ## [1.3.0] - 2026-09-30
 
 Datasets that keep their conversations as trees or their preferences as

@@ -171,6 +171,32 @@ def test_ultrafeedback_falls_back_to_overall_score() -> None:
     assert ex.messages[-1].text == "4" and ex.rejected[-1].text == "Maybe 9"
 
 
+def test_ultrafeedback_ties_fall_back_to_overall_score() -> None:
+    # Real rows: all four fine-grained scores 4.5, overall 8.5 / 7.5 / 8.5 / 7.5.
+    completions = [
+        {"response": r, "fine-grained_score": 4.5, "overall_score": o}
+        for r, o in (("a", 8.5), ("b", 7.5), ("c", 8.5), ("d", 7.5))
+    ]
+    record = {**ULTRAFEEDBACK, "completions": completions}
+    [ex] = list(PAIRS(record))
+    assert ex.messages[-1].text == "a" and ex.rejected[-1].text == "d"
+    # the tie-break also picks the chosen answer among equal best scores
+    completions[0]["fine-grained_score"] = completions[2]["fine-grained_score"] = 5.0
+    completions[2]["overall_score"] = 9.0
+    [ex] = list(PAIRS(record))
+    assert ex.messages[-1].text == "c" and ex.rejected[-1].text == "d"
+    # equal on both scores: still no pair
+    tied = [{**c, "fine-grained_score": 4.5, "overall_score": 8.0} for c in completions]
+    [ex] = list(PAIRS({**ULTRAFEEDBACK, "completions": tied}))
+    assert validate_example(ex) == ["no_preference"]
+    # a candidate without overall_score: fine-grained_score alone decides
+    partial = [dict(c) for c in completions[:2]]
+    del partial[1]["overall_score"]
+    partial[0]["fine-grained_score"] = 4.5
+    [ex] = list(PAIRS({**ULTRAFEEDBACK, "completions": partial}))
+    assert validate_example(ex) == ["no_preference"]
+
+
 def test_nectar_pairs_rank_one_with_the_last_rank() -> None:
     [ex] = list(PAIRS(NECTAR))
     assert _pair(ex) == (

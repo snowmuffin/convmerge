@@ -6,6 +6,7 @@ import json
 import random
 import tempfile
 from dataclasses import dataclass, field
+from itertools import chain
 from pathlib import Path
 from typing import Any, Literal
 
@@ -182,13 +183,35 @@ def _chars(row: Any) -> int:
 
 
 _TRACE_KEYS = ("reasoning_content", "thinking", "reasoning")
+_TRACE_SET = frozenset(_TRACE_KEYS)
+_TURN_KEYS = ("messages", "conversations", "chosen")
+
+
+def _may_have_trace(row: Any, raw: str) -> bool:
+    """A cheap test run first: ``False`` means :func:`_has_trace` is ``False`` too.
+
+    Without a ``<`` in the line (literal or escaped) no ``<think>`` tag can be
+    there, so only the turns' keys need a look, which happens in C.
+    """
+    if not isinstance(row, dict):
+        return False
+    if "<" in raw or ("\\" in raw and "\\u003" in raw):
+        return True
+    try:
+        for key in _TURN_KEYS:
+            turns = row.get(key)
+            if isinstance(turns, list) and not _TRACE_SET.isdisjoint(chain.from_iterable(turns)):
+                return True
+    except TypeError:  # a turn that is neither a dict nor a string
+        return True
+    return False
 
 
 def _has_trace(row: Any) -> bool:
     """Whether a converted row's answers carry a reasoning trace."""
     if not isinstance(row, dict):
         return False
-    for key in ("messages", "conversations", "chosen"):
+    for key in _TURN_KEYS:
         turns = row.get(key)
         if not isinstance(turns, list):
             continue
@@ -390,7 +413,7 @@ def _scan(path: Path, encoding: str, measure: Any = None) -> _Scan:
         path, encoding=encoding, on_invalid=lambda e: invalid.append(e.line_number)
     ):
         rows += 1
-        if _has_trace(line.value):
+        if _may_have_trace(line.value, line.raw) and _has_trace(line.value):
             reasoning += 1
         if measure is not None:
             units += measure(line.value)
@@ -512,7 +535,7 @@ def _load_valid_lines(path: Path, encoding: str) -> tuple[list[str], int]:
     traces = 0
     for line in iter_jsonl(path, encoding=encoding):
         lines.append(line.raw)
-        traces += _has_trace(line.value)
+        traces += _may_have_trace(line.value, line.raw) and _has_trace(line.value)
     return lines, traces
 
 
