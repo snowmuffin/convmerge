@@ -76,6 +76,9 @@ def with_preference_keys(record: dict[str, Any]) -> dict[str, Any]:
         ranked = ranked_as_preference(record)
         if ranked is not None:
             return ranked
+    labeled = labeled_as_preference(record)
+    if labeled is not None:
+        return labeled
     for chosen, rejected in PREFERENCE_ALIASES:
         if chosen in record and rejected in record:
             rest = {k: v for k, v in record.items() if k not in (chosen, rejected)}
@@ -181,7 +184,7 @@ def is_preference_record(record: dict[str, Any]) -> bool:
             return True
     if "completions" in record or "answers" in record:
         return _candidates(record) is not None
-    return False
+    return _labeled_layout(record) is not None
 
 
 # (list key, answer key, score keys in priority order, lower score is better)
@@ -257,6 +260,61 @@ def ranked_as_preference(record: dict[str, Any]) -> dict[str, Any] | None:
         "prompt": prompt,
         "chosen": [_assistant(candidates[0][1])],
         "rejected": [_assistant(candidates[-1][1])],
+    }
+
+
+# Two answers and a label naming the better one:
+# (answer A key, answer B key, label key, prompt key, label value -> 0 / 1 / None)
+_LABELED: tuple[tuple[str, str, str, str, Callable[[Any], int | None]], ...] = (
+    # PKU-SafeRLHF: better_response_id is the index of the better answer.
+    ("response_0", "response_1", "better_response_id", "prompt",
+     lambda v: v if v in (0, 1) else None),
+    # SHP: labels is 1 when A is preferred, 0 when B is.
+    ("human_ref_A", "human_ref_B", "labels", "history",
+     lambda v: {1: 0, 0: 1}.get(v)),
+    # HelpSteer3: overall_preference < 0 prefers response1, > 0 response2, 0 is a tie.
+    ("response1", "response2", "overall_preference", "context",
+     lambda v: 0 if v < 0 else 1 if v > 0 else None),
+)  # fmt: skip
+
+
+def _labeled_layout(
+    record: dict[str, Any],
+) -> tuple[str, str, str, str, Callable[[Any], int | None]] | None:
+    for layout in _LABELED:
+        if all(key in record for key in layout[:4]):
+            return layout
+    return None
+
+
+def labeled_as_preference(record: dict[str, Any]) -> dict[str, Any] | None:
+    """A chosen / rejected record from two answers and a label naming the
+    better one (PKU-SafeRLHF, SHP, HelpSteer3; see ``_LABELED``). ``None`` if
+    the record has none of those layouts; a tie, or a label or answer that
+    cannot be read, gives ``no_preference`` instead of a pair."""
+    layout = _labeled_layout(record)
+    if layout is None:
+        return None
+    a_key, b_key, label_key, prompt_key, better = layout
+    label = record[label_key]
+    if isinstance(label, str) and label.strip().lstrip("-").isdigit():
+        label = int(label)
+    index = better(label) if isinstance(label, int) and not isinstance(label, bool) else None
+    answers = (record[a_key], record[b_key])
+    prompt = record[prompt_key]
+    if isinstance(prompt, str) and _is_hh(prompt):
+        prompt = _parse_hh(prompt) or None
+    usable = all(isinstance(a, str) and a.strip() for a in answers) and (
+        (isinstance(prompt, str) and prompt.strip()) or (isinstance(prompt, list) and prompt)
+    )
+    if index is None or not usable:
+        return {**record, "no_preference": True}
+    rest = {k: v for k, v in record.items() if k not in (a_key, b_key, prompt_key)}
+    return {
+        **rest,
+        "prompt": prompt,
+        "chosen": [_assistant(answers[index])],
+        "rejected": [_assistant(answers[1 - index])],
     }
 
 
