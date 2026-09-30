@@ -195,3 +195,21 @@ def test_recipe_mix_by(tmp_path: Path) -> None:
         parse_recipe({**base, "mix": {"by": "chars"}}, path=tmp_path / "r.yaml")
     with pytest.raises(RecipeError, match="needs mix.tokenizer"):
         parse_recipe({**base, "mix": {"total": 10, "by": "tokens"}}, path=tmp_path / "r.yaml")
+
+
+def test_clipped_source_off_its_weight_is_warned(tmp_path: Path, caplog) -> None:
+    from convmerge.mix import written_shares
+
+    big = _rows(tmp_path / "big.jsonl", 200, 50)
+    small = _rows(tmp_path / "small.jsonl", 5, 50)
+    sources = [MixSource(big, 0.5), MixSource(small, 0.5)]
+    with caplog.at_level("WARNING"):
+        result = mix_files(sources, tmp_path / "o.jsonl", total=100)
+    assert "the mix is off its weights: big.jsonl 91% (weight 50%)" in caplog.text
+    assert "small.jsonl (5 of 50 rows)" in caplog.text
+    assert [round(x, 2) for x in written_shares(result)] == [0.91, 0.09]
+    caplog.clear()
+    with caplog.at_level("WARNING"):
+        mix_files(sources, tmp_path / "o.jsonl", total=100, oversample=True)
+        mix_files(sources, tmp_path / "o.jsonl", total=10)  # enough rows everywhere
+    assert "off its weights" not in caplog.text

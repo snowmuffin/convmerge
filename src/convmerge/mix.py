@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import random
 import tempfile
 from dataclasses import dataclass, field
@@ -11,6 +12,11 @@ from pathlib import Path
 from typing import Any, Literal
 
 from convmerge.io import iter_jsonl, iter_raw_lines
+
+logger = logging.getLogger(__name__)
+
+# A clipped source moves the mix off its weights; warn past this many points.
+OFF_TARGET = 0.05
 
 
 @dataclass(frozen=True)
@@ -152,10 +158,41 @@ def mix_files(
 
     if sampler == "v2":
         measure = _measure(by, tokenizer)
-        return _mix_v2(
+        result = _mix_v2(
             normalized, output_path, total, seed, oversample, encoding, by, measure, by_sample
         )
-    return _mix_v1(normalized, output_path, total, seed, oversample, encoding)
+    else:
+        result = _mix_v1(normalized, output_path, total, seed, oversample, encoding)
+    _warn_off_target(result)
+    return result
+
+
+def written_shares(result: MixResult) -> list[float]:
+    """Each source's share of what was written, in the unit the weights
+    measured (rows, or the characters / tokens of its sample)."""
+    sizes = [s.written * (s.mean_units or 0.0) if result.by != "rows" else float(s.written)
+             for s in result.sources]  # fmt: skip
+    total = sum(sizes)
+    return [x / total if total else 0.0 for x in sizes]
+
+
+def _warn_off_target(result: MixResult) -> None:
+    clipped = [s for s in result.sources if s.written < s.requested]
+    if not clipped:
+        return
+    shares = written_shares(result)
+    off = [(s, share) for s, share in zip(result.sources, shares)
+           if abs(share - s.weight) > OFF_TARGET]  # fmt: skip
+    if not off:
+        return
+    unit = "rows" if result.by == "rows" else result.by
+    detail = ", ".join(f"{s.path.name} {share:.0%} (weight {s.weight:.0%})" for s, share in off)
+    short = ", ".join(f"{s.path.name} ({s.written:,} of {s.requested:,} rows)" for s in clipped)
+    logger.warning(
+        "the mix is off its weights: %s of the %s. Too few rows in %s; oversample them "
+        "(--oversample), ask for fewer rows, or change the weights",
+        detail, unit, short,
+    )  # fmt: skip
 
 
 def _measure(by: str, tokenizer: Any) -> Any:
@@ -503,8 +540,9 @@ def write_mix_recipe(result: MixResult, *, encoding: str = "utf-8") -> Path:
                 "units": s.units,
                 "reasoning": s.reasoning,
                 "measured": s.measured,
+                "share": round(share, 4),
             }
-            for s in result.sources
+            for s, share in zip(result.sources, written_shares(result))
         ],
         "created_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
     }
