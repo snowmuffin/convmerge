@@ -11,8 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Three more preference layouts read without a mapping, a warning when a mix
 cannot meet its weights, and documentation on when the package helps, with
-complete example recipes and a measured comparison against hand-written
-conversion scripts. All additive; see "Changed output".
+complete example recipes, and a measured comparison against hand-written
+conversion scripts (no training benefit found at this scale). All additive; see "Changed output".
 
 ### Added
 
@@ -47,6 +47,13 @@ conversion scripts. All additive; see "Changed output".
 - `examples/recipes`: a Korean SFT mix, a DPO mix of three preference
   layouts, and a tool-calling mix checked against a Qwen chat template, each
   parsed and planned in the test suite.
+- Effect study (`docs/effect.md`, design in `docs/design/effect-study.md`,
+  workflow `effect.yml`): SmolLM2-135M trained 3 times each on four public
+  sources prepared by common scripts and by a convmerge recipe. No behaviour
+  difference; eval loss 2.603 for the scripts against 2.612 for the recipe,
+  most likely because the scripts' long rows put 1.7 times as many tokens
+  into the same steps. README: weights by text count whole rows, so filter
+  each source to the training length before `mix --by chars` / `tokens`.
 
 ## [1.4.0] - 2026-09-30
 

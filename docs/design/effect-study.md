@@ -1,7 +1,7 @@
 # Effect study: does convmerge's data preparation change what a model learns?
 
-Status: design fixed before any full run (1.5). Results go to
-[docs/effect.md](../effect.md) whatever they show.
+Status: design fixed before any full run (1.5); run on 2026-09-30. Results:
+[docs/effect.md](../effect.md).
 
 ## Question
 

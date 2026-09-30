@@ -18,12 +18,6 @@ on:
       gen:
         description: Evaluation prompts to generate for
         default: "100"
-  # The workflow cannot be dispatched before it is on the default branch, so a
-  # pull request that changes the study runs it in full once.
-  pull_request:
-    paths:
-      - scripts/eval/effect/**
-      - .github/workflows/effect.yml
 
 permissions:
   contents: read

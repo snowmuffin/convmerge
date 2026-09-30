@@ -80,6 +80,14 @@ It adds little when:
 - **You need personal information removed.** Use a dedicated tool first (see
   [Out of scope](#out-of-scope)).
 
+Does cleaner data train a better model? A small pre-registered study
+([docs/effect.md](docs/effect.md)) trained SmolLM2-135M on the same four
+sources prepared by common scripts and by a convmerge recipe. It found no
+behaviour difference, and a slightly lower eval loss for the scripts, which
+put 1.7 times as many tokens into the same number of steps. convmerge saves
+the conversion work and shows what the data contains. This study found no
+sign that it makes a small model better.
+
 Three complete recipes with real datasets are in
 [examples/recipes](examples/recipes): a Korean SFT mix, a DPO mix of three
 preference layouts, and a tool-calling mix checked against a Qwen chat template.
@@ -393,6 +401,11 @@ random rows per source and scale (an estimate, the same for the same seed).
 A source with too few rows is written whole and the others keep their
 counts, so the mix moves off its weights; `mix` warns when a share ends more
 than 5 points from its weight (`--oversample` repeats the short source).
+Weights by text count whole rows. If the trainer cuts rows at a fixed
+length, first keep only the rows that fit in each source
+(`convmerge tokens -i SOURCE --tokenizer MODEL --max-tokens N -o FIT`).
+Otherwise a source of very long rows gets its share on paper and loses most
+of it to truncation, as the [effect study](docs/effect.md) found.
 
 ### 5. `dedupe` / `filter` / `decontam` / `tokens` / `split` — ready for training
 
