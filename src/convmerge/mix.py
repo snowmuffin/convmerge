@@ -7,7 +7,7 @@ import random
 import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 from convmerge.io import iter_jsonl, iter_raw_lines
 
@@ -27,6 +27,19 @@ class SourceStats:
     requested: int
     available: int
     written: int
+    units: float | None = None
+    """Characters or tokens in the source's valid rows (``by="chars"`` /
+    ``"tokens"``); ``None`` when mixing by rows."""
+    reasoning: int = 0
+    """Valid rows whose answers carry a reasoning trace (a ``reasoning_content``
+    / ``thinking`` / ``reasoning`` field or an inline ``<think>`` block)."""
+
+    @property
+    def mean_units(self) -> float | None:
+        """Mean characters or tokens per row (``None`` when mixing by rows)."""
+        if self.units is None or not self.available:
+            return None
+        return self.units / self.available
 
 
 @dataclass
@@ -36,10 +49,14 @@ class MixResult:
     output: Path
     sources: list[SourceStats] = field(default_factory=list)
     sampler: str = "v2"
+    by: str = "rows"
+    """What the weights measured: ``rows``, ``chars`` or ``tokens``."""
 
 
 Sampler = Literal["v1", "v2"]
 SAMPLERS: tuple[str, ...] = ("v1", "v2")
+MixUnit = Literal["rows", "chars", "tokens"]
+MIX_UNITS: tuple[str, ...] = ("rows", "chars", "tokens")
 
 # v2 shuffles through temporary bucket files holding about this many lines
 # each, so peak memory is bounded by one bucket rather than the whole output.
@@ -56,6 +73,8 @@ def mix_files(
     oversample: bool = False,
     encoding: str = "utf-8",
     sampler: Sampler = "v2",
+    by: MixUnit = "rows",
+    tokenizer: Any = None,
 ) -> MixResult:
     """Sample from each source at its weight and write a merged JSONL file.
 
@@ -76,12 +95,34 @@ def mix_files(
     algorithm; use it to reproduce a mix made with an earlier version (the
     same seed selects different lines under v1 and v2).
 
+    ``by`` says what the weights measure. ``"rows"`` (default) splits *total*
+    rows by weight. ``"chars"`` and ``"tokens"`` split the training text
+    instead: *total* is still a row count, allocated so that each source's
+    share of the characters (every string in its rows but ``role`` / ``from``
+    / ``type`` labels) or tokens is its
+    weight, using each source's mean row length. ``"tokens"`` needs
+    *tokenizer*: a Hugging Face tokenizer name or path (``transformers`` is
+    then required) or an object with ``encode``. Both need *total* and the
+    v2 sampler.
+
     Returns a :class:`MixResult` with per-source statistics.
     """
     if not sources:
         raise ValueError("At least one source is required")
     if sampler not in SAMPLERS:
         raise ValueError(f"sampler must be one of {list(SAMPLERS)}, got {sampler!r}")
+    if by not in MIX_UNITS:
+        raise ValueError(f"by must be one of {list(MIX_UNITS)}, got {by!r}")
+    if by != "rows":
+        if total is None:
+            raise ValueError(
+                f"by={by!r} needs a total: without one every record is merged and "
+                "weights are not used"
+            )
+        if sampler != "v2":
+            raise ValueError(f"by={by!r} needs the v2 sampler")
+        if by == "tokens" and tokenizer is None:
+            raise ValueError("by='tokens' needs a tokenizer (name, path, or object)")
 
     total_weight = sum(s.weight for s in sources)
     if total_weight <= 0:
@@ -94,8 +135,75 @@ def mix_files(
             raise FileNotFoundError(f"Source not found: {src.path}")
 
     if sampler == "v2":
-        return _mix_v2(normalized, output_path, total, seed, oversample, encoding)
+        measure = _measure(by, tokenizer)
+        return _mix_v2(normalized, output_path, total, seed, oversample, encoding, by, measure)
     return _mix_v1(normalized, output_path, total, seed, oversample, encoding)
+
+
+def _measure(by: str, tokenizer: Any) -> Any:
+    """Row → its length in ``by`` units (``None`` for rows)."""
+    if by == "chars":
+        return _chars
+    if by == "tokens":
+        tok = tokenizer
+        if isinstance(tok, (str, Path)):
+            from convmerge.tokens import load_tokenizer
+
+            tok = load_tokenizer(str(tok))
+
+        def tokens(row: Any) -> int:
+            return len(tok.encode("\n".join(_strings(row)), add_special_tokens=False))
+
+        return tokens
+    return None
+
+
+# Keys whose strings are labels, not training text.
+_LABEL_KEYS = frozenset({"role", "from", "type"})
+
+
+def _strings(value: Any) -> list[str]:
+    """Every string in a row except labels (``role`` / ``from`` / ``type``)."""
+    out: list[str] = []
+    stack = [value]
+    while stack:
+        v = stack.pop()
+        if isinstance(v, str):
+            out.append(v)
+        elif isinstance(v, dict):
+            stack.extend(reversed([x for k, x in v.items() if k not in _LABEL_KEYS]))
+        elif isinstance(v, list):
+            stack.extend(reversed(v))
+    return out
+
+
+def _chars(row: Any) -> int:
+    return sum(len(s) for s in _strings(row))
+
+
+_TRACE_KEYS = ("reasoning_content", "thinking", "reasoning")
+
+
+def _has_trace(row: Any) -> bool:
+    """Whether a converted row's answers carry a reasoning trace."""
+    if not isinstance(row, dict):
+        return False
+    for key in ("messages", "conversations", "chosen"):
+        turns = row.get(key)
+        if not isinstance(turns, list):
+            continue
+        for t in turns:
+            if not isinstance(t, dict):
+                continue
+            for k in _TRACE_KEYS:
+                v = t.get(k)
+                if isinstance(v, str) and v.strip():
+                    return True
+            text = t.get("content", t.get("value"))
+            if isinstance(text, str) and "<think>" in text:
+                return True
+    output = row.get("output")
+    return isinstance(output, str) and "<think>" in output
 
 
 def _mix_v1(
@@ -107,8 +215,11 @@ def _mix_v1(
     encoding: str,
 ) -> MixResult:
     loaded: list[list[str]] = []
+    traces: list[int] = []
     for src in normalized:
-        loaded.append(_load_valid_lines(src.path, encoding))
+        lines, n_traces = _load_valid_lines(src.path, encoding)
+        loaded.append(lines)
+        traces.append(n_traces)
 
     if total is None:
         targets = [len(recs) for recs in loaded]
@@ -119,7 +230,7 @@ def _mix_v1(
     sampled: list[list[str]] = []
     stats: list[SourceStats] = []
 
-    for src, recs, target in zip(normalized, loaded, targets):
+    for src, recs, target, n_traces in zip(normalized, loaded, targets, traces):
         available = len(recs)
         if available == 0:
             sampled.append([])
@@ -132,7 +243,8 @@ def _mix_v1(
         else:
             chosen = list(recs)
         sampled.append(chosen)
-        stats.append(SourceStats(src.path, src.weight, target, available, len(chosen)))
+        stats.append(SourceStats(src.path, src.weight, target, available, len(chosen),
+                                 reasoning=n_traces))  # fmt: skip
 
     all_records = [line for group in sampled for line in group]
     rng.shuffle(all_records)
@@ -158,20 +270,36 @@ def _mix_v2(
     seed: int,
     oversample: bool,
     encoding: str,
+    by: str = "rows",
+    measure: Any = None,
 ) -> MixResult:
     # Pass 1: count valid lines and remember where the invalid ones are, so
     # pass 2 can pick lines by ordinal without parsing JSON again.
-    scans = [_scan(src.path, encoding) for src in normalized]
-    available = [n for n, _ in scans]
-    targets = list(available) if total is None else _allocate(normalized, total)
+    scans = [_scan(src.path, encoding, measure) for src in normalized]
+    available = [scan.rows for scan in scans]
+    if total is None:
+        targets = list(available)
+    elif measure is None:
+        targets = _allocate(normalized, total)
+    else:
+        # Rows per unit of weight: a source of long rows needs fewer rows.
+        per_row = [s.weight * s_.rows / s_.units if s_.units else 0.0
+                   for s, s_ in zip(normalized, scans)]  # fmt: skip
+        norm = sum(per_row)
+        if norm <= 0:
+            raise ValueError(f"the sources have no {by} to mix")
+        targets = _allocate([MixSource(s.path, w / norm) for s, w in zip(normalized, per_row)],
+                            total)  # fmt: skip
 
     rng = random.Random(seed)
     plans: list[_Plan] = []
     stats: list[SourceStats] = []
-    for src, avail, target in zip(normalized, available, targets):
-        plan = _plan(rng, avail, target, oversample)
+    for src, scan, target in zip(normalized, scans, targets):
+        plan = _plan(rng, scan.rows, target, oversample)
         plans.append(plan)
-        stats.append(SourceStats(src.path, src.weight, target, avail, plan.size))
+        units = None if measure is None else scan.units
+        stats.append(SourceStats(src.path, src.weight, target, scan.rows, plan.size,
+                                 units=units, reasoning=scan.reasoning))  # fmt: skip
 
     n_out = sum(p.size for p in plans)
     n_buckets = max(1, -(-n_out // _BUCKET_LINES))
@@ -183,10 +311,10 @@ def _mix_v2(
         in_memory: list[str] = []
         try:
             # Pass 2: stream each source, emit chosen lines to random buckets.
-            for src, plan, (_, invalid) in zip(normalized, plans, scans):
+            for src, plan, scan in zip(normalized, plans, scans):
                 if not plan.size:
                     continue
-                for i, raw in enumerate(_valid_raw_lines(src.path, encoding, invalid)):
+                for i, raw in enumerate(_valid_raw_lines(src.path, encoding, scan.invalid)):
                     for _ in range(plan.copies(i)):
                         if handles:
                             handles[rng.randrange(n_buckets)].write(raw + "\n")
@@ -208,7 +336,7 @@ def _mix_v2(
                 del lines
 
     return MixResult(
-        total_written=n_out, seed=seed, output=output_path, sources=stats, sampler="v2"
+        total_written=n_out, seed=seed, output=output_path, sources=stats, sampler="v2", by=by
     )
 
 
@@ -245,16 +373,28 @@ def _plan(rng: random.Random, available: int, target: int, oversample: bool) -> 
     return _Plan(base=base, extra=frozenset(rng.sample(range(available), rest)), size=target)
 
 
-def _scan(path: Path, encoding: str) -> tuple[int, frozenset[int]]:
-    """Count valid JSONL lines; return the count and invalid line numbers."""
+@dataclass
+class _Scan:
+    rows: int
+    invalid: frozenset[int]
+    units: float
+    reasoning: int
+
+
+def _scan(path: Path, encoding: str, measure: Any = None) -> _Scan:
+    """Count valid JSONL lines (and their length in ``measure`` units, and those
+    with a reasoning trace); remember the invalid line numbers."""
     invalid: list[int] = []
-    n = sum(
-        1
-        for _ in iter_jsonl(
-            path, encoding=encoding, on_invalid=lambda e: invalid.append(e.line_number)
-        )
-    )
-    return n, frozenset(invalid)
+    rows = units = reasoning = 0
+    for line in iter_jsonl(
+        path, encoding=encoding, on_invalid=lambda e: invalid.append(e.line_number)
+    ):
+        rows += 1
+        if _has_trace(line.value):
+            reasoning += 1
+        if measure is not None:
+            units += measure(line.value)
+    return _Scan(rows, frozenset(invalid), units, reasoning)
 
 
 def _valid_raw_lines(path: Path, encoding: str, invalid: frozenset[int]):
@@ -278,6 +418,7 @@ def write_mix_recipe(result: MixResult, *, encoding: str = "utf-8") -> Path:
     recipe = {
         "version": 1,
         "sampler": result.sampler,
+        "by": result.by,
         "seed": result.seed,
         "total_written": result.total_written,
         "output": str(result.output),
@@ -288,6 +429,8 @@ def write_mix_recipe(result: MixResult, *, encoding: str = "utf-8") -> Path:
                 "requested": s.requested,
                 "available": s.available,
                 "written": s.written,
+                "units": s.units,
+                "reasoning": s.reasoning,
             }
             for s in result.sources
         ],
@@ -302,7 +445,8 @@ def load_mix_config(path: Path) -> tuple[list[MixSource], dict]:
     """Parse a YAML or JSON mix config file.
 
     Returns ``(sources, options)`` where *options* may contain
-    ``total``, ``seed``, ``output``, ``oversample``, and ``sampler``.
+    ``total``, ``seed``, ``output``, ``oversample``, ``sampler``, ``by``, and
+    ``tokenizer``.
 
     YAML support requires ``pyyaml`` (``pip install 'convmerge[preset]'``).
     """
@@ -353,12 +497,23 @@ def load_mix_config(path: Path) -> tuple[list[MixSource], dict]:
         if raw["sampler"] not in SAMPLERS:
             raise ValueError(f"sampler must be one of {list(SAMPLERS)}, got {raw['sampler']!r}")
         options["sampler"] = raw["sampler"]
+    if "by" in raw:
+        if raw["by"] not in MIX_UNITS:
+            raise ValueError(f"by must be one of {list(MIX_UNITS)}, got {raw['by']!r}")
+        options["by"] = raw["by"]
+    if "tokenizer" in raw:
+        options["tokenizer"] = str(raw["tokenizer"])
 
     return sources, options
 
 
-def _load_valid_lines(path: Path, encoding: str) -> list[str]:
-    return [line.raw for line in iter_jsonl(path, encoding=encoding)]
+def _load_valid_lines(path: Path, encoding: str) -> tuple[list[str], int]:
+    lines: list[str] = []
+    traces = 0
+    for line in iter_jsonl(path, encoding=encoding):
+        lines.append(line.raw)
+        traces += _has_trace(line.value)
+    return lines, traces
 
 
 def _allocate(sources: list[MixSource], total: int) -> list[int]:

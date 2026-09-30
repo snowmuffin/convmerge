@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import tempfile
 import traceback
@@ -111,14 +112,67 @@ def rows(dataset: str, config: str | None, n: int) -> tuple[str, list[dict[str, 
     except Exception:  # noqa: BLE001 - fall back to "train"
         splits = ["train"]
     split = "train" if "train" in splits else splits[0]
-    ds = load_dataset(dataset, config, split=split, streaming=True)
-    return split, [dict(r) for r in ds.take(n)]
+    try:
+        ds = load_dataset(dataset, config, split=split, streaming=True)
+        return split, [dict(r) for r in ds.take(n)]
+    except Exception as exc:  # noqa: BLE001 - e.g. files whose column types disagree
+        found = _file_rows(dataset, config, n)
+        if found is None:
+            raise
+        name, data = found
+        return f"file {name} ({type(exc).__name__} from load_dataset)", data
 
 
-RAW_ROWS = 0  # --raw: source rows kept in the result (strings clipped)
+_DATA_SUFFIXES = (".jsonl", ".json", ".parquet", ".jsonl.gz", ".json.gz")
 
 
-def _clip(value: Any, limit: int = 300) -> Any:
+def _file_rows(dataset: str, config: str | None, n: int) -> tuple[str, list[dict]] | None:
+    """The first ``n`` rows of the dataset's first data file, read directly: what
+    ``convmerge fetch`` would download when ``load_dataset`` cannot build one
+    schema for every file."""
+    import gzip
+    import io
+
+    from huggingface_hub import HfFileSystem
+
+    fs = HfFileSystem()
+    root = f"datasets/{dataset}"
+    files = sorted(
+        f for f in fs.find(root)
+        if f.endswith(_DATA_SUFFIXES) and (config is None or f"/{config}" in f[len(root):])
+    )  # fmt: skip
+    if not files:
+        return None
+    path = files[0]
+    name = path[len(root) + 1 :]
+    if path.endswith(".parquet"):
+        import pyarrow.parquet as pq
+
+        with fs.open(path, "rb") as f:
+            batch = next(pq.ParquetFile(f).iter_batches(batch_size=n))
+            return name, batch.to_pylist()
+    with fs.open(path, "rb") as f:
+        raw = gzip.open(f) if path.endswith(".gz") else f
+        text = io.TextIOWrapper(raw, encoding="utf-8")
+        first = text.read(1)
+        if first == "[":  # one JSON array
+            data = json.loads(first + text.read())
+            return name, [r for r in data[:n] if isinstance(r, dict)]
+        out: list[dict] = []
+        for line in (first + text.readline(), *text):
+            if line.strip():
+                out.append(json.loads(line))
+            if len(out) >= n:
+                break
+        return name, out
+
+
+RAW_ROWS = 0  # --raw: dropped source rows kept in the result (strings clipped)
+RAW_CHARS = 300  # --raw-chars: longest string kept in a raw row
+
+
+def _clip(value: Any, limit: int | None = None) -> Any:
+    limit = RAW_CHARS if limit is None else limit
     if isinstance(value, str) and value[:1] in "[{":
         try:  # a JSON column (messages_json): clip inside it, not the whole string
             return {"<json>": _clip(json.loads(value), limit)}
@@ -129,7 +183,7 @@ def _clip(value: Any, limit: int = 300) -> Any:
     if isinstance(value, dict):
         return {k: _clip(v, limit) for k, v in value.items()}
     if isinstance(value, list):
-        return [_clip(v, limit) for v in value[:8]]
+        return [_clip(v, limit) for v in value[: 8 if limit <= 300 else 40]]
     return value if isinstance(value, (int, float, bool, type(None))) else str(value)
 
 
@@ -159,12 +213,29 @@ def check(dataset: str, kind: str, config: str | None, n: int) -> dict[str, Any]
             return result
         first = dst.read_text(encoding="utf-8").splitlines()[:1]
     result.update(read=stats.lines_read, written=stats.written, reasoning=stats.reasoning,
-                  drops=dict(stats.drop_reasons))  # fmt: skip
+                  grouped=stats.grouped, drops=dict(stats.drop_reasons))  # fmt: skip
     result["first"] = first[0][:400] if first else None
-    result["raw"] = [_clip(r) for r in data[:RAW_ROWS]]
-    ok = stats.lines_read and stats.written >= 0.9 * stats.lines_read
+    result["raw"] = [_clip(r) for r in _dropped(data, fmt, RAW_ROWS)]
+    records = stats.lines_read - stats.grouped  # message rows of one tree make one record
+    ok = records and stats.written >= 0.9 * records
     result["status"] = "ok" if ok else ("partial" if stats.written else "fail")
     return result
+
+
+def _dropped(data: list[dict[str, Any]], fmt: str, n: int) -> list[dict[str, Any]]:
+    """The first ``n`` rows that convert to nothing."""
+    from convmerge import convert_records
+
+    out: list[dict[str, Any]] = []
+    for row in data:
+        if len(out) >= n:
+            break
+        try:
+            if not list(convert_records([row], output_format=fmt)):
+                out.append(row)
+        except Exception:  # noqa: BLE001
+            out.append(row)
+    return out
 
 
 def _isolated(dataset: str, kind: str, config: str | None, args: argparse.Namespace) -> dict:
@@ -177,7 +248,7 @@ def _isolated(dataset: str, kind: str, config: str | None, args: argparse.Namesp
     import time
 
     cmd = [sys.executable, __file__, "--rows", str(args.rows), "--raw", str(args.raw),
-           "--one", dataset, kind, config or "-"]  # fmt: skip
+           "--raw-chars", str(args.raw_chars), "--one", dataset, kind, config or "-"]  # fmt: skip
     base: dict[str, Any] = {"id": dataset, "kind": kind, "config": config}
     limit_kb = int(args.max_memory_gb * 2**20)
     deadline = time.monotonic() + args.timeout
@@ -195,8 +266,11 @@ def _isolated(dataset: str, kind: str, config: str | None, args: argparse.Namesp
             time.sleep(0.5)
         out, err = proc.communicate()
     lines = out.strip().splitlines()
-    if proc.returncode == 0 and lines:
-        return json.loads(lines[-1])
+    if lines:
+        try:  # the result is printed before the interpreter shuts down; some
+            return json.loads(lines[-1])  # loaders' threads crash it afterwards
+        except ValueError:
+            pass
     tail = err.strip().splitlines()[-1:] or [f"exit code {proc.returncode}"]
     return {**base, "status": "load_error", "note": f"child failed: {tail[0]}"[:300]}
 
@@ -257,16 +331,20 @@ def main() -> int:
     parser.add_argument("--only", nargs="*", default=None, metavar="DATASET",
                         help="check only these dataset ids")  # fmt: skip
     parser.add_argument("--raw", type=int, default=0, metavar="N",
-                        help="print N source rows of datasets that fail")  # fmt: skip
+                        help="print N dropped source rows of datasets that fail")  # fmt: skip
+    parser.add_argument("--raw-chars", type=int, default=300, metavar="N",
+                        help="longest string kept in a printed raw row")  # fmt: skip
     parser.add_argument("--set", choices=("v014", "fresh", "all"), default="all",
                         help="v014: the 0.14 list; fresh: the 1.1 additions")  # fmt: skip
     args = parser.parse_args()
-    global RAW_ROWS
-    RAW_ROWS = args.raw
+    global RAW_ROWS, RAW_CHARS
+    RAW_ROWS, RAW_CHARS = args.raw, args.raw_chars
     if args.one:
         dataset, kind, config = args.one
-        print(json.dumps(check(dataset, kind, None if config == "-" else config, args.rows)))
-        return 0
+        result = check(dataset, kind, None if config == "-" else config, args.rows)
+        print(json.dumps(result, default=str), flush=True)
+        sys.stderr.flush()
+        os._exit(0)  # skip interpreter shutdown, where some loaders' threads crash
     sets = {"v014": DATASETS, "fresh": FRESH}
     results = []
     for name, entries in sets.items():
@@ -289,7 +367,7 @@ def main() -> int:
             raw = r.pop("raw", None)
             print(json.dumps(r, ensure_ascii=False)[:1500])
             for row in raw or []:
-                print("  raw:", json.dumps(row, ensure_ascii=False)[:3000])
+                print("  raw:", json.dumps(row, ensure_ascii=False, default=str)[: 12 * RAW_CHARS])
     return 0
 
 

@@ -63,6 +63,10 @@ What the command adapts to:
   `"train": false` on earlier answers, and the entry gets
   `message_field_training: train` so axolotl trains only the final answer
   of each conversation (checked with `axolotl preprocess`).
+- **The dataset's own turn marks:** `--train-turns data` writes the flag a
+  dataset gives each assistant turn (`train`, `loss`, `weight` keys, or
+  Nemotron's `metadata.train_turns`); the entry gets the same
+  `message_field_training: train`.
 
 ## DPO
 

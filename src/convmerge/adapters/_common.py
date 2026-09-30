@@ -23,6 +23,7 @@ from convmerge.adapters.tool_formats import (
     rewrite_ai_to_calls,
     rewrite_bracket_calls,
     rewrite_hermes,
+    rewrite_react_calls,
     system_tool_specs,
     uses_hermes_tags,
 )
@@ -334,9 +335,13 @@ def build_example(
     if tools is None and looks_like_bracket_calls(msgs):
         msgs, tools = rewrite_bracket_calls(msgs)
     for m in msgs:
-        if m.role == "assistant" and type(m.content) is str and "AI to=" in m.content:
-            msgs = rewrite_ai_to_calls(msgs)
-            break
+        if m.role == "assistant" and type(m.content) is str:
+            if "AI to=" in m.content:
+                msgs = rewrite_ai_to_calls(msgs)
+                break
+            if "Action Input:" in m.content:
+                msgs = rewrite_react_calls(msgs)
+                break
     if tools is None and any(m.tool_calls for m in msgs):
         msgs, tools = system_tool_specs(msgs)
     msgs, issues = attach_media(msgs, record)
@@ -387,6 +392,8 @@ def coerce_messages(
         if role_raw is None:
             continue
         content = _first_content(item, content_keys, strip=strip)
+        if content is MISSING and role_map.get(role_raw, role_raw) == "tool":
+            content = _structured_result(item, content_keys)
 
         if role_raw in FUNCTION_CALL_ROLES:
             calls = function_call_value(content)
@@ -405,6 +412,7 @@ def coerce_messages(
         name = item.get("name")
         tool_call_id = item.get("tool_call_id")
         role = role_map.get(role_raw, role_raw)
+        answer = role == "assistant"
         out.append(
             ChatMessage(
                 role,
@@ -412,10 +420,38 @@ def coerce_messages(
                 tool_calls=tool_calls,
                 tool_call_id=tool_call_id if isinstance(tool_call_id, str) else None,
                 name=name if isinstance(name, str) and name else None,
-                reasoning=first_text(item, reasoning_keys) if role == "assistant" else None,
+                reasoning=first_text(item, reasoning_keys) if answer else None,
+                train=train_flag(item)
+                if answer and ("train" in item or "loss" in item or "weight" in item)
+                else None,
             )
         )
     return out
+
+
+# Per-turn keys that say whether to train on a turn: axolotl's ``train``, a
+# boolean ``loss`` mask, ``weight`` 0 / 1 (axolotl ShareGPT).
+TRAIN_KEYS: tuple[str, ...] = ("train", "loss", "weight")
+
+
+def train_flag(item: dict[str, Any]) -> bool | None:
+    """The turn's training flag from :data:`TRAIN_KEYS` (``None`` if it has none)."""
+    for key in TRAIN_KEYS:
+        value = item.get(key)
+        if type(value) is bool:
+            return value
+        if key == "weight" and type(value) in (int, float) and value in (0, 1):
+            return bool(value)
+    return None
+
+
+def _structured_result(item: dict[str, Any], content_keys: tuple[str, ...]) -> Any:
+    """A tool result given as a JSON object (ToolBench): the object as JSON text."""
+    for ck in content_keys:
+        value = item.get(ck)
+        if isinstance(value, dict) or (isinstance(value, list) and value):
+            return json.dumps(value, ensure_ascii=False)
+    return MISSING
 
 
 def first_text(record: dict[str, Any], keys: Iterable[str]) -> str | None:

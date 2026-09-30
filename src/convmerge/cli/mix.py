@@ -53,6 +53,19 @@ def _add_mix(sub: argparse._SubParsersAction) -> None:
         "sampler, to reproduce a mix made with an earlier version",
     )
     p.add_argument(
+        "--by",
+        choices=("rows", "chars", "tokens"),
+        default=None,
+        help="what the weights measure (default rows). chars / tokens: --total rows are "
+        "split so each source's share of the characters or tokens is its weight",
+    )
+    p.add_argument(
+        "--tokenizer",
+        default=None,
+        metavar="NAME_OR_PATH",
+        help="Hugging Face tokenizer for --by tokens (needs transformers)",
+    )
+    p.add_argument(
         "--no-recipe",
         action="store_true",
         help="Skip writing the .mix.json sidecar file",
@@ -61,6 +74,35 @@ def _add_mix(sub: argparse._SubParsersAction) -> None:
         "--encoding", default="utf-8",
         help="Encoding of the source files (default: utf-8); output is always UTF-8",
     )  # fmt: skip
+
+
+def mix_summary(result, *, oversample: bool) -> list[str]:
+    """Per-source lines, then the total; shares are estimated from each source's
+    mean row length and the share of its rows with a reasoning trace."""
+    lines = []
+    written_units = [
+        s.written * (s.mean_units or 0.0) for s in result.sources
+    ]  # the expected size of each source's sample
+    all_units = sum(written_units)
+    traces = 0.0
+    for s, units in zip(result.sources, written_units):
+        clipped = s.available < s.requested and not oversample
+        note = f" (clipped from {s.requested:,})" if clipped else ""
+        extra = ""
+        if result.by != "rows" and all_units:
+            extra += f" {result.by}={units / all_units:.1%}"
+        if s.reasoning and s.available:
+            share = s.reasoning / s.available
+            traces += s.written * share
+            extra += f" reasoning={share:.0%}"
+        lines.append(f"  {s.path}: weight={s.weight:.4f} written={s.written:,}{extra}{note}")
+    lines.append(f"total written: {result.total_written:,} -> {result.output}")
+    if traces and result.total_written:
+        lines.append(
+            f"rows with a reasoning trace: about {traces / result.total_written:.0%} "
+            "(each source's share applied to its sample)"
+        )
+    return lines
 
 
 def _cmd_mix(args: argparse.Namespace) -> None:
@@ -103,6 +145,8 @@ def _cmd_mix(args: argparse.Namespace) -> None:
     seed = args.seed if args.seed is not None else options.get("seed", 42)
     oversample = args.oversample or options.get("oversample", False)
     sampler = args.sampler or options.get("sampler", "v2")
+    by = args.by or options.get("by", "rows")
+    tokenizer = args.tokenizer or options.get("tokenizer")
 
     if output is None:
         print("error: --output / -o is required (or set 'output' in config)", file=sys.stderr)
@@ -117,19 +161,18 @@ def _cmd_mix(args: argparse.Namespace) -> None:
             oversample=oversample,
             encoding=args.encoding,
             sampler=sampler,
+            by=by,
+            tokenizer=tokenizer,
         )
-    except (FileNotFoundError, ValueError) as e:
+    except ImportError as e:
+        print(f"error: {e}", file=sys.stderr)
+        sys.exit(2)
+    except (FileNotFoundError, ValueError, OSError) as e:
         print(f"error: {e}", file=sys.stderr)
         sys.exit(1)
 
-    for s in result.sources:
-        clipped = s.available < s.requested and not oversample
-        note = f" (clipped from {s.requested:,})" if clipped else ""
-        print(
-            f"  {s.path}: weight={s.weight:.4f} written={s.written:,}{note}",
-            file=sys.stderr,
-        )
-    print(f"total written: {result.total_written:,} -> {result.output}", file=sys.stderr)
+    for line in mix_summary(result, oversample=oversample):
+        print(line, file=sys.stderr)
 
     if not args.no_recipe:
         sidecar = write_mix_recipe(result)

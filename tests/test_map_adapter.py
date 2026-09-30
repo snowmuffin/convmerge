@@ -215,7 +215,7 @@ def test_label_pair_after_a_conversation_and_ties() -> None:
         ({"user": "p", "responses": ["a"], "preferred": "l"}, "two paths"),
         ({"user": "p", "responses": ["a", "b"]}, "go together"),
         ({**PKU_MAP, "preferred_values": {"1": 2}}, "0 or 1"),
-        ({**PKU_MAP, "chosen": "a", "rejected": "b"}, "not both"),
+        ({**PKU_MAP, "chosen": "a", "rejected": "b"}, "give one of"),
         ({**PKU_MAP, "assistant": "x"}, "cannot be combined"),
     ],
 )

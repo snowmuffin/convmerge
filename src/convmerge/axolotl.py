@@ -8,7 +8,7 @@ entries into a YAML snippet for an axolotl config.
 
 - ``messages`` → ``type: chat_template`` (tools, and ``reasoning_content`` or
   ``thinking`` traces, are read by axolotl as they are; per-turn ``train``
-  flags from ``--train-turns last`` add ``message_field_training: train``)
+  flags from ``--train-turns last`` / ``data`` add ``message_field_training: train``)
 - ``sharegpt`` → ``chat_template`` with ``from`` / ``value`` mappings and the
   ``system`` column
 - ``preference`` / ``sharegpt-preference`` → ``chat_template.default`` for
@@ -81,7 +81,7 @@ def dataset_config(path: str | Path, *, file_path: str | None = None) -> dict[st
         if thinking:
             entry.update(field_thinking="thinking", template_thinking_key="thinking")
         if train_flags:
-            # convert --train-turns last: "train": false on earlier answers.
+            # convert --train-turns last / data: per-turn "train" flags.
             entry["message_field_training"] = "train"
     elif "conversations" in keys:
         if function_calls:

@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Any, Literal, TextIO
 
 from convmerge import _parallel
 from convmerge.adapter_resolve import resolve_adapter
+from convmerge.adapters import oasst
 from convmerge.config import AdapterOptions, ConvertConfig
 from convmerge.emitters import (
     EmitOptions,
@@ -53,7 +54,8 @@ class ConvertStats:
     """Per-run counters filled by :func:`convert_file` when ``stats`` is passed.
 
     Every non-blank input line is either ``invalid_json``, ``non_object``,
-    ``no_example`` (the adapter found nothing to map), or yields one or more
+    ``no_example`` (the adapter found nothing to map), ``grouped`` into an
+    earlier line's record (OpenAssistant message rows), or yields one or more
     examples (e.g. ``pairwise_mode="both"``). Each example is then either
     ``written`` or ``dropped``; ``drop_reasons`` counts why (validation reason
     codes, see :mod:`convmerge.validate`, or an output format that cannot
@@ -81,6 +83,10 @@ class ConvertStats:
     :data:`convmerge.transforms.TRANSFORM_COUNTERS`)."""
     reasoning: int = 0
     """Written examples with a reasoning trace (a field or an inline ``<think>``)."""
+    grouped: int = 0
+    """Input rows folded into the record of an earlier row: the message rows
+    of one OpenAssistant tree become one conversation (see
+    :mod:`convmerge.adapters.oasst`). They count in ``lines_read`` only."""
 
     @property
     def skipped(self) -> int:
@@ -98,7 +104,7 @@ class ConvertStats:
         """Add ``other`` (a later chunk of the same input) into these stats."""
         for name in (
             "lines_read", "written", "blank", "invalid_json", "non_object",
-            "no_example", "dropped", "kept_invalid", "reasoning",
+            "no_example", "dropped", "kept_invalid", "reasoning", "grouped",
         ):  # fmt: skip
             setattr(self, name, getattr(self, name) + getattr(other, name))
         if self.first_invalid_line is None:
@@ -226,6 +232,9 @@ def convert_file(
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
+    if workers > 1 and _groups_rows(input_path, encoding):
+        workers = 1  # a tree's rows must reach one process together; reading is fast anyway
+
     with output_path.open("w", encoding="utf-8") as fout:
         if workers > 1:
             _run_parallel(
@@ -329,16 +338,31 @@ def _run(
     transform: Transform | None = None,
 ) -> None:
     read = ReadStats()
+    trees = oasst.TreeBuffer()  # OpenAssistant message rows, one tree at a time
+
+    def flush(done: tuple[int, Any, int] | None) -> None:
+        if done is not None:
+            st.grouped += done[2]
+            for row in _process(done[1], done[0], adapter, emitter, st, on_invalid, notes,
+                                transform):  # fmt: skip
+                if fout is not None:
+                    fout.write(row)
+
     try:
         for line in iter_jsonl(input_path, encoding=encoding, stats=read):
             if reporter is not None:
                 reporter.update()
-            rows = _process(
-                line.value, line.number, adapter, emitter, st, on_invalid, notes, transform
-            )
+            value = line.value
+            if type(value) is dict and "message_tree_id" in value and oasst.is_message(value):
+                flush(trees.add(line.number, value))
+                continue
+            if trees.rows:
+                flush(trees.flush())
+            rows = _process(value, line.number, adapter, emitter, st, on_invalid, notes, transform)
             for row in rows:
                 if fout is not None:
                     fout.write(row)
+        flush(trees.flush())
     finally:
         st.lines_read = read.lines_read
         st.blank = read.blank
@@ -443,10 +467,26 @@ def convert_records(
     adapter = resolve_adapter(adapter_name, adapter_options, pairs=pairs)
     transform = _transformer(transform_options)
     st = stats if stats is not None else ConvertStats()
-    for number, record in enumerate(records, 1):
-        st.lines_read += 1
+
+    def numbered() -> Iterator[tuple[int, Any]]:
+        for number, record in enumerate(records, 1):
+            st.lines_read += 1
+            yield number, record
+
+    for number, record, grouped in oasst.group_messages(numbered()):
+        st.grouped += grouped
         yield from _process_rows(record, number, adapter, emitter, st, on_invalid, notes,
                                  transform)  # fmt: skip
+
+
+def _groups_rows(path: Path, encoding: str) -> bool:
+    """Whether the first record of ``path`` is an OpenAssistant message row."""
+    try:
+        for line in iter_jsonl(path, encoding=encoding):
+            return oasst.is_message(line.value)
+    except OSError:
+        pass
+    return False
 
 
 def _examples(

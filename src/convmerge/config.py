@@ -377,10 +377,11 @@ def build_convert_config(
         cfg_transforms = replace(cfg_transforms or TransformOptions(), **transform_overrides)
     if cfg_emit is not None:
         _check_reasoning_format(cfg_emit.reasoning, cfg_format)
-        if cfg_emit.train_turns == "last" and cfg_format != "messages":
+        if cfg_emit.train_turns != "all" and cfg_format != "messages":
             raise ValueError(
-                "train_turns: last writes per-turn train flags, which only the messages "
-                "format has (for LLaMA-Factory, set mask_history: true in the training config)"
+                f"train_turns: {cfg_emit.train_turns} writes per-turn train flags, which only "
+                "the messages format has (for LLaMA-Factory, mask_history: true trains on the "
+                "last turn only)"
             )
     if cfg_transforms is not None:
         _check_split_turns(cfg_transforms, cfg_format)
