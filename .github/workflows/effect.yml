@@ -28,6 +28,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: effect-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
 env:
   PIP_DEFAULT_TIMEOUT: "60"
   PIP_RETRIES: "10"
@@ -63,7 +67,7 @@ jobs:
   train:
     needs: prepare
     runs-on: ubuntu-latest
-    timeout-minutes: 180
+    timeout-minutes: 300
     strategy:
       fail-fast: false
       matrix:

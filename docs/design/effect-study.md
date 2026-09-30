@@ -50,8 +50,9 @@ files through `convert --from auto`, then these steps:
 - Model: `HuggingFaceTB/SmolLM2-135M` base weights, with the ChatML chat
   template and `<|im_end|>` as the end token from `SmolLM2-135M-Instruct`.
 - Trainer: TRL `SFTTrainer` with its defaults for the loss.
-- Schedule: 400 steps at batch size 8, `max_length` 1024, learning rate 3e-4
-  with cosine decay and 20 warmup steps, on CPU.
+- Schedule: 400 steps at batch size 8 (4 per step, 2 accumulated),
+  `max_length` 512 for training and eval loss, learning rate 3e-4 with cosine
+  decay and 20 warmup steps, on CPU.
 - Seeds: 0, 1, and 2 for each pipeline.
 
 ## Metrics (fixed now)
@@ -94,3 +95,14 @@ including those where A does better.
 - Anything about larger models or longer training.
 - The value of features this setup does not exercise: tool calls, preference
   data, templates other than ChatML.
+
+## Amendment (before any result was seen)
+
+The first run used `max_length` 1024 and batch 8 per step. On a 4-core, 16 GB
+GitHub runner one such step of a model this size takes about 34 s (measured
+with a randomly initialised model of the same shape), so 400 steps need about
+3.8 hours, over the job limit; peak memory at batch 8 also came within 2 GB of
+the runner's. Both runs were cancelled while training, before any metric was
+written, and the length was halved to 512 with the batch split into 2
+accumulated halves (the same 8 rows per optimizer step). Nothing else changed.
+Rows longer than 512 tokens are cut in both pipelines alike.
