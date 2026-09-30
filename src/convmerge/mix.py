@@ -186,13 +186,25 @@ def _warn_off_target(result: MixResult) -> None:
     if not off:
         return
     unit = "rows" if result.by == "rows" else result.by
-    detail = ", ".join(f"{s.path.name} {share:.0%} (weight {s.weight:.0%})" for s, share in off)
-    short = ", ".join(f"{s.path.name} ({s.written:,} of {s.requested:,} rows)" for s in clipped)
+    label = _labels([s.path for s in result.sources])
+    detail = ", ".join(f"{label[s.path]} {share:.0%} (weight {s.weight:.0%})" for s, share in off)
+    short = ", ".join(f"{label[s.path]} (has {s.written:,} rows, needs {s.requested:,})"
+                      for s in clipped)  # fmt: skip
     logger.warning(
         "the mix is off its weights: %s of the %s. Too few rows in %s; oversample them "
         "(--oversample), ask for fewer rows, or change the weights",
         detail, unit, short,
     )  # fmt: skip
+
+
+def _labels(paths: list[Path]) -> dict[Path, str]:
+    """The shortest trailing part of each path that tells the sources apart
+    (the file name, or ``oasst/converted.jsonl`` for a recipe's sources)."""
+    for depth in range(1, max((len(p.parts) for p in paths), default=1) + 1):
+        names = {p: "/".join(p.parts[-depth:]) for p in paths}
+        if len(set(names.values())) == len(set(paths)):
+            return names
+    return {p: str(p) for p in paths}
 
 
 def _measure(by: str, tokenizer: Any) -> Any:
