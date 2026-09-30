@@ -31,7 +31,8 @@ ReasoningTurns = Literal["all", "last"]
 TRANSFORM_COUNTERS: dict[str, str] = {
     "system_folded": "system turns folded into the first user turn",
     "system_dropped": "system turns removed",
-    "leading_assistant_dropped": "assistant and tool turns before the first user turn removed",
+    "leading_assistant_dropped": "assistant and tool turns before the first user turn, or "
+    "tool results right after it that answer no call, removed",
     "turns_merged": "consecutive same-role turns merged into the one before",
     "reasoning_stripped": "reasoning traces removed from turns before the last user message",
     "split_examples": "examples written by splitting conversations at user turns",
@@ -60,7 +61,10 @@ class TransformOptions:
     - ``leading_assistant``: ``"drop"`` removes assistant (and tool) turns
       before the first user turn (datasets that withhold the first prompt,
       such as Nemotron chat, whose examples otherwise fail validation as
-      ``withheld_prompt``; or agent data that opens with a greeting);
+      ``withheld_prompt``; or agent data that opens with a greeting), and
+      tool results right after the first user turn, which answer no call
+      (agent traces whose first call was not recorded, such as smolagents
+      rows that open with a tool error; otherwise ``orphan_tool_message``);
       ``"keep"`` (default) leaves them.
     """
 
@@ -131,10 +135,13 @@ def _drop_leading_assistant(msgs: list[ChatMessage], tally: dict[str, int]) -> l
     if first_user is None:
         return msgs
     kept = [m for m in msgs[:first_user] if m.role == "system"]
-    if len(kept) == first_user:
+    rest = first_user + 1
+    while rest < len(msgs) and msgs[rest].role == "tool":
+        rest += 1  # tool results with no call before them
+    if len(kept) == first_user and rest == first_user + 1:
         return msgs
     _add(tally, "leading_assistant_dropped")
-    return [*kept, *msgs[first_user:]]
+    return [*kept, msgs[first_user], *msgs[rest:]]
 
 
 def _add(tally: dict[str, int], key: str, n: int = 1) -> None:

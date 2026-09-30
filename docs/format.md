@@ -178,7 +178,7 @@ Off by default; each one is counted in the report's `transforms`:
 | `--merge-consecutive` | Consecutive user turns, or consecutive assistant turns without tool calls, are joined with a blank line. Turns from different named speakers and tool turns are left alone. | "Conversation roles must alternate" (Mistral, Gemma, Llama 2); LLaMA-Factory's `unrepresentable_role_order`. |
 | `--reasoning-turns last` | Removes the reasoning of assistant turns before the last user turn. | Qwen3 / gpt-oss / DeepSeek-R1 templates, which drop those traces at inference. |
 | `--split-turns` | One example per user turn (the conversation up to the next user turn); earlier answers keep their text but lose their reasoning; `meta.turn` records the position. Not for preference formats. | Training every turn of a multi-turn reasoning conversation the way the model sees it. |
-| `--leading-assistant drop` | Assistant (and tool) turns before the first user turn are removed; system turns stay. | Datasets that withhold the first prompt (Nemotron chat: `null` user turn, otherwise dropped as `withheld_prompt`), or agent data that opens with a greeting when the template requires a user turn first. |
+| `--leading-assistant drop` | Assistant (and tool) turns before the first user turn are removed, and so are tool results right after it that answer no call; system turns stay. | Datasets that withhold the first prompt (Nemotron chat: `null` user turn, otherwise dropped as `withheld_prompt`), agent data that opens with a greeting when the template requires a user turn first, or agent traces whose first call was not recorded (smolagents rows that open with a tool error, otherwise dropped as `orphan_tool_message`). |
 
 Order: leading assistant, system, merge, split, reasoning turns. The same options exist in
 presets (`transforms:`), recipes (source `convert` keys), and the API
@@ -584,7 +584,7 @@ that would train badly are **dropped by default** and counted by reason:
 | `empty_message` | a message has neither content nor tool calls |
 | `no_user` | there is no user message (e.g. a plain `text` record) |
 | `no_assistant` | there is no assistant message with content or tool calls |
-| `orphan_tool_message` | a `tool` message is not preceded by an assistant tool call |
+| `orphan_tool_message` | a `tool` message is not preceded by an assistant tool call. When it comes right after the first user turn (the first call was not recorded), `--leading-assistant drop` removes it and keeps the rest |
 | `tool_call_id_mismatch` | a `tool_call_id` matches no earlier tool call id |
 | `unresolved_image` / `_video` / `_audio` | a media placeholder has no matching reference in the record |
 | `unused_image` / `_video` / `_audio` | the record lists more media references than placeholders |
