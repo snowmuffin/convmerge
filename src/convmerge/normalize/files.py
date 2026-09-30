@@ -28,10 +28,16 @@ class NormalizeResult:
 
 
 def normalize_file(src: Path, dst: Path, *, array_key: str = "conversation") -> int:
-    """Normalize one ``.parquet`` / ``.json`` / ``.jsonl`` file; return records written."""
+    """Normalize one ``.parquet`` / ``.json`` / ``.jsonl`` file, or a ``.csv`` /
+    ``.tsv`` table (one object per row, see :mod:`convmerge.normalize.tabular`);
+    return records written. Directory walks (:func:`iter_data_files`) skip
+    tables: pass a table file directly."""
     # Imported lazily so that convert works without the parquet extra.
     from convmerge.normalize.jsonl import normalize_to_jsonl
+    from convmerge.normalize.tabular import TABLE_EXTENSIONS, table_to_jsonl
 
+    if src.suffix.lower() in TABLE_EXTENSIONS:
+        return table_to_jsonl(src, dst)
     if src.suffix.lower() == ".parquet":
         from convmerge.normalize.parquet import parquet_to_jsonl
 

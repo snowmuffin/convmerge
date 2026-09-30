@@ -14,6 +14,8 @@ present. Handles the common messy shapes seen across SFT datasets:
 - Alpaca-style ``instruction`` / ``input`` / ``output`` (delegates to the
   existing alpaca adapter), and ``input`` turns + an ``output`` answer
   (Llama-Nemotron post-training data).
+- OpenAssistant message trees (a ``prompt`` with nested ``replies``): the
+  conversation along the best-ranked reply (see :mod:`convmerge.adapters.oasst`).
 - Tool-calling encodings other than OpenAI's: Hermes tags, Glaive
   ``system`` + ``chat`` transcripts, and xLAM ``query`` / ``answers`` (see
   :mod:`convmerge.adapters.tool_formats`).
@@ -37,6 +39,7 @@ import logging
 from collections.abc import Iterator
 from typing import Any
 
+from convmerge.adapters import oasst
 from convmerge.adapters._common import (
     DEFAULT_REASONING_KEYS,
     build_example,
@@ -162,6 +165,8 @@ def iter_from_chat_line(
                     yield build_example(turns, record, meta={"source": "chat:text"})
                     return
         if isinstance(convs, list) and convs:
+            if "metadata" in record:
+                convs = _with_turn_flags(convs, record["metadata"])
             msgs = coerce_messages(
                 convs,
                 role_keys=role_keys,
@@ -174,6 +179,15 @@ def iter_from_chat_line(
                 answer = _answer_turn(record, (*output_keys, "target", "target_json"))
                 if answer is not None:
                     msgs.append(answer)
+            for m in msgs:
+                if m.role == "user":
+                    break
+            else:
+                # The answer turns, with the question in its own column (smolagents).
+                question = _first_string(record, _QUESTION_KEYS)
+                if msgs and question is not None:
+                    at = next((i for i, m in enumerate(msgs) if m.role != "system"), len(msgs))
+                    msgs.insert(at, ChatMessage("user", question))
             if msgs:
                 example = build_example(msgs, record, meta={"source": "chat"})
                 if _starts_with_answer(msgs) and _null_user_turn(convs, role_keys, content_keys):
@@ -204,6 +218,14 @@ def iter_from_chat_line(
         return
     if is_xlam(record):
         yield build_example(xlam_messages(record), record, meta={"source": "chat:xlam"})
+        return
+    if type(record.get("prompt")) is dict and oasst.is_tree(record):
+        if record["prompt"].get("missing_root") is True:
+            yield TrainingExample(meta={"source": "chat:oasst"}, issues=["missing_root"])
+            return
+        msgs = [ChatMessage(t["role"], t["content"]) for t in oasst.best_path(record)]
+        tree = {"id": record.get("message_tree_id")}
+        yield build_example(msgs, tree, meta={"source": "chat:oasst"})
         return
 
     # Resolve Alpaca cues up front so a stray ``text`` field can't silently
@@ -382,6 +404,24 @@ def _has_answer(msgs: list[ChatMessage]) -> bool:
         if m.role == "assistant":
             return True
     return False
+
+
+# Columns holding the question when the turns have no user turn at all.
+_QUESTION_KEYS = ("prompt", "question", "original_question", "instruction", "query")
+
+
+def _with_turn_flags(convs: list[Any], metadata: Any) -> list[Any]:
+    """Turns with ``train`` set from a row-level flag list: Nemotron's
+    ``metadata.train_turns``, one bool per turn (only when the lengths match)."""
+    flags = metadata.get("train_turns") if isinstance(metadata, dict) else None
+    if not isinstance(flags, list) or len(flags) != len(convs):
+        return convs
+    if not all(type(f) is bool for f in flags):
+        return convs
+    return [
+        {**t, "train": f} if isinstance(t, dict) and "train" not in t else t
+        for t, f in zip(convs, flags)
+    ]
 
 
 def _json_columns(record: dict[str, Any], keys: tuple[str, ...]) -> dict[str, Any]:

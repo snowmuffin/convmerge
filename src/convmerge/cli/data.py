@@ -58,11 +58,12 @@ def _add_normalize(sub: argparse._SubParsersAction) -> None:
     p = sub.add_parser(
         "normalize",
         help=(
-            "Normalize parquet/json/jsonl files in a directory into clean JSONL "
-            "(install convmerge[parquet] for .parquet inputs)"
+            "Normalize parquet/json/jsonl files in a directory (or one csv/tsv table) "
+            "into clean JSONL (install convmerge[parquet] for .parquet inputs)"
         ),
         description="Normalize parquet/json/jsonl files in a directory into clean JSONL. "
-        "Parquet inputs require convmerge[parquet].",
+        "A .csv or .tsv file given as --input becomes one object per row, keyed by the "
+        "header. Parquet inputs require convmerge[parquet].",
     )
     p.add_argument("--input", "-i", type=Path, required=True, help="Input file or directory")
     p.add_argument(

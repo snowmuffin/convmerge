@@ -136,10 +136,12 @@ def _add_convert(sub: argparse._SubParsersAction) -> None:
     )
     p.add_argument(
         "--train-turns",
-        choices=("all", "last"),
+        choices=("all", "last", "data"),
         default=None,
-        help='last: mark every assistant turn but the last with "train": false '
-        "(messages format; axolotl message_field_training: train)",
+        help='last: mark every assistant turn but the last with "train": false; '
+        "data: write the flag the dataset gives each assistant turn (train / loss / "
+        "weight keys, metadata.train_turns) (messages format; axolotl "
+        "message_field_training: train)",
     )
     g = p.add_argument_group("fixes for strict chat templates (all off by default)")
     g.add_argument(
@@ -228,6 +230,12 @@ def _cmd_convert(args: argparse.Namespace) -> None:
         print(f"error: {e} (use --on-invalid drop or keep to continue)", file=sys.stderr)
         sys.exit(1)
     print(f"read {n_in} lines, wrote {n_out} examples", file=sys.stderr)
+    if stats.grouped:
+        print(
+            f"read OpenAssistant message rows as trees: {stats.grouped:,} rows joined "
+            "the conversation of an earlier row",
+            file=sys.stderr,
+        )
     advice = encoding_advice(bad_bytes_before, cfg.encoding, has_encoding_flag=True)
     if n_out == 0 and not advice:  # a bad encoding is explained with the skipped lines below
         for hint in _explain_empty(args.input, cfg.adapter, cfg.encoding, stats):
@@ -281,6 +289,8 @@ def _explain_empty(path: Path, adapter: str, encoding: str, stats: ConvertStats)
     missing = {"no_messages", "no_user", "no_assistant"}
     if not stats.no_example and not missing & set(stats.drop_reasons):
         return []
+    if "preference_record" in stats.drop_reasons:
+        return []  # the drop summary says how to read preference records
     rows = []
     for line in iter_jsonl(path, encoding=encoding):
         if isinstance(line.value, dict):

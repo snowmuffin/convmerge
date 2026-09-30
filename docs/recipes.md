@@ -110,6 +110,8 @@ by path) and concatenated.
 | `mix.seed` | `42` | |
 | `mix.oversample` | `false` | Repeat records of sources smaller than their share. |
 | `mix.sampler` | `v2` | `v1` reproduces pre-0.7 mixes. |
+| `mix.by` | `rows` | What the weights measure: `rows`, `chars`, or `tokens` (needs `total`; `tokens` needs `tokenizer`). `total` stays a row count, split so each source's share of the characters or tokens is its weight. |
+| `mix.tokenizer` | — | Hugging Face tokenizer name or path for `by: tokens` (needs `convmerge[tokens]`). |
 
 | `dedupe.near` | `false` | Drop rows whose text is a near-copy of an earlier row (MinHash LSH over word 5-grams). Needs `convmerge[quality]`. |
 | `dedupe.threshold` | `0.8` | `near`: estimated Jaccard similarity that makes a duplicate (below 1). |

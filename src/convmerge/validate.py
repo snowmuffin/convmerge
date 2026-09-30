@@ -28,7 +28,14 @@ REASONS: dict[str, str] = {
 # per media type by ``convert``).
 ISSUES: dict[str, str] = {
     "map_path_missing": "a path of the --from map field mapping is missing from the record",
-    "no_preference": "the --from map preferred label names no winner (a tie)",
+    "no_preference": (
+        "no winner: the --from map preferred label names none (a tie), or every scored "
+        "answer has the same score"
+    ),
+    "missing_root": (
+        "an OpenAssistant message tree without its root prompt (the file starts mid-tree, "
+        "or the rows of a tree are not next to each other)"
+    ),
     "withheld_prompt": (
         "a user turn is null and the conversation starts with its answer (the dataset "
         "withholds that prompt; --leading-assistant drop removes the answer)"

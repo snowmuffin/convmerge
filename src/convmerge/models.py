@@ -77,6 +77,11 @@ class ChatMessage:
     tool_call_id: str | None = None
     name: str | None = None
     reasoning: str | None = None
+    train: bool | None = None
+    """For an assistant turn: whether the dataset marks it to be trained on
+    (a per-turn ``train`` / ``loss`` / ``weight`` key, or a row-level list
+    such as Nemotron's ``metadata.train_turns``); ``None`` when it says
+    nothing. Written only with ``convert --train-turns data``."""
 
     def __post_init__(self) -> None:
         content = self.content

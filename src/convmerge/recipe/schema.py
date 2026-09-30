@@ -98,6 +98,8 @@ class MixSpec:
     seed: int = 42
     oversample: bool = False
     sampler: str = "v2"
+    by: str = "rows"
+    tokenizer: str | None = None
 
 
 @dataclass(frozen=True)
@@ -434,7 +436,7 @@ def _mix(raw: Any, sources: dict[str, SourceSpec]) -> MixSpec | None:
     if raw is None:
         return None
     spec = _mapping(raw, "mix")
-    _only(spec, {"weights", "total", "seed", "oversample", "sampler"}, "mix")
+    _only(spec, {"weights", "total", "seed", "oversample", "sampler", "by", "tokenizer"}, "mix")
     weights_raw = spec.get("weights")
     if weights_raw is None:
         weights = {name: 1.0 for name in sources}
@@ -459,12 +461,24 @@ def _mix(raw: Any, sources: dict[str, SourceSpec]) -> MixSpec | None:
     sampler = spec.get("sampler", "v2")
     if sampler not in ("v1", "v2"):
         raise RecipeError("mix.sampler: expected v1 or v2")
+    by = spec.get("by", "rows")
+    if by not in ("rows", "chars", "tokens"):
+        raise RecipeError("mix.by: expected rows, chars, or tokens")
+    tokenizer = spec.get("tokenizer")
+    if tokenizer is not None and not isinstance(tokenizer, str):
+        raise RecipeError("mix.tokenizer: expected a tokenizer name or path")
+    if by != "rows" and total is None:
+        raise RecipeError(f"mix.by: {by} needs mix.total")
+    if by == "tokens" and tokenizer is None:
+        raise RecipeError("mix.by: tokens needs mix.tokenizer")
     return MixSpec(
         weights=weights,
         total=total,
         seed=seed,
         oversample=bool(spec.get("oversample", False)),
         sampler=sampler,
+        by=by,
+        tokenizer=tokenizer,
     )
 
 

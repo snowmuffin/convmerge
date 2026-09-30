@@ -32,7 +32,8 @@ CATALOG = script.load_catalog()
 
 def _convert(tmp_path: Path, entry: dict) -> tuple[list, ConvertStats]:
     src, dst = tmp_path / "in.jsonl", tmp_path / "out.jsonl"
-    src.write_text(json.dumps(entry["record"], ensure_ascii=False) + "\n", encoding="utf-8")
+    lines = [json.dumps(r, ensure_ascii=False) + "\n" for r in script.sample_rows(entry)]
+    src.write_text("".join(lines), encoding="utf-8")
     cfg = script.convert_config(entry)
     stats = ConvertStats()
     convert_with_config(src, dst, cfg, stats=stats)
@@ -104,7 +105,7 @@ def test_readme_table_matches_catalog() -> None:
 
 def _catalog_rows(entry: dict, rows: int) -> list[dict]:
     """A stand-in for the Hub: the catalog record, repeated."""
-    return [entry["record"]] * min(rows, 3)
+    return script.sample_rows(entry) * min(rows, 3)
 
 
 def test_live_check_logic(tmp_path: Path, monkeypatch) -> None:
