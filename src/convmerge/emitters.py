@@ -32,6 +32,7 @@ ToolArguments = Literal["string", "object"]
 AlpacaMultiturn = Literal["flatten", "history", "drop"]
 ToolContent = Literal["empty", "null"]
 TrainTurns = Literal["all", "last", "data"]
+MediaMode = Literal["urls", "placeholders"]
 
 
 @dataclass(frozen=True)
@@ -69,6 +70,14 @@ class EmitOptions:
       ``message_field_training: train``); ``"data"`` writes the flag the
       dataset gives each assistant turn (:attr:`ChatMessage.train`, ``true``
       where it gives none); ``"all"`` (default) writes no flag.
+    - ``media``: how the ``messages`` format writes images, video, and audio.
+      ``"urls"`` (default) keeps each reference in its content part
+      (``{"type": "image_url", "image_url": {"url": ...}}``, the OpenAI
+      schema). ``"placeholders"`` writes the TRL vision-language layout: a
+      bare ``{"type": "image"}`` part where the image goes, the references
+      in order in an ``images`` column (``videos`` / ``audios`` likewise),
+      and every content as a list of parts so all rows share one Arrow type;
+      ``images`` is present (maybe empty) on every row.
     """
 
     tool_arguments: ToolArguments = "string"
@@ -79,6 +88,7 @@ class EmitOptions:
     tool_content: ToolContent = "empty"
     meta_values: Mapping[str, str] | None = None
     train_turns: TrainTurns = "all"
+    media: MediaMode = "urls"
 
     def __post_init__(self) -> None:
         if self.tool_arguments not in ("string", "object"):
@@ -100,6 +110,8 @@ class EmitOptions:
             raise ValueError(
                 f"train_turns must be 'all', 'last', or 'data', got {self.train_turns!r}"
             )
+        if self.media not in ("urls", "placeholders"):
+            raise ValueError(f"media must be 'urls' or 'placeholders', got {self.media!r}")
         if not isinstance(self.keep_meta, bool):
             object.__setattr__(self, "keep_meta", tuple(self.keep_meta))
         if self.meta_values is not None:
@@ -130,7 +142,8 @@ def emit_messages(
     Hugging Face chat templates expect that).
     """
     opts = options if options is not None else EmitOptions(tool_arguments=tool_arguments)
-    row: dict[str, Any] = {"messages": _message_dicts(example.messages, opts)}
+    media: dict[str, list[str]] | None = {"images": []} if opts.media == "placeholders" else None
+    row: dict[str, Any] = {"messages": _message_dicts(example.messages, opts, media)}
     if opts.train_turns == "last":
         _train_last_turn_only(row["messages"])
     elif opts.train_turns == "data":
@@ -139,6 +152,8 @@ def emit_messages(
                 d["train"] = m.train is not False
     if example.tools:
         row["tools"] = example.tools
+    if media is not None:
+        row.update(media)
     return _with_meta(row, example, options)
 
 
@@ -164,7 +179,11 @@ def _with_meta(
     return row
 
 
-def _message_dicts(msgs: Sequence[ChatMessage], opts: EmitOptions) -> list[dict[str, Any]]:
+def _message_dicts(
+    msgs: Sequence[ChatMessage], opts: EmitOptions, media: dict[str, list[str]] | None = None
+) -> list[dict[str, Any]]:
+    """``media``, when given, collects media references by column
+    (``images``, ...) and the content becomes TRL placeholder parts."""
     key = "thinking" if opts.reasoning == "thinking" else "reasoning_content"
     return [
         _message_dict(
@@ -172,6 +191,7 @@ def _message_dicts(msgs: Sequence[ChatMessage], opts: EmitOptions) -> list[dict[
             opts.tool_arguments,
             reasoning_key=key,
             tool_content=opts.tool_content,
+            media=media,
         )
         for m in msgs
     ]
@@ -213,11 +233,14 @@ def _message_dict(
     *,
     reasoning_key: str = "reasoning_content",
     tool_content: ToolContent = "empty",
+    media: dict[str, list[str]] | None = None,
 ) -> dict[str, Any]:
     out: dict[str, Any] = {"role": m.role}
     if m.name is not None:
         out["name"] = m.name
-    if m.content is None:
+    if media is not None and (m.content is not None or tool_content == "empty"):
+        out["content"] = _placeholder_parts(m.content or "", media)
+    elif m.content is None:
         out["content"] = "" if m.tool_calls and tool_content == "empty" else None
     elif isinstance(m.content, str):
         out["content"] = m.content
@@ -229,6 +252,26 @@ def _message_dict(
         out["tool_calls"] = [_tool_call_dict(tc, tool_arguments) for tc in m.tool_calls]
     if m.tool_call_id is not None:
         out["tool_call_id"] = m.tool_call_id
+    return out
+
+
+def _placeholder_parts(
+    content: str | Sequence[ContentPart], media: dict[str, list[str]]
+) -> list[dict[str, Any]]:
+    """Content as TRL vision-language parts; media references go to ``media``."""
+    parts = [ContentPart("text", text=content)] if isinstance(content, str) else content
+    out: list[dict[str, Any]] = []
+    for p in parts:
+        if p.type == "text":
+            if p.text:
+                out.append({"type": "text", "text": p.text})
+        elif p.url is not None and p.type in _MEDIA_COLUMNS:
+            out.append({"type": p.type})
+            media.setdefault(_MEDIA_COLUMNS[p.type], []).append(p.url)
+        else:
+            # An unresolved placeholder (validation normally drops these first):
+            # a bare part without a reference would pair with the wrong image.
+            raise UnrepresentableExample("unrepresentable_media_placeholder")
     return out
 
 

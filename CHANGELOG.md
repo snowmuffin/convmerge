@@ -7,6 +7,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-09-30
+
+Vision-language training data for TRL, Excel input, and a fast estimate for
+token-weighted mixes. All additive; see "Changed output" for the one option
+whose output grows.
+
+### Added
+
+- `convert --media placeholders` (`EmitOptions.media`, recipe and preset
+  `media`): the `messages` format in TRL's vision-language layout, a bare
+  `{"type": "image"}` part where each image goes and the references in order
+  in an `images` column (`videos` / `audios` likewise). Every content is a
+  list of parts and every row has `images`, so text-only and image rows load
+  as one Arrow schema. Checked by training a small Qwen2-VL with TRL 1.14's
+  `SFTTrainer` on converted rows with one, two, and no images; see the TRL
+  guide for loading the images with `datasets`. The default (`urls`) is
+  unchanged.
+- `normalize` reads Excel workbooks (`.xlsx`, new extra `convmerge[xlsx]`,
+  included in `[all]`): one sheet (`--sheet NAME`, recipe
+  `normalize: {sheet: ...}`; default the first) becomes one object per row
+  under the CSV rules. Numbers keep Excel's 15 significant digits, dates
+  become ISO 8601, booleans `TRUE` / `FALSE`. Formula cells take the value
+  Excel saved; files never opened in Excel have none, and those cells are
+  left empty with a warning. `.xls` gets a one-line hint to re-save.
+- `mix --by-sample N` (`mix_files(by_sample=)`, recipe `mix.by_sample`):
+  with `--by chars` / `tokens`, measure N random rows per source (the same
+  rows for the same seed) and scale by the row count instead of measuring
+  every row. On 600,000 rows `--by tokens` went from 224 s to 32 s with
+  `--by-sample 2000`; on the 1.3 evaluation mix the token shares stayed
+  within 1 point of the target. `SourceStats.measured` and
+  `MixResult.by_sample` record it, and the summary and `.mix.json` say the
+  lengths are estimated.
+
+### Changed output
+
+- `--leading-assistant drop` also removes tool results right after the first
+  user turn, which answer no call. Agent traces whose first call was not
+  recorded (smolagents/toolcalling: 21 of 20,000 rows open with a tool
+  error, and the question comes from a column) were dropped as
+  `orphan_tool_message` even with the option; they now convert. Rows without
+  such a turn are unchanged, and nothing changes without the option. The
+  catalog entry for smolagents/toolcalling now uses it.
+
+### Documentation
+
+- README: convmerge does not remove personal information (PII); use a
+  dedicated tool before converting when the data needs it.
+- TRL guide: vision-language SFT with `--media placeholders`.
+
 ## [1.3.1] - 2026-09-30
 
 Fixes from the 1.3 evaluation: `mix` speed, UltraFeedback ties, and a

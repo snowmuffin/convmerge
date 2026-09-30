@@ -19,7 +19,7 @@ internal and may change without notice.
 | `ConvertStats` | Counters and drop reasons; pass one as `stats=` and read it afterwards. `to_report()` gives the `--report` JSON. `grouped` counts OpenAssistant message rows joined to an earlier row's tree. |
 | `InvalidExampleError` | Raised by `on_invalid="fail"`; has `line_number` and `reasons`. |
 | `ConvertConfig`, `AdapterOptions`, `ChatAdapterOptions`, `SharegptAdapterOptions` | Adapter configuration (see [custom_presets.md](custom_presets.md)). |
-| `EmitOptions` | Output options: `tool_arguments`, `keep_meta`, `meta_key`, `alpaca_multiturn`, `reasoning`, `tool_content`, `meta_values`, `train_turns` (`all`, `last`, `data`). |
+| `EmitOptions` | Output options: `tool_arguments`, `keep_meta`, `meta_key`, `alpaca_multiturn`, `reasoning`, `tool_content`, `meta_values`, `train_turns` (`all`, `last`, `data`), `media` (`urls`, `placeholders`: the TRL vision-language layout). |
 | `MapSpec` | The `--from map` field mapping: `MapSpec.from_mapping({"user": "q.text", "assistant": "a.text"})`, passed as `AdapterOptions(map=...)` (see [format.md](format.md#field-mapping---from-map)); scored answers with `candidates` / `candidate` / `score` / `better`. |
 | `TransformOptions` | Fixes for strict chat templates: `system`, `merge_consecutive`, `split_turns`, `reasoning_turns` (see [format.md](format.md#fixes-for-strict-chat-templates)). |
 | `validate_example(example)` | Reason codes that make a `TrainingExample` unfit for SFT (empty list = valid). |

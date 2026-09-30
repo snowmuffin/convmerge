@@ -20,6 +20,7 @@
   --reasoning choices=keep|inline|reasoning_content|thinking|drop
   --tool-content choices=empty|null
   --train-turns choices=all|last|data
+  --media choices=urls|placeholders
   --system choices=keep|fold|drop
   --merge-consecutive (switch)
   --split-turns (switch)
@@ -39,6 +40,7 @@
   --input, -i required
   --output, -o required
   --array-key default='conversation'
+  --sheet
 [convmerge dedupe]
   --input, -i required
   --output, -o required
@@ -137,6 +139,7 @@
   --sampler choices=v1|v2
   --by choices=rows|chars|tokens
   --tokenizer
+  --by-sample
   --no-recipe (switch)
   --encoding default='utf-8'
 [convmerge run]
