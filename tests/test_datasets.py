@@ -32,8 +32,8 @@ CATALOG = script.load_catalog()
 
 def _convert(tmp_path: Path, entry: dict) -> tuple[list, ConvertStats]:
     src, dst = tmp_path / "in.jsonl", tmp_path / "out.jsonl"
-    src.write_text("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in script.sample_rows(entry)),
-                   encoding="utf-8")  # fmt: skip
+    lines = [json.dumps(r, ensure_ascii=False) + "\n" for r in script.sample_rows(entry)]
+    src.write_text("".join(lines), encoding="utf-8")
     cfg = script.convert_config(entry)
     stats = ConvertStats()
     convert_with_config(src, dst, cfg, stats=stats)
