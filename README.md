@@ -8,7 +8,7 @@
 [![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-2.1-4baaaa.svg)](CODE_OF_CONDUCT.md)
 
 > **Convert Alpaca, ShareGPT, tool-calling, preference, and mixed chat datasets into one training-ready JSONL.**  
-> Fetch from HuggingFace or GitHub, normalize messy Parquet / JSON / JSONL, convert [60+ popular dataset layouts](#tested-datasets) into `messages` (SFT) or `{prompt, chosen, rejected}` (DPO) rows, weighted-mix multiple domain sources, deduplicate, filter, and decontaminate — one command each, or the whole pipeline from a reproducible recipe.
+> Fetch from HuggingFace or GitHub, normalize messy Parquet / JSON / JSONL, convert [65 popular dataset layouts](#tested-datasets) into `messages` (SFT) or `{prompt, chosen, rejected}` (DPO) rows, weighted-mix multiple domain sources, deduplicate, filter, and decontaminate — one command each, or the whole pipeline from a reproducible recipe.
 
 `convmerge` is a **data-preparation CLI and library** for LLM supervised fine-tuning (SFT).
 It takes heterogeneous instruction-tuning datasets — **Alpaca**, **ShareGPT**, raw chat JSONL,
@@ -241,7 +241,9 @@ convmerge normalize -i ./raw -o ./jsonl
 Handles parquet (streamed via `pyarrow`), top-level JSON arrays, concatenated
 single-line JSON (`{...}{...}{...}`), JSONL whose lines are arrays (wrapped as
 `{"conversation": [...]}`), and already-valid JSONL. A directory input is
-walked recursively and mirrored under the output directory.
+walked recursively and mirrored under the output directory. A `.csv` or
+`.tsv` file given as `-i` becomes one object per row, keyed by the header
+(`instruction,input,output` spreadsheets convert with `--from auto` next).
 
 ### 3. `convert` — adapter + emitter pipeline
 
@@ -344,6 +346,13 @@ through temporary files next to the output, so memory stays small even when
 merging multi-GB sources (`--sampler v1` reproduces mixes made before 0.7). A sidecar `.mix.json` is written alongside
 the output recording the exact seed, weights, and per-source counts for full
 reproducibility. Omit `--total` to merge all records from every source.
+
+Weights count rows by default. Sources whose rows differ a lot in length
+(short chat against long reasoning traces) can be weighted by text instead:
+`--by chars`, or `--by tokens --tokenizer Qwen/Qwen2.5-7B-Instruct`, splits
+the `--total` rows so each source's share of the characters or tokens is its
+weight. `mix` prints each source's share, and the share of rows with a
+reasoning trace, so the mix you get is the mix you meant.
 
 ### 5. `dedupe` / `filter` / `decontam` / `tokens` / `split` — ready for training
 

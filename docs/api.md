@@ -16,11 +16,11 @@ internal and may change without notice.
 | `convert_records(records, *, adapter_name="auto", output_format="messages", ...)` | The same pipeline in memory: any iterable of dicts (a list, a generator, a `datasets.Dataset`) in, output rows (dicts) out, lazily. Takes `adapter_options`, `emit_options`, `transform_options`, `on_invalid`, and `stats` like `convert_file`. |
 | `build_convert_config(*, preset_path, adapter, output_format, ...)` | Merge a preset file, `--adapter-kwargs` JSON, and explicit overrides into a `ConvertConfig`. |
 | `validate_file(input, *, adapter_name="chat")` | Run validation only; returns `ConvertStats`. |
-| `ConvertStats` | Counters and drop reasons; pass one as `stats=` and read it afterwards. `to_report()` gives the `--report` JSON. |
+| `ConvertStats` | Counters and drop reasons; pass one as `stats=` and read it afterwards. `to_report()` gives the `--report` JSON. `grouped` counts OpenAssistant message rows joined to an earlier row's tree. |
 | `InvalidExampleError` | Raised by `on_invalid="fail"`; has `line_number` and `reasons`. |
 | `ConvertConfig`, `AdapterOptions`, `ChatAdapterOptions`, `SharegptAdapterOptions` | Adapter configuration (see [custom_presets.md](custom_presets.md)). |
-| `EmitOptions` | Output options: `tool_arguments`, `keep_meta`, `meta_key`, `alpaca_multiturn`, `reasoning`, `tool_content`, `meta_values`. |
-| `MapSpec` | The `--from map` field mapping: `MapSpec.from_mapping({"user": "q.text", "assistant": "a.text"})`, passed as `AdapterOptions(map=...)` (see [format.md](format.md#field-mapping---from-map)). |
+| `EmitOptions` | Output options: `tool_arguments`, `keep_meta`, `meta_key`, `alpaca_multiturn`, `reasoning`, `tool_content`, `meta_values`, `train_turns` (`all`, `last`, `data`). |
+| `MapSpec` | The `--from map` field mapping: `MapSpec.from_mapping({"user": "q.text", "assistant": "a.text"})`, passed as `AdapterOptions(map=...)` (see [format.md](format.md#field-mapping---from-map)); scored answers with `candidates` / `candidate` / `score` / `better`. |
 | `TransformOptions` | Fixes for strict chat templates: `system`, `merge_consecutive`, `split_turns`, `reasoning_turns` (see [format.md](format.md#fixes-for-strict-chat-templates)). |
 | `validate_example(example)` | Reason codes that make a `TrainingExample` unfit for SFT (empty list = valid). |
 
@@ -53,7 +53,7 @@ train = Dataset.from_list(list(convert_records(raw)))
 | Name | Purpose |
 |------|---------|
 | `TrainingExample(messages, meta={}, tools=None, issues=[], rejected=None)` | One example between adapter and emitter. For preference data `messages` is the chosen conversation and `rejected` the rejected one (read by the `preference` format). |
-| `ChatMessage(role, content, tool_calls=(), tool_call_id=None, name=None, reasoning=None)` | `content` is a string, a sequence of `ContentPart`, or `None`; `.text` gives the text-only view, `.media` the media parts. `reasoning` is a trace stored apart from the answer (inline `<think>` blocks stay in `content`). |
+| `ChatMessage(role, content, tool_calls=(), tool_call_id=None, name=None, reasoning=None, train=None)` | `content` is a string, a sequence of `ContentPart`, or `None`; `.text` gives the text-only view, `.media` the media parts. `reasoning` is a trace stored apart from the answer (inline `<think>` blocks stay in `content`). `train` is the dataset's own flag for an assistant turn (written with `train_turns="data"`). |
 | `ContentPart(type, text=None, url=None)` | `text`, or `image` / `audio` / `video` by reference (`url` is a URL or path). |
 | `ToolCall(name, arguments="{}", id=None)` | `arguments` is a JSON string; `ToolCall.from_any(name, dict_or_str)` builds one from a dict. |
 
@@ -61,9 +61,9 @@ train = Dataset.from_list(list(convert_records(raw)))
 
 | Name | Purpose |
 |------|---------|
-| `mix_files(sources, output, *, total, seed, oversample, sampler)` with `MixSource(path, weight)` | Weighted mixing; `sampler="v2"` streams, `"v1"` reproduces pre-0.7 mixes. Returns a `MixResult` (`total_written`, `sources`, …). |
+| `mix_files(sources, output, *, total, seed, oversample, sampler, by, tokenizer)` with `MixSource(path, weight)` | Weighted mixing; `sampler="v2"` streams, `"v1"` reproduces pre-0.7 mixes. `by="chars"` / `"tokens"` (with `tokenizer`, a name, path, or object with `encode`) splits `total` rows so each source's share of the characters or tokens is its weight. Returns a `MixResult` (`total_written`, `by`, `sources`: `SourceStats` with `written`, `units`, `mean_units`, `reasoning` rows, …). |
 | `deduplicate_jsonl(src, dst, *, keys, algorithm, seen_store, stats)` with `DedupeStats` | Hash-based dedupe. |
-| `normalize_to_jsonl(src, dst, *, array_key="conversation")` | Messy JSON / JSONL → clean JSONL. |
+| `normalize_to_jsonl(src, dst, *, array_key="conversation")` | Messy JSON / JSONL → clean JSONL (CSV / TSV tables: `convmerge normalize`, see [format.md](format.md#normalization-utilities)). |
 | `profile_schema(path_or_records, *, max_rows, max_examples)` | The structure report behind `convmerge inspect`. |
 | `analyze_turn_distribution(path)`, `split_by_turns(src, *, single_out, multi_out)` | The report and split behind `convmerge turns`. |
 | `split_jsonl(src, train_out, val_out, *, val, val_rows, seed, keys, stats)` with `SplitStats` | Content-hashed train/validation split (`convmerge split`); returns `(train, val)` counts. |
