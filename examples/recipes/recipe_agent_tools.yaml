@@ -1,0 +1,24 @@
+# Tool-calling SFT for a Qwen model: three encodings (Glaive, Hermes <tool_call>,
+# smolagents Python dicts) become standard tool_calls, checked against the template.
+# Run: convmerge run examples/recipes/recipe_agent_tools.yaml   (needs convmerge[all])
+version: 1
+output: train/tools.jsonl               # validation rows -> train/tools.val.jsonl
+workdir: build/tools
+sources:
+  glaive:
+    fetch: { hf: glaiveai/glaive-function-calling-v2, max_rows: 10000 }
+    convert: { from: auto, tool_arguments: object }
+  hermes:
+    fetch: { hf: NousResearch/hermes-function-calling-v1, config: func_calling, max_rows: 5000 }
+    convert: { from: auto, tool_arguments: object }
+  smolagents:                           # traces whose first call was not recorded open with a tool error
+    fetch: { hf: smolagents/toolcalling, max_rows: 5000 }
+    convert: { from: auto, tool_arguments: object, leading_assistant: drop }
+mix:
+  weights: { glaive: 1, hermes: 1, smolagents: 1 }
+  total: 15000
+dedupe: true
+tokens:                                 # render with the model's template; drop what it rejects or is too long
+  tokenizer: Qwen/Qwen2.5-0.5B-Instruct
+  max_tokens: 4096
+split: { val: 0.02 }

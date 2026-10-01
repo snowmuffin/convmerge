@@ -8,17 +8,20 @@ from the top-level [README](../README.md):
 pip install "convmerge[all]"
 ```
 
-The manifests intentionally use `<HF_ORG>/<DATASET>` and `ORG/REPO`
-**placeholders** rather than pinning any specific public dataset or
-repository. `convmerge` does not endorse or commit to supporting any
-particular third-party source — plug in whichever dataset your project
-actually uses.
+The manifests in `manifests/` use `<HF_ORG>/<DATASET>` and `ORG/REPO`
+**placeholders**; plug in whichever dataset your project uses. The recipes in
+`recipes/`, `trl/`, and `llamafactory/` name real public datasets from the
+[tested catalog](../README.md#tested-datasets) so they run as written; naming
+them is not an endorsement.
 
 > You are responsible for the license of any data you download. Respect
 > each source's terms. `convmerge` does not rehost any dataset.
 
 ## Directory layout
 
+- `recipes/` — complete `convmerge run` recipes for three common jobs (below).
+- `trl/`, `llamafactory/` — the recipes behind the trainer guides in
+  [docs/guides](../docs/guides).
 - `manifests/` — ready-to-run `convmerge fetch` YAML manifests for the
   common source patterns. Safe defaults (`resume: true`, tokens read
   from env).
@@ -26,7 +29,27 @@ actually uses.
   `fetch → normalize → convert → dedupe → turns` sequence for each
   manifest shape.
 
-## Recipes
+## Complete recipes
+
+Each one fetches, converts, mixes, cleans, and splits in one command
+(`pip install "convmerge[all]"`). Every recipe here is parsed and planned in the
+test suite.
+
+| Recipe | Sources | What it shows |
+|--------|---------|---------------|
+| [recipes/recipe_korean_sft.yaml](recipes/recipe_korean_sft.yaml) | KoAlpaca, KULLM v2, open-korean-instructions | three layouts to `messages`; mix by chars; near dedupe; drop answers that are mostly not Hangul |
+| [recipes/recipe_dpo_mix.yaml](recipes/recipe_dpo_mix.yaml) | UltraFeedback, hh-rlhf, PKU-SafeRLHF | scored, transcript, and labeled preference data to `{prompt, chosen, rejected}` |
+| [recipes/recipe_agent_tools.yaml](recipes/recipe_agent_tools.yaml) | Glaive, Hermes function calling, smolagents | three tool-call encodings to standard `tool_calls`; rows checked against a Qwen chat template |
+
+```bash
+convmerge run examples/recipes/recipe_dpo_mix.yaml --plan   # show the steps
+convmerge run examples/recipes/recipe_dpo_mix.yaml          # run them
+```
+
+Change `max_rows`, the weights, or `total` to size the output; see
+[docs/recipes.md](../docs/recipes.md) for every field.
+
+## Step-by-step walkthroughs
 
 ### Alpaca-style instruction data (HuggingFace)
 

@@ -364,3 +364,59 @@ def test_odd_message_rows_are_not_trees() -> None:
 def test_prompt_only_tree_is_no_assistant() -> None:
     [ex] = list(SFT({"message_tree_id": "t", "prompt": _nest(FLAT[:1], "a")}))
     assert validate_example(ex) == ["no_assistant"]
+
+
+PKU = {"prompt": "Hi?", "response_0": "short", "response_1": "a longer answer",
+       "better_response_id": 1, "safer_response_id": 0, "is_response_0_safe": True}  # fmt: skip
+SHP = {"history": "Keep basil fresh?", "human_ref_A": "In water.", "human_ref_B": "Freeze it.",
+       "labels": 1, "score_A": 34, "score_B": 16}  # fmt: skip
+HELPSTEER3 = {"context": [{"role": "user", "content": "Reverse a list."}],
+              "response1": "lst[::-1]", "response2": "Loop over it.",
+              "overall_preference": -2}  # fmt: skip
+
+
+@pytest.mark.parametrize(
+    "record, chosen, rejected",
+    [
+        (PKU, "a longer answer", "short"),
+        ({**PKU, "better_response_id": 0}, "short", "a longer answer"),
+        (SHP, "In water.", "Freeze it."),
+        ({**SHP, "labels": 0}, "Freeze it.", "In water."),
+        (HELPSTEER3, "lst[::-1]", "Loop over it."),
+        ({**HELPSTEER3, "overall_preference": 3}, "Loop over it.", "lst[::-1]"),
+        ({**PKU, "better_response_id": "1"}, "a longer answer", "short"),
+    ],
+)
+def test_labeled_pairs_are_read_by_auto(record, chosen, rejected) -> None:
+    [ex] = list(PAIRS(record))
+    assert ex.messages[-1].text == chosen and ex.rejected[-1].text == rejected
+    assert ex.messages[0].role == "user" and validate_example(ex) == []
+    [sft] = list(CHOSEN(record))
+    assert sft.messages[-1].text == chosen
+    [plain] = list(SFT(record))
+    assert "preference_record" in validate_example(plain)
+
+
+@pytest.mark.parametrize(
+    "record",
+    [
+        {**HELPSTEER3, "overall_preference": 0},  # a tie
+        {**PKU, "better_response_id": 2},
+        {**SHP, "labels": None},
+        {**PKU, "response_1": ""},
+        {**PKU, "better_response_id": True},
+    ],
+)
+def test_labeled_pairs_without_a_winner_are_no_preference(record) -> None:
+    [ex] = list(PAIRS(record))
+    assert validate_example(ex) == ["no_preference"]
+
+
+def test_labeled_layouts_need_every_key() -> None:
+    from convmerge.adapters.preference import is_preference_record
+
+    # Similar keys without the label are not taken for a pair.
+    for record in ({k: v for k, v in PKU.items() if k != "better_response_id"},
+                   {"response1": "a", "response2": "b", "context": "x"},
+                   {"human_ref_A": "a", "human_ref_B": "b", "labels": 1}):  # fmt: skip
+        assert not is_preference_record(record)
