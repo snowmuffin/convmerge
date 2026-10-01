@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "output": "b.jsonl",
+  "sources": {
+    "oasst": {"path": "raw/oasst.jsonl", "normalize": false, "convert": {"from": "auto", "meta": {"source": "oasst"}}},
+    "openhermes": {"path": "raw/openhermes.jsonl", "normalize": false, "convert": {"from": "auto", "meta": {"source": "openhermes"}}},
+    "openr1": {"path": "raw/openr1.jsonl", "normalize": false, "convert": {"from": "auto", "meta": {"source": "openr1"}}},
+    "alpaca": {"path": "raw/alpaca.jsonl", "normalize": false, "convert": {"from": "auto", "meta": {"source": "alpaca"}}}
+  },
+  "mix": {"weights": {"oasst": 1, "openhermes": 1, "openr1": 1, "alpaca": 1}, "total": 8000, "by": "chars", "seed": 0},
+  "dedupe": true,
+  "filter": true,
+  "decontam": {"against": ["raw/eval.jsonl"]}
+}

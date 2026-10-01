@@ -1,0 +1,25 @@
+# Korean SFT mix: three instruction sets with different layouts, weighted by text
+# so the long answers of one source do not crowd out the others.
+# Run: convmerge run examples/recipes/recipe_korean_sft.yaml   (needs convmerge[all])
+version: 1
+output: train/ko_sft.jsonl              # validation rows -> train/ko_sft.val.jsonl
+workdir: build/ko_sft
+sources:
+  koalpaca:                             # instruction / output
+    fetch: { hf: beomi/KoAlpaca-v1.1a, max_rows: 20000 }
+    convert: { from: auto, meta: { dataset: koalpaca } }
+  kullm:                                # instruction / input / output
+    fetch: { hf: nlpai-lab/kullm-v2, max_rows: 20000 }
+    convert: { from: auto, meta: { dataset: kullm } }
+  oig_ko:                               # <usr> / <bot> text turns
+    fetch: { hf: heegyu/open-korean-instructions, max_rows: 20000 }
+    convert: { from: auto, meta: { dataset: open-korean-instructions } }
+mix:
+  weights: { koalpaca: 1, kullm: 1, oig_ko: 1 }
+  total: 30000
+  by: chars                             # equal shares of text, not of rows
+dedupe:
+  near: true                            # near-copies too (needs convmerge[quality])
+filter:
+  min_script: { hangul: 0.3 }           # drop answers that are mostly not Korean
+split: { val: 0.02 }

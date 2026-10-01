@@ -1,0 +1,116 @@
+name: Effect study
+
+# Does convmerge's data preparation change what a small model learns?
+# Design and reading rules: docs/design/effect-study.md. Run by hand.
+
+on:
+  workflow_dispatch:
+    inputs:
+      steps:
+        description: Training steps per run
+        default: "400"
+      scale:
+        description: Fraction of the source rows to fetch (1.0 for the study, smaller for a dry run)
+        default: "1.0"
+      seeds:
+        description: JSON list of seeds
+        default: "[0, 1, 2]"
+      gen:
+        description: Evaluation prompts to generate for
+        default: "100"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: effect-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PIP_DEFAULT_TIMEOUT: "60"
+  PIP_RETRIES: "10"
+  PIP_ONLY_BINARY: "numpy,pandas,pyarrow"
+  MODEL: HuggingFaceTB/SmolLM2-135M
+  TOKENIZER: HuggingFaceTB/SmolLM2-135M-Instruct
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: python -m pip install -e ".[fetch-all,tokens]"
+      - name: Build both pipelines' training files
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: python scripts/eval/effect/prepare.py --out data --tokenizer "$TOKENIZER" --scale "${{ inputs.scale || '1.0' }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: effect-data
+          path: |
+            data/a.jsonl
+            data/b.jsonl
+            data/eval.jsonl
+            data/stats.json
+            data/build/report.json
+
+  train:
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    strategy:
+      fail-fast: false
+      matrix:
+        pipeline: [a, b]
+        seed: ${{ fromJSON(inputs.seeds || '[0, 1, 2]') }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: |
+          python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+          python -m pip install trl transformers datasets accelerate
+      - uses: actions/download-artifact@v4
+        with:
+          name: effect-data
+          path: data
+      - name: Train and evaluate
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: >-
+          python scripts/eval/effect/train_eval.py --data data/${{ matrix.pipeline }}.jsonl
+          --eval data/eval.jsonl --model "$MODEL" --tokenizer "$TOKENIZER"
+          --seed ${{ matrix.seed }} --steps "${{ inputs.steps || '400' }}" --gen "${{ inputs.gen || '100' }}"
+          --label ${{ matrix.pipeline }} --out results/${{ matrix.pipeline }}-${{ matrix.seed }}.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: effect-result-${{ matrix.pipeline }}-${{ matrix.seed }}
+          path: results/
+
+  summarize:
+    needs: train
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: effect-*
+          path: artifacts
+      - name: Summarize
+        run: >-
+          python scripts/eval/effect/summarize.py --results artifacts
+          --stats artifacts/effect-data/stats.json --summary "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: effect-summary
+          path: artifacts/summary.json

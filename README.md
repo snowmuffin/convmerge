@@ -55,6 +55,43 @@ convmerge convert -i raw/tatsu-lab_alpaca.jsonl -o train.jsonl --from auto
 A file saved in another encoding (cp949 on Korean Windows, for example) is
 read with `--encoding cp949`; the output is always UTF-8.
 
+## When it helps, and when it doesn't
+
+convmerge is worth adding when **several datasets in different layouts** go into
+one training run. Of the 65 datasets in the [catalog](#tested-datasets), 10 load
+into TRL's `SFTTrainer` / `DPOTrainer` as they are; the other 55 need a
+conversion script of their own (ShareGPT roles, Alpaca columns, message trees,
+tool calls in five encodings, scored or labeled preference pairs). Once there
+are several sources, the steps after conversion come up too: weighting the mix
+by text rather than rows, removing copies across sources, keeping evaluation
+prompts out, and checking each row against the target model's chat template.
+Each of those is one command here, or one recipe for the whole pipeline.
+
+It adds little when:
+
+- **You train on one dataset that is already in `messages` or `{prompt, chosen, rejected}`.**
+  `datasets.load_dataset` plus the trainer is enough.
+- **You need model-based cleaning:** quality classifiers, LLM judges, topic or
+  safety labels. convmerge's `filter` is rule-based only (see
+  [Out of scope](#out-of-scope)).
+- **You process web-scale corpora.** convmerge streams line by line on one
+  machine; for billions of documents use a distributed pipeline such as
+  [datatrove](https://github.com/huggingface/datatrove).
+- **You need personal information removed.** Use a dedicated tool first (see
+  [Out of scope](#out-of-scope)).
+
+Does cleaner data train a better model? A small pre-registered study
+([docs/effect.md](docs/effect.md)) trained SmolLM2-135M on the same four
+sources prepared by common scripts and by a convmerge recipe. It found no
+behaviour difference, and a slightly lower eval loss for the scripts, which
+put 1.7 times as many tokens into the same number of steps. convmerge saves
+the conversion work and shows what the data contains. This study found no
+sign that it makes a small model better.
+
+Three complete recipes with real datasets are in
+[examples/recipes](examples/recipes): a Korean SFT mix, a DPO mix of three
+preference layouts, and a tool-calling mix checked against a Qwen chat template.
+
 ## Install
 
 ```bash
@@ -186,9 +223,9 @@ convmerge convert -i raw/HuggingFaceH4_ultrafeedback_binarized.jsonl -o dpo.json
 | [lmsys/chatbot_arena_conversations](https://huggingface.co/datasets/lmsys/chatbot_arena_conversations) (gated) | Preference | en | Arena conversation_a/b + winner | `--from auto --format preference` |
 | [maywell/ko_Ultrafeedback_binarized](https://huggingface.co/datasets/maywell/ko_Ultrafeedback_binarized) | Preference | ko | prompt / chosen / rejected strings | `--from auto --format preference` |
 | [kuotient/orca-math-korean-dpo-pairs](https://huggingface.co/datasets/kuotient/orca-math-korean-dpo-pairs) | Preference | ko | system / question / chosen / rejected | `--from auto --format preference` |
-| [PKU-Alignment/PKU-SafeRLHF](https://huggingface.co/datasets/PKU-Alignment/PKU-SafeRLHF) | Preference | en | response_0/1 + better_response_id | `--from map --format preference --adapter-kwargs '{"map":{"user":"prompt","responses":["response_0","response_1"],"preferred":"better_response_id"}}'` |
-| [stanfordnlp/SHP](https://huggingface.co/datasets/stanfordnlp/SHP) | Preference | en | human_ref_A/B + labels | `--from map --format preference --adapter-kwargs '{"map":{"user":"history","responses":["human_ref_A","human_ref_B"],"preferred":"labels","preferred_values":{"1":0,"0":1}}}'` |
-| [nvidia/HelpSteer3](https://huggingface.co/datasets/nvidia/HelpSteer3) | Preference | multi | context turns + response1/2 + overall_preference | `--from map --format preference --adapter-kwargs '{"map":{"turns":"context","responses":["response1","response2"],"preferred":"overall_preference","preferred_values":{"-3":0,"-2":0,"-1":0,"1":1,"2":1,"3":1}}}'` |
+| [PKU-Alignment/PKU-SafeRLHF](https://huggingface.co/datasets/PKU-Alignment/PKU-SafeRLHF) | Preference | en | response_0/1 + better_response_id | `--from auto --format preference` |
+| [stanfordnlp/SHP](https://huggingface.co/datasets/stanfordnlp/SHP) | Preference | en | human_ref_A/B + labels | `--from auto --format preference` |
+| [nvidia/HelpSteer3](https://huggingface.co/datasets/nvidia/HelpSteer3) | Preference | multi | context turns + response1/2 + overall_preference | `--from auto --format preference` |
 | [argilla/distilabel-math-preference-dpo](https://huggingface.co/datasets/argilla/distilabel-math-preference-dpo) | Preference | en | instruction + chosen_response / rejected_response | `--from auto --format preference` |
 | [shibing624/DPO-En-Zh-20k-Preference](https://huggingface.co/datasets/shibing624/DPO-En-Zh-20k-Preference) | Preference | en, zh | history pairs + question + response_chosen / response_rejected | `--from auto --format preference` |
 | [ChuGyouk/argilla-distilabel-math-preference-dpo-korean](https://huggingface.co/datasets/ChuGyouk/argilla-distilabel-math-preference-dpo-korean) | Preference | ko | English + `_ko` columns, chosen_response / rejected_response | `--from map --format preference --adapter-kwargs '{"map":{"user":"instruction_ko","chosen":"chosen_response_ko","rejected":"rejected_response_ko"}}'` |
@@ -361,6 +398,14 @@ reasoning trace, so the mix you get is the mix you meant. `--by chars` is
 fast and enough when the sources share a language; `--by tokens` tokenizes
 every row, so on large sources add `--by-sample 5000` to measure 5,000
 random rows per source and scale (an estimate, the same for the same seed).
+A source with too few rows is written whole and the others keep their
+counts, so the mix moves off its weights; `mix` warns when a share ends more
+than 5 points from its weight (`--oversample` repeats the short source).
+Weights by text count whole rows. If the trainer cuts rows at a fixed
+length, first keep only the rows that fit in each source
+(`convmerge tokens -i SOURCE --tokenizer MODEL --max-tokens N -o FIT`).
+Otherwise a source of very long rows gets its share on paper and loses most
+of it to truncation, as the [effect study](docs/effect.md) found.
 
 ### 5. `dedupe` / `filter` / `decontam` / `tokens` / `split` — ready for training
 
@@ -453,14 +498,14 @@ To keep the package lean and dependency-free at its core, `convmerge` does
   LLM-as-judge or classifier quality scores, safety classification). These
   are left to upstream tools or private pipelines; `filter` covers the
   deterministic, rule-based checks.
-- **RLHF / DPO / preference-dataset construction** beyond passing through
-  existing pairwise rows via the `chat` adapter's `pairwise_mode`.
+- **Building preference data.** Existing pairs, rankings, scores, and labels
+  are converted to `{prompt, chosen, rejected}`; generating or judging new
+  answers is not.
 - **Training-job orchestration** (SkyPilot, RunPod, Modal, K8s operators).
-- **Prompt templating / chat-template rendering** for specific model
-  families. Output JSONL uses the standard `messages` / `alpaca` shapes;
-  downstream trainers apply their own template.
-- **Tokenizer-aware length filtering, packing, or curriculum scheduling.**
-  Those live in the training stack, not here.
+- **Writing chat-template-rendered text.** Output JSONL uses the standard
+  `messages` / `alpaca` shapes and the trainer applies its own template;
+  `tokens` renders the template only to measure and check rows.
+- **Packing or curriculum scheduling.** Those live in the training stack.
 - **Downloading, decoding, or transforming media.** Images, audio, and video
   are carried through as references (URLs or paths) exactly as the source
   gave them; fetching and preprocessing the files is the trainer's job.

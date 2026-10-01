@@ -516,7 +516,10 @@ convmerge convert -i aihub.jsonl -o out.jsonl --from map -f messages --adapter-k
 | `reasoning` | The answer's reasoning trace (flat mode: from the record; turns mode: inside each assistant turn). |
 | `system`, `tools` | Paths from the record in both modes. |
 
-Preference data where a label picks the winner:
+Preference data where a label picks the winner. PKU-SafeRLHF, SHP, and
+HelpSteer3 are read by `--from auto` since 1.5 (see
+[Preference data](#preference-data)); the mappings below do the same and
+show the pattern for other datasets:
 
 ```bash
 # PKU-SafeRLHF: better_response_id is the index of the better answer
@@ -567,6 +570,9 @@ adapter and these shapes:
 | Chatbot Arena (`--format preference` only) | `conversation_a` / `conversation_b` + `winner` | the winner is chosen, the other side rejected; ties are skipped |
 | UltraFeedback (raw) | `instruction` + `completions[]` with `response` and `fine-grained_score` | the best-scored completion is chosen, the worst rejected; `overall_score` breaks ties (and is used alone when `fine-grained_score` is missing); all scores equal → `no_preference` |
 | Nectar | HH `prompt` + `answers[]` with `answer` and `rank` | rank 1 is chosen, the last rank rejected |
+| PKU-SafeRLHF | `prompt` + `response_0` / `response_1` + `better_response_id` | the answer `better_response_id` names is chosen |
+| SHP | `history` + `human_ref_A` / `human_ref_B` + `labels` | `labels` 1 → A chosen, 0 → B chosen |
+| HelpSteer3 | `context` turns + `response1` / `response2` + `overall_preference` | negative → response1 chosen, positive → response2; 0 → `no_preference` |
 | OpenAssistant trees | see [above](#openassistant-message-trees) | the best- and worst-ranked answers at the deepest ranked step |
 
 UltraFeedback's `fine-grained_score` is the mean of its four aspect ratings,
