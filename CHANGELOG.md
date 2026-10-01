@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.1] - 2026-10-01
+
+### Fixed
+
+- Repeating a multi-value flag now adds to the list instead of replacing it.
+  `mix -i a.jsonl:1 -i b.jsonl:1` mixed only `b.jsonl`, with no error; it now
+  mixes both, as `mix -i a.jsonl:1 b.jsonl:1` always did. The same applies to
+  `dedupe --keys`, `split --keys`, `fetch --only`, and `fetch --ext`.
+
+### Changed output
+
+- Commands that repeated one of those flags now use every value given. Before
+  1.5.1 they used only the last occurrence: `mix` dropped sources, and
+  `dedupe` / `split` hashed fewer keys. Commands that give the flag once are
+  unchanged.
+
 ## [1.5.0] - 2026-09-30
 
 Three more preference layouts read without a mapping, a warning when a mix
