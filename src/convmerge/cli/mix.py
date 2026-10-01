@@ -28,6 +28,7 @@ def _add_mix(sub: argparse._SubParsersAction) -> None:
         "--input",
         "-i",
         nargs="+",
+        action="extend",
         metavar="FILE:WEIGHT",
         default=None,
         help="Inline sources as path:weight pairs, e.g. code.jsonl:0.4 math.jsonl:0.6",

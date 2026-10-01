@@ -128,6 +128,7 @@ def _add_dedupe(sub: argparse._SubParsersAction) -> None:
     p.add_argument(
         "--keys",
         nargs="+",
+        action="extend",
         default=None,
         help="Only hash these top-level keys (defaults to the whole record)",
     )
@@ -262,6 +263,7 @@ def _add_split(sub: argparse._SubParsersAction) -> None:
     p.add_argument(
         "--keys",
         nargs="+",
+        action="extend",
         default=None,
         help="Hash only these top-level keys, so rows sharing them stay on one side",
     )

@@ -29,7 +29,13 @@ def _add_fetch(sub: argparse._SubParsersAction) -> None:
     p.add_argument("--output", "-o", type=Path, default=None, help="Output root directory")
     p.add_argument("--hf-token", default=None)
     p.add_argument("--github-token", default=None)
-    p.add_argument("--only", nargs="+", default=None, help="Manifest mode: fetch only these names")
+    p.add_argument(
+        "--only",
+        nargs="+",
+        action="extend",
+        default=None,
+        help="Manifest mode: fetch only these names",
+    )
     p.add_argument(
         "--on-error",
         choices=("continue", "fail"),
@@ -50,7 +56,9 @@ def _add_fetch(sub: argparse._SubParsersAction) -> None:
         "after N lines, LFS files are resolved without cloning (not for mode: clone)",
     )
     # Shortcut-only flags (ignored in manifest mode)
-    p.add_argument("--ext", nargs="+", default=None, help="GitHub URL mode: extension filter")
+    p.add_argument(
+        "--ext", nargs="+", action="extend", default=None, help="GitHub URL mode: extension filter"
+    )
     p.add_argument("--mode", choices=("tree", "clone"), default=None)
     p.add_argument("--lfs", action="store_true")
     p.add_argument("--split", default=None, help="hf:// shortcut: dataset split")
