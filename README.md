@@ -401,11 +401,13 @@ random rows per source and scale (an estimate, the same for the same seed).
 A source with too few rows is written whole and the others keep their
 counts, so the mix moves off its weights; `mix` warns when a share ends more
 than 5 points from its weight (`--oversample` repeats the short source).
-Weights by text count whole rows. If the trainer cuts rows at a fixed
-length, first keep only the rows that fit in each source
-(`convmerge tokens -i SOURCE --tokenizer MODEL --max-tokens N -o FIT`).
-Otherwise a source of very long rows gets its share on paper and loses most
-of it to truncation, as the [effect study](docs/effect.md) found.
+Weights by text count whole rows, but trainers cut rows at their maximum
+length. Pass that length as `--max-tokens N` with `--by tokens` (recipe:
+`mix.max_tokens`) and each row counts as at most N tokens, so the weights
+describe the text that is trained on; `mix` also prints each source's share
+of rows longer than N. Without it a source of very long rows gets its share
+on paper and loses most of it to truncation, as the
+[effect study](docs/effect.md) found.
 
 ### 5. `dedupe` / `filter` / `decontam` / `tokens` / `split` — ready for training
 
