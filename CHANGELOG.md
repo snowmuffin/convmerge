@@ -7,6 +7,60 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-10-03
+
+Mix weights that match what the trainer sees, one more layout read without a
+mapping, a clearer reason for empty answers, and Python 3.14. All additive;
+see "Changed output".
+
+### Added
+
+- `mix --max-tokens N` with `--by tokens` (`mix_files(max_tokens=)`, recipe
+  `mix.max_tokens`) counts each row as at most N tokens. Set it to the
+  trainer's maximum length: trainers cut longer rows, so the weights then
+  describe the text that is trained on. The effect study found the gap this
+  closes: weighted on whole rows, a source of long reasoning traces got its
+  share on paper and lost most of it to truncation. `mix` prints each
+  source's share of rows longer than N (`over_512=97%`); `.mix.json` records
+  `max_tokens` and each source's `over_cap`, and `SourceStats.over_cap` /
+  `MixResult.max_tokens` carry them. Without the option nothing changes (same
+  bytes, same speed).
+- `--from auto` reads a question with a `responses` list of
+  `{"response_model": ..., "response": ...}` entries
+  (facebook/natural_reasoning) as the question and the first non-empty
+  response. The output equals the `--from map` configuration the README gave,
+  which the catalog entry no longer needs.
+- Python 3.14 is tested in CI and listed in the package classifiers.
+
+### Fixed
+
+- `run --force a --force b` forced only `b`; repeated `--force` flags now
+  add up, as the other multi-value flags do since 1.5.1, and a bare `--force`
+  still forces every step. A contract test now fails on any multi-value flag
+  that keeps only its last occurrence.
+
+### Changed output
+
+- A question whose answer column is present but blank (`"output": ""`) is
+  dropped as `empty_answer`. Before 1.6 it was dropped as `no_user` or
+  `no_assistant`, and a `text` column beside it triggered a warning that
+  content would be lost and a hint to map the fields, neither of which
+  applied. The rows written are the same.
+- facebook/natural_reasoning rows converted with `--from auto` become
+  conversations; before 1.6 they were dropped as `no_assistant`.
+
+### Deprecated
+
+- Python 3.10 reaches its upstream end of life in October 2026. Following
+  [the support policy](docs/stability.md#python-versions), 1.7 will require
+  Python 3.11 or later; 1.6.x keeps 3.10.
+
+### Documentation
+
+- README, `docs/recipes.md`, the troubleshooting guide, and `docs/effect.md`
+  describe `--max-tokens` in place of the per-source `tokens` workaround.
+- README and CONTRIBUTING list the Python versions CI runs (3.10 - 3.14).
+
 ## [1.5.1] - 2026-10-01
 
 ### Fixed
