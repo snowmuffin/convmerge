@@ -77,6 +77,9 @@ def _cmd_run(args: argparse.Namespace) -> None:
 
     if args.init:
         if args.output:
+            from convmerge.cli._common import refuse_existing
+
+            refuse_existing(args.output)
             args.output.write_text(RECIPE_TEMPLATE, encoding="utf-8")
             print(f"wrote {args.output}", file=sys.stderr)
         else:
@@ -84,6 +87,9 @@ def _cmd_run(args: argparse.Namespace) -> None:
         return
     if args.recipe is None:
         print("error: a recipe file is required (or --init)", file=sys.stderr)
+        sys.exit(2)
+    if not Path(args.recipe).is_file():
+        print(f"error: recipe file not found: {args.recipe}", file=sys.stderr)
         sys.exit(2)
     try:
         recipe = load_recipe(args.recipe)

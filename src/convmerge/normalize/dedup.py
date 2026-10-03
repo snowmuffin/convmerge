@@ -149,7 +149,7 @@ def deduplicate_jsonl(
 
     Returns ``(total_rows, kept_rows)``.
     """
-    refuse_overwrite([src], [dst, rejects])
+    refuse_overwrite([src], [dst, rejects, seen_db])
     from convmerge.progress import ProgressReporter
 
     reporter = ProgressReporter(f"dedupe {Path(src).name}", enabled=progress)

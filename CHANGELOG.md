@@ -7,6 +7,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.2] - 2026-10-03
+
+Fixes only: the remaining ways an output could replace an input file, values
+that were accepted but meant nothing, and messages with no explanation or
+the wrong grammar.
+
+### Fixed
+
+- More outputs could replace an input file; each now stops before writing
+  with `error: output X is ...` (exit 2):
+  - `convert --report` naming the input (the training data was replaced by
+    the report) or the output;
+  - `decontam -o` or `--rejects` naming an `--against` evaluation file (the
+    evaluation set was replaced by training rows);
+  - `axolotl-config -o` naming `-i` or `--val` (the data was replaced by the
+    YAML snippet, with exit 0);
+  - `dedupe --seen-db` naming the input or an output (it showed a SQLite
+    traceback).
+- `run --init -o FILE` and `preset init -o FILE` replaced an existing file
+  without asking; they now refuse when FILE exists (exit 2).
+- `mix` accepted `-n 0`, `-n -3` (wrote an empty file), a total of 0 in a mix
+  config, and zero or negative weights ("weight -100%"). They are now errors
+  (exit 2), as recipes already required; `mix_files` rejects negative
+  weights.
+- `fetch --only NAME` with a name not in the manifest showed a Python
+  traceback; it is now an error that lists the datasets and suggests the
+  closest name. `fetch ftp://...` said "manifest file not found: ftp:/..."; it
+  now says the scheme is not supported. A manifest with no datasets warns.
+- `validate` exited with 1 for skipped lines without saying why; it now
+  prints the same warnings and hints as `convert` (the reason for the first
+  unreadable line, `normalize` for a JSON array).
+- `inspect --max-rows 0` profiled one record; `--max-rows` must now be
+  positive and `--max-examples` non-negative.
+- `filter --min-chars` above `--max-chars` rejected every row silently; it is
+  now an error (`FilterSpec` too). A missing `--rules-file` gives "rules file
+  not found" instead of the raw OS error.
+- `split` warns when one side comes out empty (`--val-rows` at least the row
+  count, `--val 0.99`, or `--val 0.01` of a few rows).
+- Missing files: `run` says "recipe file not found", `convert --preset` and
+  `preset validate` say "preset file not found", instead of `[Errno 2] ...`.
+- Counts in messages agree with their number: "1 line", "1 example",
+  "1 row fails" instead of "1 lines", "1 examples", "1 rows fail".
+
+### Changed output
+
+- The stderr messages above; `convert`'s summary reads "read 1 line, wrote 1
+  example". Report keys are unchanged.
+- Exit code 2 for the cases above that used to succeed (exit 0) or crash.
+
 ## [1.6.1] - 2026-10-03
 
 Fixes only: no output path can empty its own input any more, and messages

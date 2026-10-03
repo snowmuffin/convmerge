@@ -181,7 +181,7 @@ def test_leading_assistant_cli_and_recipe_keys(tmp_path: Path, capsys) -> None:
                    encoding="utf-8")  # fmt: skip
     main(["convert", "-i", str(src), "-o", str(tmp_path / "o.jsonl"), "--from", "auto"])
     # An agent that greets first is a whole conversation, not a withheld prompt.
-    assert "wrote 1 examples" in capsys.readouterr().err
+    assert "wrote 1 example" in capsys.readouterr().err
     main(["convert", "-i", str(src), "-o", str(tmp_path / "o.jsonl"), "--from", "auto",
           "--leading-assistant", "drop"])  # fmt: skip
     assert "leading_assistant_dropped=1" in capsys.readouterr().err

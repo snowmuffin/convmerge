@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from pathlib import Path
 
 
@@ -21,6 +22,17 @@ def positive_int(value: str) -> int:
     if n <= 0:
         raise argparse.ArgumentTypeError(f"must be a positive integer, got {value}")
     return n
+
+
+def refuse_existing(path: Path) -> None:
+    """Exit with 2 when a template would replace a file that is already there."""
+    if path.exists():
+        print(
+            f"error: {path} already exists; write the template to a new path, "
+            "or delete the file first",
+            file=sys.stderr,
+        )
+        sys.exit(2)
 
 
 def config_errors() -> tuple[type[Exception], ...]:

@@ -184,7 +184,7 @@ def test_cli_convert_format_defaults_to_messages(tmp_path: Path) -> None:
     ("text", "args", "expected"),
     [
         ('{"instruction": "q", "output": "a"}\n', ["--from", "sharegpt"],
-         "1 of the first 1 rows convert with --from auto"),
+         "the row converts with --from auto"),
         ('[{"instruction": "q", "output": "a"},\n{"instruction": "q", "output": "a"}]\n',
          ["--from", "auto"], "convmerge normalize"),
         ('{"task": "q", "reply_text": "a"}\n', ["--from", "auto"], "keys: task, reply_text"),
@@ -200,4 +200,4 @@ def test_cli_convert_explains_empty_output(
 def test_cli_convert_explains_empty_output_of_too_deep_input(tmp_path: Path, capsys) -> None:
     deep = '{"messages":' + "[" * 100_000 + "]" * 100_000 + "}\n"
     _convert(tmp_path, deep, "--from", "auto")
-    assert "read 1 lines, wrote 0 examples" in capsys.readouterr().err
+    assert "read 1 line, wrote 0 examples" in capsys.readouterr().err

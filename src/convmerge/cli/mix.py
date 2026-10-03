@@ -34,7 +34,9 @@ def _add_mix(sub: argparse._SubParsersAction) -> None:
         help="Inline sources as path:weight pairs, e.g. code.jsonl:0.4 math.jsonl:0.6",
     )
     p.add_argument("--output", "-o", type=Path, default=None, help="Output JSONL path")
-    p.add_argument("--total", "-n", type=int, default=None, help="Target total record count")
+    p.add_argument(
+        "--total", "-n", type=_positive_int, default=None, help="Target total record count"
+    )
     p.add_argument(
         "--seed",
         type=int,
@@ -231,6 +233,15 @@ def _cmd_mix(args: argparse.Namespace) -> None:
 
     if output is None:
         print("error: --output / -o is required (or set 'output' in config)", file=sys.stderr)
+        sys.exit(2)
+    bad = [s for s in sources if not s.weight > 0]
+    if bad:
+        print(f"error: weight {bad[0].weight:g} for {bad[0].path}: expected a positive number",
+              file=sys.stderr)  # fmt: skip
+        sys.exit(2)
+    if isinstance(total, int) and total < 1:
+        print(f"error: 'total' in the config: expected a positive integer, got {total}",
+              file=sys.stderr)  # fmt: skip
         sys.exit(2)
     problem = _option_problem(
         args, by=by, total=total, sampler=sampler, tokenizer=tokenizer,

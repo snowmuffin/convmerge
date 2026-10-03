@@ -47,6 +47,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from convmerge._text import agree, count
 from convmerge.io import ReadStats, iter_jsonl, refuse_overwrite
 
 _BATCH = 256
@@ -180,13 +181,18 @@ class TokenStats:
             )
         if self.answer_beyond_limit:
             out.append(
-                f"{self.answer_beyond_limit:,} rows start their answer beyond "
-                f"{self.max_tokens:,} tokens and train on nothing when truncated; filter them "
+                f"{count(self.answer_beyond_limit, 'row')} "
+                f"{agree(self.answer_beyond_limit, 'starts its', 'start their')} answer beyond "
+                f"{count(self.max_tokens or 0, 'token')} and "
+                f"{agree(self.answer_beyond_limit, 'trains', 'train')} on nothing when "
+                "truncated; filter them "
                 "with -o (tokens --max-tokens) or raise the trainer's max length"
             )
         if self.markers_missing:
             out.append(
-                f"{self.markers_missing:,} rows do not contain the response_markers as tokens: "
+                f"{count(self.markers_missing, 'row')} "
+                f"{agree(self.markers_missing, 'does', 'do')} not contain the response_markers "
+                "as tokens: "
                 "Unsloth train_on_responses_only would mask all of their labels; check the "
                 "markers against the template the trainer uses"
             )

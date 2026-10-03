@@ -158,7 +158,7 @@ def test_cli_convert_report_and_fail(tmp_path: Path, capsys) -> None:
     data = json.loads(report.read_text())
     assert data["dropped"] == 1
     assert data["reason_descriptions"] == {"no_user": REASONS["no_user"]}
-    assert "dropped 1 examples (no_user=1)" in capsys.readouterr().err
+    assert "dropped 1 example (no_user=1)" in capsys.readouterr().err
 
     with pytest.raises(SystemExit) as exc:
         main(
