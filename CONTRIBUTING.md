@@ -53,7 +53,7 @@ including the optional `pyarrow` / `datasets` / PyYAML paths.
 ## Checks
 
 Run these locally before opening a PR — CI runs the same four commands on
-Python 3.10, 3.11, and 3.12:
+Python 3.10 through 3.14:
 
 ```bash
 ruff check src tests

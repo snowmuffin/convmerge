@@ -91,13 +91,12 @@ Per run:
    512 tokens, which removed most of OpenR1's share in both pipelines. In A
    this made the scripts' worst problem (88% of tokens from one source) mostly
    disappear. In B it turned an even text mix into a mix dominated by short
-   alpaca rows. The lesson: when mixing `--by chars` or `--by tokens` and
-   training at a fixed length, drop rows longer than that length from each
-   source first. Run `convmerge tokens -i SOURCE --tokenizer MODEL
-   --max-tokens N -o SOURCE.fit.jsonl` per source, then `mix` the `.fit`
-   files. Otherwise the weights describe text the trainer will cut. A recipe's
-   `tokens` step runs after `mix`, so it drops those rows only once the mix is
-   already made.
+   alpaca rows. The lesson: when training at a fixed length, the weights
+   should count each row only up to that length. Since 1.6,
+   `mix --by tokens --max-tokens N` (recipe `mix.max_tokens`) does this and
+   reports each source's share of rows longer than N. Before 1.6 the way was
+   to drop the longer rows from each source first
+   (`convmerge tokens --max-tokens N -o`) and mix the results.
 
 3. **No role leaks in either pipeline.** The common scripts used here map
    roles correctly: OpenHermes `human`/`gpt` to `user`/`assistant`. The

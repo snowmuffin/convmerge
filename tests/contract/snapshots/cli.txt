@@ -140,6 +140,7 @@
   --by choices=rows|chars|tokens
   --tokenizer
   --by-sample
+  --max-tokens
   --no-recipe (switch)
   --encoding default='utf-8'
 [convmerge run]

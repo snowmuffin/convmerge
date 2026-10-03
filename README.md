@@ -193,7 +193,7 @@ convmerge convert -i raw/HuggingFaceH4_ultrafeedback_binarized.jsonl -o dpo.json
 | [FreedomIntelligence/sharegpt-korean](https://huggingface.co/datasets/FreedomIntelligence/sharegpt-korean) | SFT | ko | ShareGPT (JSON array) | `--from auto --format messages` |
 | [microsoft/orca-agentinstruct-1M-v1](https://huggingface.co/datasets/microsoft/orca-agentinstruct-1M-v1) | SFT | en | messages as a JSON string | `--from auto --format messages` |
 | [nvidia/OpenMathInstruct-2](https://huggingface.co/datasets/nvidia/OpenMathInstruct-2) | SFT | en | problem / generated_solution | `--from auto --format messages` |
-| [facebook/natural_reasoning](https://huggingface.co/datasets/facebook/natural_reasoning) | SFT | en | question + responses[] list | `--from map --format messages --adapter-kwargs '{"map":{"user":"question","assistant":"responses[0].response"}}'` |
+| [facebook/natural_reasoning](https://huggingface.co/datasets/facebook/natural_reasoning) | SFT | en | question + responses[] list | `--from auto --format messages` |
 | [CohereLabs/aya_dataset](https://huggingface.co/datasets/CohereLabs/aya_dataset) | SFT | multi | inputs / targets | `--from auto --format messages` |
 | [CertifiedJoon/Korean-Instruction](https://huggingface.co/datasets/CertifiedJoon/Korean-Instruction) | SFT | ko | Instruction / Response (capitalised) | `--from auto --format messages` |
 | [heegyu/open-korean-instructions-v20231020](https://huggingface.co/datasets/heegyu/open-korean-instructions-v20231020) | SFT | ko | ShareGPT, `input` turn = system prompt | `--from auto --format messages` |
@@ -401,11 +401,13 @@ random rows per source and scale (an estimate, the same for the same seed).
 A source with too few rows is written whole and the others keep their
 counts, so the mix moves off its weights; `mix` warns when a share ends more
 than 5 points from its weight (`--oversample` repeats the short source).
-Weights by text count whole rows. If the trainer cuts rows at a fixed
-length, first keep only the rows that fit in each source
-(`convmerge tokens -i SOURCE --tokenizer MODEL --max-tokens N -o FIT`).
-Otherwise a source of very long rows gets its share on paper and loses most
-of it to truncation, as the [effect study](docs/effect.md) found.
+Weights by text count whole rows, but trainers cut rows at their maximum
+length. Pass that length as `--max-tokens N` with `--by tokens` (recipe:
+`mix.max_tokens`) and each row counts as at most N tokens, so the weights
+describe the text that is trained on; `mix` also prints each source's share
+of rows longer than N. Without it a source of very long rows gets its share
+on paper and loses most of it to truncation, as the
+[effect study](docs/effect.md) found.
 
 ### 5. `dedupe` / `filter` / `decontam` / `tokens` / `split` — ready for training
 
@@ -526,7 +528,7 @@ step of a larger pipeline rather than expecting it to grow into those areas.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the full guide — setup, local
 checks, code conventions, and a walkthrough for adding a new adapter /
-emitter. CI runs Ruff, mypy, and pytest on Python 3.10 – 3.12.
+emitter. CI runs Ruff, mypy, and pytest on Python 3.10 – 3.14.
 
 ```bash
 pip install -e ".[dev,all]"

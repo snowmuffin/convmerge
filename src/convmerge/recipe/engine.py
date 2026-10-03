@@ -226,6 +226,7 @@ def _mix_step(recipe: Recipe, converted: dict[str, Path], out: Path) -> Step:
     by = mix.by if mix else "rows"
     tokenizer = mix.tokenizer if mix else None
     by_sample = mix.by_sample if mix else None
+    max_tokens = mix.max_tokens if mix else None
 
     def run(stage: Path) -> dict[str, Any]:
         result = mix_files(
@@ -238,6 +239,7 @@ def _mix_step(recipe: Recipe, converted: dict[str, Path], out: Path) -> Step:
             by=by,  # type: ignore[arg-type]
             tokenizer=tokenizer,
             by_sample=by_sample,
+            max_tokens=max_tokens,
         )
         return {
             "sampler": result.sampler,
@@ -260,6 +262,8 @@ def _mix_step(recipe: Recipe, converted: dict[str, Path], out: Path) -> Step:
         options.update(by=by, tokenizer=tokenizer)
     if by_sample is not None:  # likewise for recipes written before 1.4
         options["by_sample"] = by_sample
+    if max_tokens is not None:  # likewise for recipes written before 1.6
+        options["max_tokens"] = max_tokens
     return Step("mix", "mix", [converted[n] for n in weights], out, options, run)
 
 
