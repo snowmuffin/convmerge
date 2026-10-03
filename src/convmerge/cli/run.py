@@ -26,6 +26,7 @@ def _add_run(sub: argparse._SubParsersAction) -> None:
     p.add_argument(
         "--force",
         nargs="*",
+        action="extend",
         default=None,
         metavar="STEP",
         help="Re-run steps even if up to date: step names (tools.convert), source "

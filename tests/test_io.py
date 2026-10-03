@@ -147,6 +147,22 @@ def test_iter_jsonl_skips_too_deep_nesting(tmp_path: Path) -> None:
         list(iter_jsonl(p, on_error="raise"))
 
 
+def test_nesting_limit_is_the_same_on_every_python(tmp_path: Path) -> None:
+    """MAX_DEPTH, not the JSON parser, decides: 3.14 parses any depth, older
+    versions stop near the recursion limit. Both lines parse on every version."""
+    from convmerge.io import MAX_DEPTH, _parse_line
+
+    deep = "[" * (MAX_DEPTH + 1) + "]" * (MAX_DEPTH + 1)
+    ok = '{"a": ' + "[" * (MAX_DEPTH - 1) + "]" * (MAX_DEPTH - 1) + "}"
+    wide = json.dumps({"rows": [[{"x": [1]}] for _ in range(2 * MAX_DEPTH)]})
+    p = _write(tmp_path / "a.jsonl", f"{deep}\n{ok}\n{wide}\n")
+    stats = ReadStats()
+    kept = [x.number for x in iter_jsonl(p, stats=stats)]
+    assert kept == [2, 3] and stats.invalid_json == 1  # wide but shallow is fine
+    assert _parse_line(deep, check_bytes=False, encoding="utf-8") == (None, "nested too deeply")
+    assert _parse_line(ok, check_bytes=False, encoding="utf-8")[1] is None
+
+
 @pytest.mark.parametrize(
     "bad",
     [b'{"instruction": "\xff", "output": "a"}\n', b'{"instruction": "\\ud800", "output": "a"}\n'],

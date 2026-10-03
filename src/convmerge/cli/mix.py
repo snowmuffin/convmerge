@@ -75,6 +75,14 @@ def _add_mix(sub: argparse._SubParsersAction) -> None:
         "(an estimate; much faster for tokens on large sources). Default: every row",
     )
     p.add_argument(
+        "--max-tokens",
+        type=_positive_int,
+        default=None,
+        metavar="N",
+        help="with --by tokens: count each row as at most N tokens, the trainer's "
+        "maximum length, so the weights describe the text that is trained on",
+    )
+    p.add_argument(
         "--no-recipe",
         action="store_true",
         help="Skip writing the .mix.json sidecar file",
@@ -110,6 +118,8 @@ def mix_summary(result, *, oversample: bool) -> list[str]:
         extra = ""
         if result.by != "rows" and all_units:
             extra += f" {result.by}={units / all_units:.1%}"
+        if s.over_cap and s.available:
+            extra += f" over_{result.max_tokens}={s.over_cap / s.available:.0%}"
         if s.reasoning and s.available:
             share = s.reasoning / s.available
             traces += s.written * share
@@ -121,6 +131,11 @@ def mix_summary(result, *, oversample: bool) -> list[str]:
         lines.append(
             f"{result.by} per row estimated from {result.by_sample:,} random "
             f"rows of {len(sampled)} source(s)"
+        )
+    if result.max_tokens is not None:
+        lines.append(
+            f"tokens counted up to {result.max_tokens:,} per row; over_{result.max_tokens} "
+            "is each source's share of rows longer than that, which the trainer cuts"
         )
     if traces and result.total_written:
         lines.append(
@@ -173,6 +188,7 @@ def _cmd_mix(args: argparse.Namespace) -> None:
     by = args.by or options.get("by", "rows")
     tokenizer = args.tokenizer or options.get("tokenizer")
     by_sample = args.by_sample if args.by_sample is not None else options.get("by_sample")
+    max_tokens = args.max_tokens if args.max_tokens is not None else options.get("max_tokens")
 
     if output is None:
         print("error: --output / -o is required (or set 'output' in config)", file=sys.stderr)
@@ -190,6 +206,7 @@ def _cmd_mix(args: argparse.Namespace) -> None:
             by=by,
             tokenizer=tokenizer,
             by_sample=by_sample,
+            max_tokens=max_tokens,
         )
     except ImportError as e:
         print(f"error: {e}", file=sys.stderr)

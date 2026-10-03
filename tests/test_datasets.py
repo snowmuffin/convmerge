@@ -177,5 +177,5 @@ def test_check_entry_shows_dropped_rows(capsys) -> None:
     rows = [alpaca["record"], {"instruction": "q", "output": ""}]
     script.check_entry(alpaca, 2, loader=lambda e, n: rows, show_drops=5)
     out = capsys.readouterr().out
-    assert "--- tatsu-lab/alpaca line 2: no_assistant" in out
+    assert "--- tatsu-lab/alpaca line 2: empty_answer" in out
     assert '"instruction": "q"' in out
