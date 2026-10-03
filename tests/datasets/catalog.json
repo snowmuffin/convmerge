@@ -523,13 +523,6 @@
   "config": null,
   "split": "train",
   "format": "messages",
-  "adapter": "map",
-  "adapter_kwargs": {
-   "map": {
-    "user": "question",
-    "assistant": "responses[0].response"
-   }
-  },
   "record": {
    "question": "Why does ice float on water?",
    "reference_answer": "It is less dense.",
