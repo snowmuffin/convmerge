@@ -162,21 +162,24 @@ class SamePathError(ValueError):
     """An output path names an input file (raised by :func:`refuse_overwrite`)."""
 
 
-def refuse_overwrite(inputs: Iterable[str | Path], outputs: Iterable[str | Path | None]) -> None:
+def refuse_overwrite(
+    inputs: Iterable[str | Path | None], outputs: Iterable[str | Path | None]
+) -> None:
     """Raise :class:`SamePathError` when an output is an input or another output.
 
     Commands open their outputs before they read their input, so an output
     naming the input file would empty it. Paths that reach the same file
     through a link count as the same file.
     """
-    ins = [Path(p) for p in inputs]
+    ins = [Path(p) for p in inputs if p is not None]
+    role = "the input file" if len(ins) == 1 else "one of the input files"
     outs: list[Path] = []
     for out in outputs:
         if out is None:
             continue
         o = Path(out)
         if any(_same_file(o, p) for p in ins):
-            raise SamePathError(f"output {o} is the input file; write to a different path")
+            raise SamePathError(f"output {o} is {role}; write to a different path")
         if any(_same_file(o, p) for p in outs):
             raise SamePathError(f"output {o} is given twice; write each output to its own path")
         outs.append(o)

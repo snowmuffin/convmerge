@@ -83,6 +83,14 @@ def _cmd_fetch(args: argparse.Namespace) -> None:
             sys.exit(1)
         return
 
+    if "://" in source:
+        scheme = source.split("://", 1)[0]
+        print(
+            f"error: unsupported source {source} ({scheme}:// is not fetched)\n"
+            "Pass either a YAML manifest path, an hf://org/dataset URI, or a GitHub URL.",
+            file=sys.stderr,
+        )
+        sys.exit(2)
     manifest_path = Path(source)
     if not manifest_path.is_file():
         print(
@@ -99,6 +107,23 @@ def _cmd_fetch(args: argparse.Namespace) -> None:
         manifest = load_manifest(manifest_path)
     except config_errors() as e:
         print(f"error: {manifest_path}: {e}", file=sys.stderr)
+        sys.exit(2)
+    if not manifest.datasets:
+        print(f"warning: {manifest_path} lists no datasets; nothing to fetch", file=sys.stderr)
+    names = [d.name for d in manifest.datasets]
+    unknown = [n for n in args.only or [] if n not in names]
+    if unknown:
+        import difflib
+
+        hints = []
+        for n in unknown:
+            close = difflib.get_close_matches(n, names, n=1)
+            hints.append(f"{n!r}" + (f" (did you mean {close[0]!r}?)" if close else ""))
+        print(
+            f"error: --only: no dataset named {', '.join(hints)} in {manifest_path}; "
+            f"datasets: {', '.join(names) or 'none'}",
+            file=sys.stderr,
+        )
         sys.exit(2)
     if args.on_error is not None or args.no_resume:
         manifest = _with_overridden_defaults(

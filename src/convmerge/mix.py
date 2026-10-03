@@ -11,6 +11,7 @@ from itertools import chain
 from pathlib import Path
 from typing import Any, Literal
 
+from convmerge._text import count
 from convmerge.io import iter_jsonl, iter_raw_lines
 
 logger = logging.getLogger(__name__)
@@ -164,6 +165,8 @@ def mix_files(
         if isinstance(max_tokens, bool) or not isinstance(max_tokens, int) or max_tokens < 1:
             raise ValueError(f"max_tokens must be a positive integer, got {max_tokens!r}")
 
+    if any(s.weight < 0 for s in sources):
+        raise ValueError("weights must not be negative")
     total_weight = sum(s.weight for s in sources)
     if total_weight <= 0:
         raise ValueError("Weights must be positive")
@@ -215,7 +218,7 @@ def _warn_off_target(result: MixResult) -> None:
     unit = "rows" if result.by == "rows" else result.by
     label = _labels([s.path for s in result.sources])
     detail = ", ".join(f"{label[s.path]} {share:.0%} (weight {s.weight:.0%})" for s, share in off)
-    short = ", ".join(f"{label[s.path]} (has {s.written:,} rows, needs {s.requested:,})"
+    short = ", ".join(f"{label[s.path]} (has {count(s.written, 'row')}, needs {s.requested:,})"
                       for s in clipped)  # fmt: skip
     logger.warning(
         "the mix is off its weights: %s of the %s. Too few rows in %s; oversample them "

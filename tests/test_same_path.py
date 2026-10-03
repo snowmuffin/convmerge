@@ -43,12 +43,20 @@ def _lines(path: Path) -> int:
         ["turns", "-i", "{x}", "--single-out", "{x}", "--multi-out", "{y}"],
         ["normalize", "-i", "{x}", "-o", "{x}"],
         ["normalize", "-i", "{dir}", "-o", "{dir}"],
+        # 1.6.2: outputs that are not the main data output.
+        ["convert", "-i", "{x}", "-o", "{y}", "--from", "auto", "--report", "{x}"],
+        ["convert", "-i", "{y}", "-o", "{x}", "--from", "auto", "--report", "{x}"],
+        ["decontam", "-i", "{y}", "-o", "{x}", "--against", "{x}"],
+        ["decontam", "-i", "{y}", "-o", "{z}", "--rejects", "{x}", "--against", "{x}"],
+        ["axolotl-config", "-i", "{x}", "-o", "{x}"],
+        ["axolotl-config", "-i", "{y}", "--val", "{x}", "-o", "{x}"],
+        ["dedupe", "-i", "{x}", "-o", "{y}", "--seen-store", "sqlite", "--seen-db", "{x}"],
     ],
 )
 def test_cli_refuses_to_overwrite_its_input(argv, tmp_path: Path, capsys) -> None:
     x = _write(tmp_path / "x.jsonl")
-    y = tmp_path / "y.jsonl"
-    args = [a.format(x=x, y=y, dir=tmp_path) for a in argv]
+    y = _write(tmp_path / "y.jsonl")
+    args = [a.format(x=x, y=y, z=tmp_path / "z.jsonl", dir=tmp_path) for a in argv]
     with pytest.raises(SystemExit) as exc:
         main(args)
     assert exc.value.code == 2

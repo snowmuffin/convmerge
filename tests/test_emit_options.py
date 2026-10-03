@@ -153,7 +153,7 @@ def test_cli_keep_meta_and_alpaca_flags(tmp_path: Path, capsys) -> None:
     assert json.loads(out.read_text())["meta"] == {"id": "r1"}
 
     main([*base, "-f", "alpaca"])
-    assert "1 examples written lossily: lossy_multiturn_flattened" in capsys.readouterr().err
+    assert "1 example written lossily: lossy_multiturn_flattened" in capsys.readouterr().err
 
     main([*base, "-f", "alpaca", "--alpaca-multiturn", "history", "--keep-meta"])
     row = json.loads(out.read_text())

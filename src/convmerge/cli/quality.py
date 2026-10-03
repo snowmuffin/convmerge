@@ -7,6 +7,7 @@ import json
 import sys
 from pathlib import Path
 
+from convmerge._text import agree, count
 from convmerge.cli._common import encoding_advice, skipped_line_reason
 from convmerge.cli._common import positive_int as _positive_int
 
@@ -97,6 +98,17 @@ def _cmd_filter(args: argparse.Namespace) -> None:
     if not args.input.is_file():
         print(f"error: input file not found: {args.input}", file=sys.stderr)
         sys.exit(1)
+    if args.rules_file is not None and not Path(args.rules_file).is_file():
+        print(f"error: rules file not found: {args.rules_file}", file=sys.stderr)
+        sys.exit(2)
+    if (
+        args.min_chars is not None
+        and args.max_chars is not None
+        and args.min_chars > args.max_chars
+    ):
+        print(f"error: --min-chars {args.min_chars} is greater than --max-chars "
+              f"{args.max_chars}: every row would be rejected", file=sys.stderr)  # fmt: skip
+        sys.exit(2)
     try:
         spec = FilterSpec.from_options(
             enable=args.enable, disable=args.disable, min_chars=args.min_chars,
@@ -122,12 +134,13 @@ def _cmd_filter(args: argparse.Namespace) -> None:
         summary = ", ".join(f"{k}={v:,}" for k, v in hit.items())
         print(f"matched: {summary}", file=sys.stderr)
     if stats.unreadable:
-        print(f"warning: {stats.unreadable:,} rows are not in a format convmerge reads",
-              file=sys.stderr)  # fmt: skip
+        n = stats.unreadable
+        print(f"warning: {count(n, 'row')} {agree(n, 'is', 'are')} not in a format "
+              "convmerge reads", file=sys.stderr)  # fmt: skip
     if stats.invalid_json:
         line = stats.first_invalid_line
         reason, fix = skipped_line_reason(args.input, line) if line else ("unreadable", None)
-        print(f"warning: dropped {stats.invalid_json:,} unreadable lines "
+        print(f"warning: dropped {count(stats.invalid_json, 'unreadable line')} "
               f"(first at line {line}: {reason})", file=sys.stderr)  # fmt: skip
         advice = encoding_advice(bad_bytes_before, "utf-8", has_encoding_flag=False) or fix
         if advice:
@@ -175,12 +188,16 @@ def _cmd_decontam(args: argparse.Namespace) -> None:
 
     from convmerge.convert import REPORT_VERSION
     from convmerge.decontam import DecontamStats, EvalSource, build_index, decontaminate_jsonl
+    from convmerge.io import refuse_overwrite
 
     if not args.input.is_file():
         print(f"error: input file not found: {args.input}", file=sys.stderr)
         sys.exit(1)
     fields = tuple(f.strip() for f in args.fields.split(",") if f.strip()) if args.fields else None
     sources = [EvalSource(spec, fields) for spec in args.against]
+    # Checked before the evaluation sets are read: an output naming one would replace it.
+    local = [s.spec for s in sources if not s.spec.startswith("hf:")]
+    refuse_overwrite([args.input, *local], [args.output, args.rejects])
     token = args.hf_token or os.environ.get("HF_TOKEN") or None
     try:
         for source in sources:

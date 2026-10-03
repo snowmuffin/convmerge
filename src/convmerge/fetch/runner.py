@@ -12,6 +12,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 
+from convmerge._text import count
 from convmerge.fetch.auth import AuthConfig, redact_url, resolve_token
 from convmerge.fetch.manifest import (
     DatasetEntry,
@@ -86,7 +87,7 @@ def run_manifest(
             result.skipped.append(entry.name)
             continue
 
-        sample = f", first {entry.max_rows:,} rows" if entry.max_rows else ""
+        sample = f", first {count(entry.max_rows, 'row')}" if entry.max_rows else ""
         log(f"[fetch] {entry.name} ({kind}{sample}) -> {dst}")
         try:
             output = _dispatch(entry, kind, dst, hf_tok=hf_tok, gh_tok=gh_tok)

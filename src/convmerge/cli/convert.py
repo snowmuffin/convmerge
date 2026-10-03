@@ -7,8 +7,14 @@ import json
 import sys
 from pathlib import Path
 
+from convmerge._text import agree, count
 from convmerge.cli._common import add_progress_flag as _add_progress_flag
-from convmerge.cli._common import config_errors, encoding_advice, skipped_line_reason
+from convmerge.cli._common import (
+    config_errors,
+    encoding_advice,
+    refuse_existing,
+    skipped_line_reason,
+)
 from convmerge.cli._common import positive_int as _positive_int
 from convmerge.convert import REPORT_VERSION, ConvertStats, convert_file
 
@@ -195,9 +201,15 @@ def _add_convert(sub: argparse._SubParsersAction) -> None:
 
 
 def _cmd_convert(args: argparse.Namespace) -> None:
+    from convmerge.io import refuse_overwrite
+
     if not args.input.is_file():
         print(f"error: input file not found: {args.input}", file=sys.stderr)
         sys.exit(1)
+    refuse_overwrite([args.input], [args.output, args.report])
+    if args.preset is not None and not Path(args.preset).is_file():
+        print(f"error: preset file not found: {args.preset}", file=sys.stderr)
+        sys.exit(2)
     from convmerge.config import build_convert_config
 
     try:
@@ -238,10 +250,10 @@ def _cmd_convert(args: argparse.Namespace) -> None:
     except InvalidExampleError as e:
         print(f"error: {e} (use --on-invalid drop or keep to continue)", file=sys.stderr)
         sys.exit(1)
-    print(f"read {n_in} lines, wrote {n_out} examples", file=sys.stderr)
+    print(f"read {count(n_in, 'line')}, wrote {count(n_out, 'example')}", file=sys.stderr)
     if stats.grouped:
         print(
-            f"read OpenAssistant message rows as trees: {stats.grouped:,} rows joined "
+            f"read OpenAssistant message rows as trees: {count(stats.grouped, 'row')} joined "
             "the conversation of an earlier row",
             file=sys.stderr,
         )
@@ -250,25 +262,34 @@ def _cmd_convert(args: argparse.Namespace) -> None:
         for hint in _explain_empty(args.input, cfg.adapter, cfg.encoding, stats):
             print(f"hint: {hint}", file=sys.stderr)
     if stats.reasoning:
-        print(f"{stats.reasoning:,} examples carry a reasoning trace", file=sys.stderr)
+        n = stats.reasoning
+        print(f"{count(n, 'example')} {agree(n, 'carries', 'carry')} a reasoning trace",
+              file=sys.stderr)  # fmt: skip
     if stats.transforms:
         fixes = ", ".join(f"{k}={n:,}" for k, n in sorted(stats.transforms.items()))
         print(f"fixes: {fixes}", file=sys.stderr)
     _print_drop_summary(stats, kept=args.on_invalid == "keep")
     if args.report:
         _write_report(args.report, stats)
+    _print_skipped(args.input, stats, cfg.encoding, advice=advice, wrote=n_out)
+
+
+def _print_skipped(
+    path: Path, stats: ConvertStats, encoding: str, *, advice: str | None, wrote: int
+) -> None:
+    """Warn about skipped lines and why the first unreadable one was skipped."""
     if stats.skipped:
         print(
-            f"warning: skipped {stats.skipped:,} lines "
+            f"warning: skipped {count(stats.skipped, 'line')} "
             f"(unreadable={stats.invalid_json:,}, non-object={stats.non_object:,}, "
             f"no example from adapter={stats.no_example:,})",
             file=sys.stderr,
         )
     if stats.first_invalid_line is not None:
         line = stats.first_invalid_line
-        reason, fix = skipped_line_reason(args.input, line, cfg.encoding)
-        # With nothing written, the empty-output hints above already gave the fix.
-        note = advice or (fix if n_out else None)
+        reason, fix = skipped_line_reason(path, line, encoding)
+        # With nothing written, the empty-output hints already gave the fix.
+        note = advice or (fix if wrote else None)
         print(
             f"warning: first unreadable line is line {line} ({reason})"
             + (f"; {note}" if note else ""),
@@ -317,7 +338,10 @@ def _explain_empty(path: Path, adapter: str, encoding: str, stats: ConvertStats)
             1 for row in rows if any(not validate_example(ex) for ex in iter_from_chat_line(row))
         )
         if ok:
-            return [f"{ok} of the first {len(rows)} rows convert with --from auto"]
+            if len(rows) == 1:
+                return ["the row converts with --from auto"]
+            return [f"{ok} of the first {len(rows)} rows {agree(ok, 'converts', 'convert')} "
+                    "with --from auto"]  # fmt: skip
     keys = ", ".join(list(rows[0])[:12])
     return [
         f"no conversation fields recognised; the first row has keys: {keys}",
@@ -380,7 +404,7 @@ def _print_drop_summary(stats: ConvertStats, *, kept: bool = False) -> None:
     if kept:
         print(f"warning: kept {stats.kept_invalid:,} invalid examples ({reasons})", file=sys.stderr)
     if stats.dropped:
-        print(f"warning: dropped {stats.dropped:,} examples ({reasons})", file=sys.stderr)
+        print(f"warning: dropped {count(stats.dropped, 'example')} ({reasons})", file=sys.stderr)
     hints = [_DROP_HINTS[r] for r in sorted(stats.drop_reasons) if r in _DROP_HINTS]
     for hint in hints:
         print(f"hint: {hint}", file=sys.stderr)
@@ -417,7 +441,7 @@ def _print_lossy_summary(stats: ConvertStats) -> None:
             if reason == "lossy_multiturn_flattened"
             else ""
         )
-        print(f"warning: {n:,} examples written lossily: {reason}{hint}", file=sys.stderr)
+        print(f"warning: {count(n, 'example')} written lossily: {reason}{hint}", file=sys.stderr)
 
 
 def _write_report(path: Path, stats: ConvertStats) -> None:
@@ -452,6 +476,9 @@ def _cmd_validate(args: argparse.Namespace) -> None:
     if not args.input.is_file():
         print(f"error: input file not found: {args.input}", file=sys.stderr)
         sys.exit(1)
+    from convmerge.io import bad_bytes_seen
+
+    bad_bytes_before = bad_bytes_seen()
     try:
         stats = validate_file(args.input, adapter_name=args.adapter, encoding=args.encoding)
     except ValueError as e:
@@ -468,6 +495,12 @@ def _cmd_validate(args: argparse.Namespace) -> None:
     if conflicts:
         report["type_conflicts"] = [c.to_report() for c in conflicts]
     print(json.dumps(report, ensure_ascii=False, indent=2))
+    # The same explanations as convert: without them a non-zero exit says nothing.
+    advice = encoding_advice(bad_bytes_before, args.encoding, has_encoding_flag=True)
+    if stats.written == 0 and not advice:
+        for hint in _explain_empty(args.input, args.adapter, args.encoding, stats):
+            print(f"hint: {hint}", file=sys.stderr)
+    _print_skipped(args.input, stats, args.encoding, advice=advice, wrote=stats.written)
     if conflicts:
         print(
             f"warning: {len(conflicts)} field(s) change type between rows; "
@@ -523,6 +556,7 @@ def _cmd_preset_init(args: argparse.Namespace) -> None:
     from convmerge.preset import PRESET_TEMPLATE_YAML
 
     if args.output:
+        refuse_existing(args.output)
         args.output.write_text(PRESET_TEMPLATE_YAML, encoding="utf-8")
         print(f"wrote {args.output}", file=sys.stderr)
     else:
@@ -532,10 +566,13 @@ def _cmd_preset_init(args: argparse.Namespace) -> None:
 def _cmd_preset_validate(args: argparse.Namespace) -> None:
     from convmerge.preset import validate_preset_file
 
+    if not Path(args.path).is_file():
+        print(f"error: preset file not found: {args.path}", file=sys.stderr)
+        sys.exit(1)
     try:
         validate_preset_file(args.path)
     except config_errors() as e:
-        print(f"error: {e}", file=sys.stderr)
+        print(f"error: {args.path}: {e}", file=sys.stderr)
         sys.exit(1)
     print("ok", file=sys.stderr)
 

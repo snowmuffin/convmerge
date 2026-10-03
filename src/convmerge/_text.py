@@ -1,4 +1,5 @@
-"""Text helpers shared by the quality commands (``filter``, ``decontam``, near dedupe)."""
+"""Text helpers shared by the quality commands (``filter``, ``decontam``, near dedupe),
+and for counts in messages printed to people."""
 
 from __future__ import annotations
 
@@ -41,3 +42,13 @@ def excerpt(text: str, start: int = 0, width: int = 160) -> str:
     begin = max(0, start - width // 4)
     piece = _SPACE.sub(" ", text[begin : begin + width]).strip()
     return ("..." if begin else "") + piece + ("..." if begin + width < len(text) else "")
+
+
+def count(n: int, singular: str, plural: str | None = None) -> str:
+    """``"1 row"`` / ``"2 rows"`` (``plural`` defaults to ``singular + "s"``)."""
+    return f"{n:,} {singular if n == 1 else plural or singular + 's'}"
+
+
+def agree(n: int, singular: str, plural: str) -> str:
+    """The verb form that agrees with ``n``: ``agree(1, "is", "are")`` is ``"is"``."""
+    return singular if n == 1 else plural
