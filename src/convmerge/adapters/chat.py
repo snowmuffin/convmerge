@@ -240,10 +240,10 @@ def iter_from_chat_line(
             yield TrainingExample(meta=source_meta(record, {"source": "chat"}),
                                   issues=["empty_answer"])  # fmt: skip
             return
-        answer = _first_response(record.get("responses"))
-        if answer is not None:
+        response = _first_response(record.get("responses"))
+        if response is not None:
             # A question with a list of model responses (natural_reasoning).
-            msgs = [ChatMessage("user", instr), ChatMessage("assistant", answer)]
+            msgs = [ChatMessage("user", instr), ChatMessage("assistant", response)]
             yield build_example(msgs, record, meta={"source": "chat:responses"})
             return
 
