@@ -42,7 +42,7 @@ from typing import Any
 
 from convmerge import _parallel
 from convmerge._text import excerpt, fold, ngrams, without_code, words
-from convmerge.io import ReadStats, iter_jsonl
+from convmerge.io import ReadStats, iter_jsonl, refuse_overwrite
 from convmerge.models import ChatMessage, TrainingExample
 
 RULES: dict[str, str] = {
@@ -332,6 +332,7 @@ def filter_jsonl(
     statistics are collected. ``workers`` > 1 checks rows in that many
     processes; the output and statistics are the same as with one.
     """
+    refuse_overwrite([path], [output, rejects])
     if workers < 1:
         raise ValueError("workers: expected a positive integer")
     spec = spec or FilterSpec()

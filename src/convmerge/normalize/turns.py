@@ -6,7 +6,7 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
-from convmerge.io import iter_jsonl
+from convmerge.io import iter_jsonl, refuse_overwrite
 
 
 def count_turns(sample: dict[str, Any]) -> int:
@@ -60,6 +60,7 @@ def split_by_turns(
 
     Returns ``(single_written, multi_written)``.
     """
+    refuse_overwrite([src], [single_out, multi_out])
     src_p = Path(src)
     single_p = Path(single_out)
     multi_p = Path(multi_out)

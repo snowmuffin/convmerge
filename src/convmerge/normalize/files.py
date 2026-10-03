@@ -36,6 +36,7 @@ def normalize_file(
     first); return records written. Directory walks (:func:`iter_data_files`)
     skip tables: pass a table file directly."""
     # Imported lazily so that convert works without the parquet extra.
+    from convmerge.io import refuse_overwrite
     from convmerge.normalize.jsonl import normalize_to_jsonl
     from convmerge.normalize.tabular import (
         TABLE_EXTENSIONS,
@@ -44,6 +45,7 @@ def normalize_file(
         xlsx_to_jsonl,
     )
 
+    refuse_overwrite([src], [dst])
     suffix = src.suffix.lower()
     if suffix in XLSX_EXTENSIONS or suffix == ".xls":
         return xlsx_to_jsonl(src, dst, sheet=sheet)
@@ -97,6 +99,12 @@ def normalize_path(
         raise FileNotFoundError(f"input not found: {src}")
     if sheet is not None:
         raise ValueError("sheet applies to one .xlsx file, not a directory")
+    if dst.exists() and dst.samefile(src):
+        from convmerge.io import SamePathError
+
+        raise SamePathError(
+            f"output directory {dst} is the input directory; write to a different directory"
+        )
     for in_path in iter_data_files(src):
         out_path = dst / in_path.relative_to(src).with_suffix(".jsonl")
         try:

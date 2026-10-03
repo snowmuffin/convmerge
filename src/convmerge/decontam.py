@@ -26,7 +26,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 from convmerge._text import excerpt, ngrams, words
-from convmerge.io import ReadStats, iter_jsonl
+from convmerge.io import ReadStats, iter_jsonl, refuse_overwrite
 from convmerge.models import ChatMessage, TrainingExample
 
 Check = Literal["prompts", "all"]
@@ -210,6 +210,7 @@ def decontaminate_jsonl(
     With ``output``, the other rows are written there and contaminated rows
     to ``rejects`` (if given), both byte-for-byte as read.
     """
+    refuse_overwrite([path], [output, rejects])
     from convmerge.adapter_resolve import resolve_adapter
 
     if check not in ("prompts", "all"):

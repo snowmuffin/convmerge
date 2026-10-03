@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 
 from convmerge.cli._common import add_progress_flag as _add_progress_flag
-from convmerge.cli._common import encoding_advice
+from convmerge.cli._common import encoding_advice, skipped_line_reason
 from convmerge.cli._common import positive_int as _positive_int
 
 
@@ -89,6 +89,7 @@ def _add_normalize(sub: argparse._SubParsersAction) -> None:
 
 
 def _cmd_normalize(args: argparse.Namespace) -> None:
+    from convmerge.io import SamePathError
     from convmerge.normalize.files import normalize_path
 
     src: Path = args.input
@@ -102,6 +103,8 @@ def _cmd_normalize(args: argparse.Namespace) -> None:
         except ImportError as e:
             print(f"error: {e}", file=sys.stderr)
             sys.exit(2)
+        except SamePathError:
+            raise  # a usage error: main() exits with 2
         except ValueError as e:
             print(f"error: {e}", file=sys.stderr)
             sys.exit(1)
@@ -205,13 +208,12 @@ def _cmd_dedupe(args: argparse.Namespace) -> None:
         file=sys.stderr,
     )
     if stats.first_invalid_line is not None:
+        line = stats.first_invalid_line
+        reason, fix = skipped_line_reason(Path(args.input), line)
+        advice = encoding_advice(bad_bytes_before, "utf-8", has_encoding_flag=False) or fix
         print(
-            f"warning: dropped {stats.invalid_json:,} invalid JSON lines "
-            f"(first at line {stats.first_invalid_line}); "
-            + (
-                encoding_advice(bad_bytes_before, "utf-8", has_encoding_flag=False)
-                or "run `convmerge normalize` first to repair the file"
-            ),
+            f"warning: dropped {stats.invalid_json:,} unreadable lines "
+            f"(first at line {line}: {reason})" + (f"; {advice}" if advice else ""),
             file=sys.stderr,
         )
 
@@ -289,12 +291,14 @@ def _cmd_split(args: argparse.Namespace) -> None:
         file=sys.stderr,
     )
     if stats.first_invalid_line is not None:
+        line = stats.first_invalid_line
+        reason, fix = skipped_line_reason(args.input, line)
         print(
-            f"warning: dropped {stats.invalid_json:,} invalid JSON lines "
-            f"(first at line {stats.first_invalid_line})",
+            f"warning: dropped {stats.invalid_json:,} unreadable lines "
+            f"(first at line {line}: {reason})",
             file=sys.stderr,
         )
-        advice = encoding_advice(bad_bytes_before, "utf-8", has_encoding_flag=False)
+        advice = encoding_advice(bad_bytes_before, "utf-8", has_encoding_flag=False) or fix
         if advice:
             print(f"hint: {advice}", file=sys.stderr)
 
