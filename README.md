@@ -528,7 +528,7 @@ step of a larger pipeline rather than expecting it to grow into those areas.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the full guide — setup, local
 checks, code conventions, and a walkthrough for adding a new adapter /
-emitter. CI runs Ruff, mypy, and pytest on Python 3.10 – 3.12.
+emitter. CI runs Ruff, mypy, and pytest on Python 3.10 – 3.14.
 
 ```bash
 pip install -e ".[dev,all]"

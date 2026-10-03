@@ -22,6 +22,12 @@ from convmerge.cli import _build_parser, main
         ),
         (["fetch", "m.yaml", "--only", "a", "--only", "b"], "only", ["a", "b"]),
         (["fetch", "gh://o/r", "--ext", "json", "--ext", "jsonl"], "ext", ["json", "jsonl"]),
+        (
+            ["run", "r.yaml", "--force", "a.convert", "--force", "mix"],
+            "force",
+            ["a.convert", "mix"],
+        ),
+        (["run", "r.yaml", "--force"], "force", []),
     ],
 )
 def test_repeated_flags_accumulate(argv, dest, expected) -> None:
@@ -46,3 +52,25 @@ def test_mix_with_repeated_inputs_uses_every_source(tmp_path: Path) -> None:
           "-o", str(out), "-n", "10", "--no-recipe"])  # fmt: skip
     firsts = {json.loads(line)["messages"][0]["content"][0] for line in out.open()}
     assert firsts == {"a", "b"}
+
+
+def _options(parser):
+    """Every optional argument of every subcommand, as (command, action)."""
+    import argparse
+
+    for action in parser._actions:
+        if isinstance(action, argparse._SubParsersAction):
+            for name, sub in action.choices.items():
+                yield from ((f"{name}", a) for a in sub._actions if a.option_strings)
+
+
+def test_every_multi_value_option_accumulates_when_repeated() -> None:
+    """A flag that takes several values must keep them all when it is given
+    twice; plain nargs='+' keeps only the last occurrence (the 1.5.1 bug)."""
+    import argparse
+
+    multi = [(cmd, a) for cmd, a in _options(_build_parser()) if a.nargs in ("+", "*")]
+    assert multi, "no multi-value options found"
+    wrong = [f"{cmd} {a.option_strings[0]}" for cmd, a in multi
+             if not isinstance(a, (argparse._ExtendAction, argparse._AppendAction))]  # fmt: skip
+    assert not wrong, f"repeat these flags and earlier values are lost: {wrong}"
