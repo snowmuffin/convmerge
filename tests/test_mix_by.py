@@ -224,3 +224,81 @@ def test_clipped_warning_tells_same_named_sources_apart(tmp_path: Path, caplog) 
         mix_files([MixSource(big, 1), MixSource(small, 1)], tmp_path / "o.jsonl", total=100)
     assert "big/converted.jsonl 91% (weight 50%)" in caplog.text
     assert "small/converted.jsonl (has 5 rows, needs 50)" in caplog.text
+
+
+def _words(path: Path, n: int, words: int) -> Path:
+    path.write_text("".join(json.dumps({"text": "w " * words}) + "\n" for _ in range(n)))
+    return path
+
+
+def test_max_tokens_counts_rows_as_the_trainer_cuts_them(tmp_path: Path) -> None:
+    from convmerge.mix import write_mix_recipe
+
+    long = _words(tmp_path / "long.jsonl", 300, 400)
+    short = _words(tmp_path / "short.jsonl", 300, 50)
+    sources = [MixSource(long, 1), MixSource(short, 1)]
+    full = mix_files(sources, tmp_path / "f.jsonl", total=90, by="tokens", tokenizer=_Tok())
+    assert [s.written for s in full.sources] == [10, 80]  # 400 vs 50 tokens a row
+    assert full.max_tokens is None and full.sources[0].over_cap is None
+    capped = mix_files(sources, tmp_path / "c.jsonl", total=90, by="tokens", tokenizer=_Tok(),
+                       max_tokens=100)  # fmt: skip
+    assert [s.written for s in capped.sources] == [30, 60]  # 100 vs 50 once cut
+    assert [s.over_cap for s in capped.sources] == [300, 0]
+    lines = mix_summary(capped, oversample=False)
+    assert "over_100=100%" in lines[0] and "over_100" not in lines[1]
+    assert any(line.startswith("tokens counted up to 100 per row") for line in lines)
+    sidecar = json.loads(write_mix_recipe(capped).read_text())
+    assert sidecar["max_tokens"] == 100 and sidecar["sources"][0]["over_cap"] == 300
+    # rows shorter than the cap: the same mix as without it
+    same = mix_files(sources, tmp_path / "s.jsonl", total=90, by="tokens", tokenizer=_Tok(),
+                     max_tokens=1000)  # fmt: skip
+    assert (tmp_path / "s.jsonl").read_bytes() == (tmp_path / "f.jsonl").read_bytes()
+    assert [s.over_cap for s in same.sources] == [0, 0]
+
+
+def test_max_tokens_with_a_sample_estimates_the_rows_over(tmp_path: Path) -> None:
+    rows = [{"text": "w " * (400 if i % 4 == 0 else 50)} for i in range(400)]
+    src = tmp_path / "a.jsonl"
+    src.write_text("".join(json.dumps(r) + "\n" for r in rows))
+    result = mix_files([MixSource(src, 1)], tmp_path / "o.jsonl", total=10, by="tokens",
+                       tokenizer=_Tok(), by_sample=200, max_tokens=100)  # fmt: skip
+    assert result.sources[0].measured == 200
+    assert result.sources[0].over_cap == pytest.approx(100, abs=25)
+
+
+@pytest.mark.parametrize(
+    "kwargs, message",
+    [
+        ({"by": "chars", "total": 5, "max_tokens": 10}, "needs by='tokens'"),
+        ({"by": "tokens", "total": 5, "tokenizer": _Tok(), "max_tokens": 0}, "positive"),
+        ({"by": "tokens", "total": 5, "tokenizer": _Tok(), "max_tokens": True}, "positive"),
+    ],
+)
+def test_max_tokens_errors(tmp_path: Path, kwargs, message) -> None:
+    src = _rows(tmp_path / "s.jsonl", 3, 5)
+    with pytest.raises(ValueError, match=message):
+        mix_files([MixSource(src, 1)], tmp_path / "o.jsonl", **kwargs)
+
+
+def test_max_tokens_cli_config_and_recipe(tmp_path: Path, capsys) -> None:
+    from convmerge.cli import main
+    from convmerge.recipe import RecipeError
+    from convmerge.recipe.schema import parse_recipe
+
+    with pytest.raises(SystemExit) as e:
+        main(["mix", "-i", "a.jsonl:1", "-o", str(tmp_path / "o.jsonl"), "--max-tokens", "0"])
+    assert e.value.code == 2
+    src = _words(tmp_path / "a.jsonl", 5, 3)
+    cfg = tmp_path / "mix.json"
+    cfg.write_text(json.dumps({"sources": [{"path": str(src), "weight": 1}], "total": 2,
+                               "by": "tokens", "max_tokens": 512}))  # fmt: skip
+    assert load_mix_config(cfg)[1]["max_tokens"] == 512
+    base = {"version": 1, "output": "o.jsonl",
+            "sources": {"a": {"path": "a.jsonl", "convert": {"from": "auto"}}}}  # fmt: skip
+    mix = {"total": 10, "by": "tokens", "tokenizer": "t", "max_tokens": 512}
+    assert parse_recipe({**base, "mix": mix}, path=tmp_path / "r.yaml").mix.max_tokens == 512
+    with pytest.raises(RecipeError, match="needs mix.by tokens"):
+        parse_recipe({**base, "mix": {"total": 10, "by": "chars", "max_tokens": 5}},
+                     path=tmp_path / "r.yaml")  # fmt: skip
+    with pytest.raises(RecipeError, match="positive integer"):
+        parse_recipe({**base, "mix": {**mix, "max_tokens": -1}}, path=tmp_path / "r.yaml")

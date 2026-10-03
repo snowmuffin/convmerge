@@ -113,6 +113,7 @@ by path) and concatenated.
 | `mix.by` | `rows` | What the weights measure: `rows`, `chars`, or `tokens` (needs `total`; `tokens` needs `tokenizer`). `total` stays a row count, split so each source's share of the characters or tokens is its weight. |
 | `mix.tokenizer` | — | Hugging Face tokenizer name or path for `by: tokens` (needs `convmerge[tokens]`). |
 | `mix.by_sample` | — | With `by: chars` / `tokens`: measure this many random rows per source and scale, instead of every row (an estimate; see `mix --by-sample`). |
+| `mix.max_tokens` | — | With `by: tokens`: count each row as at most this many tokens, the trainer's maximum length, so the weights describe the text that is trained on (see `mix --max-tokens`). |
 
 | `dedupe.near` | `false` | Drop rows whose text is a near-copy of an earlier row (MinHash LSH over word 5-grams). Needs `convmerge[quality]`. |
 | `dedupe.threshold` | `0.8` | `near`: estimated Jaccard similarity that makes a duplicate (below 1). |

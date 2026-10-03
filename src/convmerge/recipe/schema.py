@@ -103,6 +103,7 @@ class MixSpec:
     by: str = "rows"
     tokenizer: str | None = None
     by_sample: int | None = None
+    max_tokens: int | None = None
 
 
 @dataclass(frozen=True)
@@ -444,7 +445,7 @@ def _mix(raw: Any, sources: dict[str, SourceSpec]) -> MixSpec | None:
         return None
     spec = _mapping(raw, "mix")
     _only(spec, {"weights", "total", "seed", "oversample", "sampler", "by", "tokenizer",
-                 "by_sample"}, "mix")  # fmt: skip
+                 "by_sample", "max_tokens"}, "mix")  # fmt: skip
     weights_raw = spec.get("weights")
     if weights_raw is None:
         weights = {name: 1.0 for name in sources}
@@ -485,6 +486,12 @@ def _mix(raw: Any, sources: dict[str, SourceSpec]) -> MixSpec | None:
             raise RecipeError("mix.by_sample: expected a positive integer")
         if by == "rows":
             raise RecipeError("mix.by_sample: needs mix.by chars or tokens")
+    max_tokens = spec.get("max_tokens")
+    if max_tokens is not None:
+        if isinstance(max_tokens, bool) or not isinstance(max_tokens, int) or max_tokens < 1:
+            raise RecipeError("mix.max_tokens: expected a positive integer")
+        if by != "tokens":
+            raise RecipeError("mix.max_tokens: needs mix.by tokens")
     return MixSpec(
         weights=weights,
         total=total,
@@ -494,6 +501,7 @@ def _mix(raw: Any, sources: dict[str, SourceSpec]) -> MixSpec | None:
         by=by,
         tokenizer=tokenizer,
         by_sample=by_sample,
+        max_tokens=max_tokens,
     )
 
 

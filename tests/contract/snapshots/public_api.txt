@@ -32,7 +32,7 @@ class JsonlLine(number: 'int', raw: 'str', value: 'Any') -> None
 class MapSpec(turns: 'Path | None' = None, role: 'Path | None' = None, content: 'Path | None' = None, name: 'Path | None' = None, role_map: 'Mapping[str, str] | None' = None, system: 'Path | None' = None, user: 'Path | None' = None, assistant: 'Path | None' = None, reasoning: 'Path | None' = None, chosen: 'Path | None' = None, rejected: 'Path | None' = None, tools: 'Path | None' = None, responses: 'tuple[Path, ...] | None' = None, preferred: 'Path | None' = None, preferred_values: 'Mapping[str, int] | None' = None, candidates: 'Path | None' = None, candidate: 'Path | None' = None, score: 'Path | None' = None, better: 'str | None' = None) -> None
     @classmethod from_mapping(cls, data: 'Any') -> 'MapSpec'
     def to_mapping(self) -> 'dict[str, Any]'
-class MixResult(total_written: 'int', seed: 'int', output: 'Path', sources: 'list[SourceStats]' = <factory>, sampler: 'str' = 'v2', by: 'str' = 'rows', by_sample: 'int | None' = None) -> None
+class MixResult(total_written: 'int', seed: 'int', output: 'Path', sources: 'list[SourceStats]' = <factory>, sampler: 'str' = 'v2', by: 'str' = 'rows', by_sample: 'int | None' = None, max_tokens: 'int | None' = None) -> None
 class MixSource(path: 'Path', weight: 'float') -> None
 class NearDedupeStats(total: 'int' = 0, kept: 'int' = 0, near_duplicates: 'int' = 0, invalid_json: 'int' = 0, first_invalid_line: 'int | None' = None, threshold: 'float' = 0.8) -> None
 class ReadStats(lines_read: 'int' = 0, blank: 'int' = 0, invalid_json: 'int' = 0, first_invalid_line: 'int | None' = None) -> None
@@ -63,7 +63,7 @@ def deduplicate_jsonl(src: 'str | Path', dst: 'str | Path', *, keys: 'Iterable[s
 def deduplicate_near_jsonl(src: 'str | Path', dst: 'str | Path', *, threshold: 'float' = 0.8, num_perm: 'int' = 128, shingle: 'int' = 5, keys: 'Iterable[str] | None' = None, rejects: 'str | Path | None' = None, encoding: 'str' = 'utf-8', stats: 'NearDedupeStats | None' = None, workers: 'int' = 1) -> 'tuple[int, int]'
 def filter_jsonl(path: 'str | Path', *, spec: 'FilterSpec | None' = None, output: 'str | Path | None' = None, rejects: 'str | Path | None' = None, encoding: 'str' = 'utf-8', stats: 'FilterStats | None' = None, workers: 'int' = 1) -> 'FilterStats'
 def iter_jsonl(path: 'str | Path', *, encoding: 'str' = 'utf-8', on_error: 'OnError' = 'skip', stats: 'ReadStats | None' = None, on_invalid: 'Callable[[JsonlDecodeError], None] | None' = None) -> 'Iterator[JsonlLine]'
-def mix_files(sources: 'list[MixSource]', output_path: 'str | Path', *, total: 'int | None' = None, seed: 'int' = 42, oversample: 'bool' = False, encoding: 'str' = 'utf-8', sampler: 'Sampler' = 'v2', by: 'MixUnit' = 'rows', tokenizer: 'Any' = None, by_sample: 'int | None' = None) -> 'MixResult'
+def mix_files(sources: 'list[MixSource]', output_path: 'str | Path', *, total: 'int | None' = None, seed: 'int' = 42, oversample: 'bool' = False, encoding: 'str' = 'utf-8', sampler: 'Sampler' = 'v2', by: 'MixUnit' = 'rows', tokenizer: 'Any' = None, by_sample: 'int | None' = None, max_tokens: 'int | None' = None) -> 'MixResult'
 def normalize_to_jsonl(src: 'str | Path', dst: 'str | Path', *, array_key: 'str' = 'conversation') -> 'int'
 def profile_schema(records: 'Iterable[dict[str, Any]] | str | Path', *, max_rows: 'int | None' = None, max_examples: 'int' = 3) -> 'dict[str, Any]'
 def register_adapter(name: 'str', fn: 'AdapterFn', *, replace: 'bool' = False) -> 'None'

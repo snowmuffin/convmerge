@@ -44,6 +44,9 @@ class SourceStats:
     """Rows whose length was measured for ``units``: every valid row, or the
     random sample of ``by_sample`` rows (``units`` is then an estimate);
     ``None`` when mixing by rows."""
+    over_cap: int | None = None
+    """Rows longer than ``max_tokens`` (counted as ``max_tokens``); estimated
+    from the sample with ``by_sample``. ``None`` without ``max_tokens``."""
 
     @property
     def mean_units(self) -> float | None:
@@ -64,6 +67,8 @@ class MixResult:
     """What the weights measured: ``rows``, ``chars`` or ``tokens``."""
     by_sample: int | None = None
     """Rows per source measured to estimate its length (``None``: all rows)."""
+    max_tokens: int | None = None
+    """Tokens counted per row at most (``None``: every token)."""
 
 
 Sampler = Literal["v1", "v2"]
@@ -89,6 +94,7 @@ def mix_files(
     by: MixUnit = "rows",
     tokenizer: Any = None,
     by_sample: int | None = None,
+    max_tokens: int | None = None,
 ) -> MixResult:
     """Sample from each source at its weight and write a merged JSONL file.
 
@@ -122,6 +128,13 @@ def mix_files(
     by the row count: much faster for ``"tokens"`` on large sources, at the
     cost of an estimate. ``None`` (default) measures every row.
 
+    *max_tokens* (with ``by="tokens"``) counts each row as at most that many
+    tokens: set it to the trainer's maximum length, which cuts longer rows, so
+    the weights describe the text that is trained on. Without it a source of
+    very long rows gets its share on paper and loses most of it to truncation.
+    The count is of the rows' text, not of the rendered chat template, which
+    adds a few tokens per turn.
+
     Returns a :class:`MixResult` with per-source statistics.
     """
     if not sources:
@@ -145,6 +158,11 @@ def mix_files(
             raise ValueError("by_sample needs by='chars' or 'tokens'")
         if isinstance(by_sample, bool) or not isinstance(by_sample, int) or by_sample < 1:
             raise ValueError(f"by_sample must be a positive integer, got {by_sample!r}")
+    if max_tokens is not None:
+        if by != "tokens":
+            raise ValueError("max_tokens needs by='tokens'")
+        if isinstance(max_tokens, bool) or not isinstance(max_tokens, int) or max_tokens < 1:
+            raise ValueError(f"max_tokens must be a positive integer, got {max_tokens!r}")
 
     total_weight = sum(s.weight for s in sources)
     if total_weight <= 0:
@@ -159,7 +177,16 @@ def mix_files(
     if sampler == "v2":
         measure = _measure(by, tokenizer)
         result = _mix_v2(
-            normalized, output_path, total, seed, oversample, encoding, by, measure, by_sample
+            normalized,
+            output_path,
+            total,
+            seed,
+            oversample,
+            encoding,
+            by,
+            measure,
+            by_sample,
+            max_tokens,
         )
     else:
         result = _mix_v1(normalized, output_path, total, seed, oversample, encoding)
@@ -362,11 +389,12 @@ def _mix_v2(
     by: str = "rows",
     measure: Any = None,
     by_sample: int | None = None,
+    max_tokens: int | None = None,
 ) -> MixResult:
     # Pass 1: count valid lines and remember where the invalid ones are, so
     # pass 2 can pick lines by ordinal without parsing JSON again.
     scans = [
-        _scan(src.path, encoding, measure, by_sample, random.Random(f"{seed}:{i}"))
+        _scan(src.path, encoding, measure, by_sample, random.Random(f"{seed}:{i}"), max_tokens)
         for i, src in enumerate(normalized)
     ]
     available = [scan.rows for scan in scans]
@@ -392,9 +420,10 @@ def _mix_v2(
         plans.append(plan)
         units = None if measure is None else scan.units
         measured = None if measure is None else scan.measured
+        over = None if max_tokens is None else scan.over
         stats.append(SourceStats(src.path, src.weight, target, scan.rows, plan.size,
                                  units=units, reasoning=scan.reasoning,
-                                 measured=measured))  # fmt: skip
+                                 measured=measured, over_cap=over))  # fmt: skip
 
     n_out = sum(p.size for p in plans)
     n_buckets = max(1, -(-n_out // _BUCKET_LINES))
@@ -431,7 +460,8 @@ def _mix_v2(
                 del lines
 
     return MixResult(total_written=n_out, seed=seed, output=output_path, sources=stats,
-                     sampler="v2", by=by, by_sample=by_sample)  # fmt: skip
+                     sampler="v2", by=by, by_sample=by_sample,
+                     max_tokens=max_tokens)  # fmt: skip
 
 
 @dataclass
@@ -474,6 +504,7 @@ class _Scan:
     units: float
     reasoning: int
     measured: int = 0
+    over: int = 0
 
 
 def _scan(
@@ -482,16 +513,29 @@ def _scan(
     measure: Any = None,
     sample: int | None = None,
     rng: random.Random | None = None,
+    cap: int | None = None,
 ) -> _Scan:
     """Count valid JSONL lines (and their length in ``measure`` units, and those
     with a reasoning trace); remember the invalid line numbers.
 
     With ``sample``, only a uniform random sample of that many rows (reservoir
     sampling with ``rng``) is measured, and ``units`` is their mean length
-    times the row count.
+    times the row count. With ``cap``, a row counts as at most ``cap`` units
+    and ``over`` counts the rows above it (scaled like ``units`` when sampled).
     """
     invalid: list[int] = []
-    rows = units = reasoning = 0
+    rows = units = reasoning = over = 0
+    if measure is not None and cap is not None:
+        full = measure
+
+        def measure(value: Any) -> int:
+            nonlocal over
+            n = full(value)
+            if n > cap:
+                over += 1
+                return cap
+            return n
+
     reservoir: list[Any] = []
     for line in iter_jsonl(
         path, encoding=encoding, on_invalid=lambda e: invalid.append(e.line_number)
@@ -513,7 +557,8 @@ def _scan(
     if sample is not None and reservoir:
         measured = len(reservoir)
         units = sum(measure(v) for v in reservoir) * rows / measured
-    return _Scan(rows, frozenset(invalid), units, reasoning, measured)
+        over = round(over * rows / measured)
+    return _Scan(rows, frozenset(invalid), units, reasoning, measured, over)
 
 
 def _valid_raw_lines(path: Path, encoding: str, invalid: frozenset[int]):
@@ -539,6 +584,7 @@ def write_mix_recipe(result: MixResult, *, encoding: str = "utf-8") -> Path:
         "sampler": result.sampler,
         "by": result.by,
         "by_sample": result.by_sample,
+        "max_tokens": result.max_tokens,
         "seed": result.seed,
         "total_written": result.total_written,
         "output": str(result.output),
@@ -552,6 +598,7 @@ def write_mix_recipe(result: MixResult, *, encoding: str = "utf-8") -> Path:
                 "units": s.units,
                 "reasoning": s.reasoning,
                 "measured": s.measured,
+                "over_cap": s.over_cap,
                 "share": round(share, 4),
             }
             for s, share in zip(result.sources, written_shares(result))
@@ -568,7 +615,7 @@ def load_mix_config(path: Path) -> tuple[list[MixSource], dict]:
 
     Returns ``(sources, options)`` where *options* may contain
     ``total``, ``seed``, ``output``, ``oversample``, ``sampler``, ``by``,
-    ``tokenizer``, and ``by_sample``.
+    ``tokenizer``, ``by_sample``, and ``max_tokens``.
 
     YAML support requires ``pyyaml`` (``pip install 'convmerge[preset]'``).
     """
@@ -627,6 +674,8 @@ def load_mix_config(path: Path) -> tuple[list[MixSource], dict]:
         options["tokenizer"] = str(raw["tokenizer"])
     if raw.get("by_sample") is not None:
         options["by_sample"] = int(raw["by_sample"])
+    if raw.get("max_tokens") is not None:
+        options["max_tokens"] = int(raw["max_tokens"])
 
     return sources, options
 
