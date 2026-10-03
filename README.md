@@ -193,7 +193,7 @@ convmerge convert -i raw/HuggingFaceH4_ultrafeedback_binarized.jsonl -o dpo.json
 | [FreedomIntelligence/sharegpt-korean](https://huggingface.co/datasets/FreedomIntelligence/sharegpt-korean) | SFT | ko | ShareGPT (JSON array) | `--from auto --format messages` |
 | [microsoft/orca-agentinstruct-1M-v1](https://huggingface.co/datasets/microsoft/orca-agentinstruct-1M-v1) | SFT | en | messages as a JSON string | `--from auto --format messages` |
 | [nvidia/OpenMathInstruct-2](https://huggingface.co/datasets/nvidia/OpenMathInstruct-2) | SFT | en | problem / generated_solution | `--from auto --format messages` |
-| [facebook/natural_reasoning](https://huggingface.co/datasets/facebook/natural_reasoning) | SFT | en | question + responses[] list | `--from map --format messages --adapter-kwargs '{"map":{"user":"question","assistant":"responses[0].response"}}'` |
+| [facebook/natural_reasoning](https://huggingface.co/datasets/facebook/natural_reasoning) | SFT | en | question + responses[] list | `--from auto --format messages` |
 | [CohereLabs/aya_dataset](https://huggingface.co/datasets/CohereLabs/aya_dataset) | SFT | multi | inputs / targets | `--from auto --format messages` |
 | [CertifiedJoon/Korean-Instruction](https://huggingface.co/datasets/CertifiedJoon/Korean-Instruction) | SFT | ko | Instruction / Response (capitalised) | `--from auto --format messages` |
 | [heegyu/open-korean-instructions-v20231020](https://huggingface.co/datasets/heegyu/open-korean-instructions-v20231020) | SFT | ko | ShareGPT, `input` turn = system prompt | `--from auto --format messages` |

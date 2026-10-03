@@ -233,6 +233,19 @@ def iter_from_chat_line(
     instr = _first_string(record, instruction_keys)
     out = _first_string(record, output_keys)
     has_strong_alpaca = instr is not None and out is not None
+    if instr is not None and out is None:
+        if _blank_answer(record, output_keys):
+            # The answer column is there but empty: nothing to train on (a
+            # ``text`` column next to it holds only the prompt template).
+            yield TrainingExample(meta=source_meta(record, {"source": "chat"}),
+                                  issues=["empty_answer"])  # fmt: skip
+            return
+        answer = _first_response(record.get("responses"))
+        if answer is not None:
+            # A question with a list of model responses (natural_reasoning).
+            msgs = [ChatMessage("user", instr), ChatMessage("assistant", answer)]
+            yield build_example(msgs, record, meta={"source": "chat:responses"})
+            return
 
     txt = record.get("text")
     if isinstance(txt, str) and txt.strip() and not has_strong_alpaca:
@@ -453,6 +466,24 @@ def _answer_turn(record: dict[str, Any], keys: tuple[str, ...]) -> ChatMessage |
             text = content if isinstance(content, str) and content.strip() else None
             if calls or text:
                 return ChatMessage("assistant", text, tool_calls=calls)
+    return None
+
+
+def _blank_answer(record: dict[str, Any], keys: tuple[str, ...]) -> bool:
+    """True when an answer column is present but holds only whitespace."""
+    return any(isinstance(record.get(k), str) and not record[k].strip() for k in keys)
+
+
+def _first_response(value: Any) -> str | None:
+    """The first non-empty ``response`` of a ``responses`` list of
+    ``{"response_model": ..., "response": ...}`` entries."""
+    if not isinstance(value, list):
+        return None
+    for item in value:
+        if isinstance(item, dict):
+            text = item.get("response")
+            if isinstance(text, str) and text.strip():
+                return text
     return None
 
 
