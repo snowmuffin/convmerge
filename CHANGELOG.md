@@ -7,6 +7,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.1] - 2026-10-03
+
+Fixes only: no output path can empty its own input any more, and messages
+that pointed at the wrong fix or the wrong option now name the right one.
+
+### Fixed
+
+- `convert`, `dedupe` (also `--near`), `filter`, `decontam`, `split`,
+  `tokens`, `turns`, and `normalize` emptied the input file when `-o` (or
+  `--rejects`, `--val-output`, `--single-out`) named it: the output was
+  opened for writing before the input was read, and the command then
+  reported success with 0 rows. They now stop before writing anything with
+  `error: output X is the input file` (exit 2). The same holds for two
+  outputs given the same path, for a path that reaches the input through a
+  link, and for `normalize` with the output directory equal to the input
+  directory. The Python functions raise `convmerge.io.SamePathError` (a
+  `ValueError`). `mix` was not affected.
+- Skipped lines: `convert` and `dedupe` told you to "run `convmerge
+  normalize` first to repair the file", but `normalize` fails on exactly
+  those lines (broken JSON, too deeply nested, unpaired surrogate escapes).
+  The warning now says why the first skipped line was skipped (`not valid
+  JSON: Expecting value`, `nested more than 500 levels deep`, ...) and
+  suggests `normalize` only when the file is a JSON array or has objects run
+  together on one line, which `normalize` does rewrite. `split` and `filter`
+  give the reason too.
+- `mix` skipped unreadable lines without saying so; it now warns with the
+  count and first line number per source.
+- `mix` errors named Python parameters (`max_tokens needs by='tokens'`,
+  `by='tokens' needs a total`) instead of the flags (`--max-tokens needs --by
+  tokens`, `--by tokens needs a total (-n/--total N)`), or the config key
+  when the value came from a mix config file. They exited with 1; flag
+  combinations now exit with 2, as `docs/stability.md` specifies.
+- `mix --tokenizer` without `--by tokens` was ignored; it is now an error.
+- The warning about a mix that is off its weights named only the CLI flags;
+  it now names the recipe keys too (`mix.oversample`, `mix.total`).
+- `run --force NAME` with a name that matches no step, source, or kind forced
+  nothing and ran normally; it is now an error that lists the steps and
+  suggests the closest name.
+
+### Changed output
+
+- Warning text for skipped lines: "first invalid JSON at line N; run
+  `convmerge normalize` ..." became "first unreadable line is line N
+  (reason)", and "dropped N invalid JSON lines" became "dropped N unreadable
+  lines (first at line L: reason)". `convert`'s summary says `unreadable=N`
+  instead of `invalid JSON=N`. Report keys (`invalid_json`) are unchanged.
+- Exit code 2 instead of 1 for invalid `mix` flag combinations.
+
 ## [1.6.0] - 2026-10-03
 
 Mix weights that match what the trainer sees, one more layout read without a

@@ -14,7 +14,7 @@ from __future__ import annotations
 import codecs
 import json
 import re
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
@@ -156,6 +156,37 @@ def _parse_line(
         if problem is not None:
             return None, problem
     return value, None
+
+
+class SamePathError(ValueError):
+    """An output path names an input file (raised by :func:`refuse_overwrite`)."""
+
+
+def refuse_overwrite(inputs: Iterable[str | Path], outputs: Iterable[str | Path | None]) -> None:
+    """Raise :class:`SamePathError` when an output is an input or another output.
+
+    Commands open their outputs before they read their input, so an output
+    naming the input file would empty it. Paths that reach the same file
+    through a link count as the same file.
+    """
+    ins = [Path(p) for p in inputs]
+    outs: list[Path] = []
+    for out in outputs:
+        if out is None:
+            continue
+        o = Path(out)
+        if any(_same_file(o, p) for p in ins):
+            raise SamePathError(f"output {o} is the input file; write to a different path")
+        if any(_same_file(o, p) for p in outs):
+            raise SamePathError(f"output {o} is given twice; write each output to its own path")
+        outs.append(o)
+
+
+def _same_file(a: Path, b: Path) -> bool:
+    try:
+        return a.samefile(b)
+    except OSError:  # one of them does not exist yet
+        return a.resolve() == b.resolve()
 
 
 def bad_bytes_seen() -> int:

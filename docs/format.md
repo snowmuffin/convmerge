@@ -608,9 +608,12 @@ that would train badly are **dropped by default** and counted by reason:
 Lines that are not usable JSON are skipped and counted as `invalid_json`
 before any adapter runs: broken JSON, bytes that are not valid in
 `--encoding`, unpaired UTF-16 surrogate escapes (`"\ud800"`), and nesting too
-deep to parse. When nothing is written, `convert` prints a hint: run
-`normalize` first, pass `--encoding` (when the lines are not valid UTF-8), use
-`--from auto`, or map the listed keys with `--from map`.
+deeper than 500 levels. The warning names the first skipped line and why it
+was skipped. These lines cannot be repaired by `normalize`; fix or remove
+them, or let convmerge skip them. When nothing is written, `convert` prints a
+hint: run `normalize` first (when the file is a JSON array or has objects run
+together on one line), pass `--encoding` (when the lines are not valid UTF-8),
+use `--from auto`, or map the listed keys with `--from map`.
 
 `--encoding` (and the `encoding` argument of the Python API) is the input
 file's encoding, for example `cp949` for files saved on Korean Windows. Every

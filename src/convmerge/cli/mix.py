@@ -145,6 +145,45 @@ def mix_summary(result, *, oversample: bool) -> list[str]:
     return lines
 
 
+def _option_problem(
+    args: argparse.Namespace,
+    *,
+    by: str,
+    total: int | None,
+    sampler: str,
+    tokenizer: str | None,
+    by_sample: int | None,
+    max_tokens: int | None,
+) -> str | None:
+    """The first invalid option combination, named as the user wrote it.
+
+    :func:`convmerge.mix.mix_files` checks the same rules but names its own
+    parameters (``by='tokens'``); here each option is named by its flag, or by
+    its key when it came from the config file.
+    """
+
+    def name(dest: str, flag: str) -> str:
+        return flag if getattr(args, dest) not in (None, False) else f"'{dest}' in the config"
+
+    by_name = f"--by {by}" if args.by else f"'by: {by}' in the config"
+    if by != "rows" and total is None:
+        return (
+            f"{by_name} needs a total (-n/--total N): without one every record is "
+            "merged and the weights are not used"
+        )
+    if by != "rows" and sampler != "v2":
+        return f"{by_name} needs the v2 sampler ({name('sampler', '--sampler')} is {sampler})"
+    if by == "tokens" and tokenizer is None:
+        return f"{by_name} needs --tokenizer NAME (the tokenizer that counts the tokens)"
+    if by_sample is not None and by == "rows":
+        return f"{name('by_sample', '--by-sample')} needs --by chars or --by tokens"
+    if max_tokens is not None and by != "tokens":
+        return f"{name('max_tokens', '--max-tokens')} needs --by tokens"
+    if args.tokenizer and by != "tokens":
+        return "--tokenizer needs --by tokens (the tokenizer only counts tokens for the weights)"
+    return None
+
+
 def _cmd_mix(args: argparse.Namespace) -> None:
     from convmerge.mix import MixSource, load_mix_config, mix_files, write_mix_recipe
 
@@ -192,6 +231,13 @@ def _cmd_mix(args: argparse.Namespace) -> None:
 
     if output is None:
         print("error: --output / -o is required (or set 'output' in config)", file=sys.stderr)
+        sys.exit(2)
+    problem = _option_problem(
+        args, by=by, total=total, sampler=sampler, tokenizer=tokenizer,
+        by_sample=by_sample, max_tokens=max_tokens,
+    )  # fmt: skip
+    if problem:
+        print(f"error: {problem}", file=sys.stderr)
         sys.exit(2)
 
     try:
