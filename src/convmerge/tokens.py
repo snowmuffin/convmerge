@@ -47,7 +47,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from convmerge.io import ReadStats, iter_jsonl
+from convmerge.io import ReadStats, iter_jsonl, refuse_overwrite
 
 _BATCH = 256
 _REASON_CHARS = 160
@@ -241,6 +241,7 @@ def check_tokens(
     rows that render and are at most ``max_tokens`` long are written there
     and the others to ``rejects`` (if given).
     """
+    refuse_overwrite([path], [output, rejects])
     _require_template_support()
     tok = load_tokenizer(tokenizer) if isinstance(tokenizer, str) else tokenizer
     template = chat_template if chat_template is not None else getattr(tok, "chat_template", None)

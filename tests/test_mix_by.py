@@ -178,8 +178,8 @@ def test_mix_config_and_cli_by(tmp_path: Path, capsys) -> None:
     with pytest.raises(SystemExit) as e:
         main(["mix", "-i", f"{short}:1", "-o", str(tmp_path / "p.jsonl"), "--by", "tokens",
               "-n", "5"])  # fmt: skip
-    assert e.value.code == 1
-    assert "needs a tokenizer" in capsys.readouterr().err
+    assert e.value.code == 2  # a flag combination: usage error (1 before 1.6.1)
+    assert "--by tokens needs --tokenizer NAME" in capsys.readouterr().err
 
 
 def test_recipe_mix_by(tmp_path: Path) -> None:

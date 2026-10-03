@@ -21,7 +21,7 @@ from convmerge.emitters import (
     split_pair,
     wants_pairs,
 )
-from convmerge.io import ReadStats, iter_jsonl
+from convmerge.io import ReadStats, iter_jsonl, refuse_overwrite
 from convmerge.models import TrainingExample
 from convmerge.reasoning import has_reasoning
 from convmerge.transforms import TransformOptions, apply_transforms
@@ -215,6 +215,7 @@ def convert_file(
 
     Returns (lines_read, lines_written).
     """
+    refuse_overwrite([input_path], [output_path])
     from convmerge.progress import ProgressReporter
 
     input_path, output_path = Path(input_path), Path(output_path)

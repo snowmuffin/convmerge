@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 
 from convmerge.cli._common import add_progress_flag as _add_progress_flag
-from convmerge.cli._common import config_errors, encoding_advice
+from convmerge.cli._common import config_errors, encoding_advice, skipped_line_reason
 from convmerge.cli._common import positive_int as _positive_int
 from convmerge.convert import REPORT_VERSION, ConvertStats, convert_file
 
@@ -260,14 +260,18 @@ def _cmd_convert(args: argparse.Namespace) -> None:
     if stats.skipped:
         print(
             f"warning: skipped {stats.skipped:,} lines "
-            f"(invalid JSON={stats.invalid_json:,}, non-object={stats.non_object:,}, "
+            f"(unreadable={stats.invalid_json:,}, non-object={stats.non_object:,}, "
             f"no example from adapter={stats.no_example:,})",
             file=sys.stderr,
         )
     if stats.first_invalid_line is not None:
+        line = stats.first_invalid_line
+        reason, fix = skipped_line_reason(args.input, line, cfg.encoding)
+        # With nothing written, the empty-output hints above already gave the fix.
+        note = advice or (fix if n_out else None)
         print(
-            f"warning: first invalid JSON at line {stats.first_invalid_line}; "
-            f"{advice or 'run `convmerge normalize` first to repair the file'}",
+            f"warning: first unreadable line is line {line} ({reason})"
+            + (f"; {note}" if note else ""),
             file=sys.stderr,
         )
 

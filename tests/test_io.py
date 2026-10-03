@@ -245,7 +245,9 @@ def test_cli_suggests_encoding_for_undecodable_input(tmp_path: Path, capsys) -> 
     broken = _write(tmp_path / "b.jsonl", '{"instruction": "q", "output": "a"}\n{bad\n')
     main(["convert", "-i", str(broken), "-o", str(tmp_path / "o2.jsonl"), "--from", "auto"])
     err = capsys.readouterr().err
-    assert "normalize" in err and "--encoding" not in err
+    # normalize cannot repair a broken line, so it is not suggested (1.6.1).
+    assert "line 2 (not valid JSON" in err
+    assert "normalize" not in err and "--encoding" not in err
 
 
 @pytest.mark.parametrize(

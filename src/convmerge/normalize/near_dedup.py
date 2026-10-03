@@ -29,7 +29,7 @@ from typing import Any
 
 from convmerge import _parallel
 from convmerge._text import ngrams, words
-from convmerge.io import ReadStats, iter_jsonl
+from convmerge.io import ReadStats, iter_jsonl, refuse_overwrite
 
 
 @dataclass
@@ -78,6 +78,7 @@ def deduplicate_near_jsonl(
     ``workers`` > 1 computes MinHashes in that many processes; the output is
     the same as with one.
     """
+    refuse_overwrite([src], [dst, rejects])
     if not 0 < threshold < 1:
         raise ValueError("threshold: expected a fraction between 0 and 1")
     if num_perm < 16 or shingle < 1:

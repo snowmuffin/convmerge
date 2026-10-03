@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import argparse
+import json
+from pathlib import Path
 
 
 def add_progress_flag(p: argparse.ArgumentParser) -> None:
@@ -52,3 +54,41 @@ def encoding_advice(bad_bytes_before: int, encoding: str, *, has_encoding_flag: 
         f"some lines are not valid {encoding}; re-save the file as UTF-8 first "
         "(`convmerge convert --encoding NAME` reads other encodings)"
     )
+
+
+def skipped_line_reason(path: Path, number: int, encoding: str = "utf-8") -> tuple[str, str | None]:
+    """Why line ``number`` of ``path`` was skipped, and advice when there is a fix.
+
+    Reads the file again up to that line, so only call it for a skipped line.
+    The advice names ``convmerge normalize`` only for the file shapes it
+    rewrites (a JSON array, or objects run together on one line); a broken,
+    too deeply nested, or unpaired-surrogate line cannot be repaired by it.
+    """
+    from convmerge.io import _parse_line, iter_raw_lines
+    from convmerge.normalize.jsonl import detect_jsonl_shape
+
+    why: object = "unreadable"
+    try:
+        for n, raw in iter_raw_lines(path, encoding=encoding):
+            if n == number:
+                _, why = _parse_line(raw, check_bytes=True, encoding=encoding)
+                break
+    except OSError:
+        pass
+    if isinstance(why, json.JSONDecodeError):
+        reason = f"not valid JSON: {why.msg}"
+        try:
+            shape = detect_jsonl_shape(path)
+        except (OSError, ValueError, RecursionError):
+            shape = "invalid"
+        if shape in ("json_array", "single_line"):
+            return reason, (
+                f"the file is not one JSON object per line (looks like {shape}); "
+                f"run `convmerge normalize -i {path} -o <out.jsonl>` first"
+            )
+        return reason, None
+    if why == "nested too deeply":
+        from convmerge.io import MAX_DEPTH
+
+        return f"nested more than {MAX_DEPTH} levels deep", None
+    return str(why or "unreadable"), None
