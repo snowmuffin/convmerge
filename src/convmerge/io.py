@@ -4,8 +4,9 @@ Every command that streams JSONL (convert, dedupe, mix, turns, filter, ...)
 reads through :func:`iter_jsonl`, so blank lines, a UTF-8 BOM, and
 unparseable lines are handled — and counted — the same way everywhere.
 A line with bytes that are not valid in the file's encoding, an unpaired
-UTF-16 surrogate escape (``"\\ud800"``), or nesting too deep to parse is
-unparseable too: it is skipped like broken JSON instead of stopping the run.
+UTF-16 surrogate escape (``"\\ud800"``), or nesting deeper than
+:data:`MAX_DEPTH` is unparseable too: it is skipped like broken JSON instead
+of stopping the run.
 """
 
 from __future__ import annotations
@@ -109,6 +110,30 @@ def _loads(raw: str) -> Any:
     return value
 
 
+# Lists and objects nested deeper than this make a line unparseable. Fixed
+# rather than left to the JSON parser: before 3.14 it raised RecursionError
+# near Python's recursion limit (about 1,000), 3.14 parses any depth, and the
+# code that walks the value afterwards still recurses.
+MAX_DEPTH = 500
+# A line must be at least this long to nest deeper than MAX_DEPTH ("[" * 501
+# + "]" * 501), so shorter lines skip the check without a function call.
+_DEEP_LEN = 2 * MAX_DEPTH + 2
+
+
+def _too_deep(raw: str, value: Any) -> bool:
+    """True when ``value`` nests lists / objects more than :data:`MAX_DEPTH` deep."""
+    if raw.count("[") + raw.count("{") <= MAX_DEPTH:
+        return False  # cannot nest that deep: the usual case, two C scans
+    stack = [(value, 1)]
+    while stack:
+        v, depth = stack.pop()
+        if depth > MAX_DEPTH:
+            return True
+        items = v.values() if isinstance(v, dict) else v if isinstance(v, list) else ()
+        stack.extend((x, depth + 1) for x in items if isinstance(x, (dict, list)))
+    return False
+
+
 def _parse_line(
     raw: str, *, check_bytes: bool, encoding: str
 ) -> tuple[Any, json.JSONDecodeError | str | None]:
@@ -123,6 +148,8 @@ def _parse_line(
     except json.JSONDecodeError as e:
         return None, e
     except RecursionError:
+        return None, "nested too deeply"
+    if len(raw) >= _DEEP_LEN and _too_deep(raw, value):
         return None, "nested too deeply"
     if check_bytes or "\\u" in raw:
         problem = _encoding_problem(raw, value, check_bytes=check_bytes, encoding=encoding)
@@ -166,8 +193,8 @@ def iter_jsonl(
     ``stats``, calling ``on_invalid`` (if given) with the error for each;
     ``"raise"`` raises :class:`JsonlDecodeError` at the first one.
     A UTF-8 byte-order mark on the first line is ignored. Lines with bytes
-    invalid in ``encoding``, unpaired surrogate escapes, or nesting too deep
-    for the parser count as unparseable.
+    invalid in ``encoding``, unpaired surrogate escapes, or nesting deeper
+    than :data:`MAX_DEPTH` count as unparseable.
     """
     if on_error not in ("skip", "raise"):
         raise ValueError(f"on_error must be 'skip' or 'raise', got {on_error!r}")
@@ -194,7 +221,9 @@ def iter_jsonl(
                 error = "nested too deeply"
             else:
                 check_bytes = _bad_bytes_seen != bad_bytes_before
-                if check_bytes or "\\u" in raw:
+                if len(raw) >= _DEEP_LEN and _too_deep(raw, value):
+                    error = "nested too deeply"
+                elif check_bytes or "\\u" in raw:
                     error = _encoding_problem(
                         raw, value, check_bytes=check_bytes, encoding=encoding
                     )

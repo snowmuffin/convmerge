@@ -34,6 +34,11 @@ see "Changed output".
 
 ### Fixed
 
+- Lines nested more than 500 lists / objects deep are skipped as `nested too
+  deeply` on every Python version (`convmerge.io.MAX_DEPTH`). The reader used
+  to rely on the JSON parser raising `RecursionError`, which Python 3.14's
+  parser no longer does, so on 3.14 such lines were read and could crash
+  later steps that walk the value.
 - `run --force a --force b` forced only `b`; repeated `--force` flags now
   add up, as the other multi-value flags do since 1.5.1, and a bare `--force`
   still forces every step. A contract test now fails on any multi-value flag
@@ -48,6 +53,9 @@ see "Changed output".
   applied. The rows written are the same.
 - facebook/natural_reasoning rows converted with `--from auto` become
   conversations; before 1.6 they were dropped as `no_assistant`.
+- On Python 3.10 - 3.13, lines nested between 501 and about 1,000 levels deep
+  (the parser's old limit) are now skipped too, so every version reads the
+  same lines.
 
 ### Deprecated
 
