@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import sys
 from pathlib import Path
+from typing import Any
 
 
 def _add_run(sub: argparse._SubParsersAction) -> None:
@@ -40,6 +41,30 @@ def _add_run(sub: argparse._SubParsersAction) -> None:
     )
 
 
+def _unknown_force(recipe: Any, force: list[str] | None) -> str | None:
+    """Say which ``--force`` names match no step, source, or kind (a typo would
+    otherwise force nothing)."""
+    import difflib
+
+    from convmerge.recipe.engine import build_steps
+
+    if not force:
+        return None
+    steps = build_steps(recipe)
+    known = {n for s in steps for n in (s.name, s.kind, s.source) if n}
+    missing = [f for f in force if f not in known]
+    if not missing:
+        return None
+    hints = []
+    for name in missing:
+        close = difflib.get_close_matches(name, sorted(known), n=1)
+        hints.append(f"{name!r}" + (f" (did you mean {close[0]!r}?)" if close else ""))
+    return (
+        f"--force: no step, source, or kind named {', '.join(hints)}; "
+        f"steps: {', '.join(s.name for s in steps)}"
+    )
+
+
 def _cmd_run(args: argparse.Namespace) -> None:
     from convmerge.recipe import (
         RECIPE_TEMPLATE,
@@ -64,6 +89,11 @@ def _cmd_run(args: argparse.Namespace) -> None:
         recipe = load_recipe(args.recipe)
     except (RecipeError, OSError, ImportError, ValueError) as e:
         print(f"error: {args.recipe}: {e}", file=sys.stderr)
+        sys.exit(2)
+
+    unknown = _unknown_force(recipe, args.force)
+    if unknown:
+        print(f"error: {unknown}", file=sys.stderr)
         sys.exit(2)
 
     if args.plan or args.frozen:

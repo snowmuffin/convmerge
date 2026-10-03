@@ -7,7 +7,7 @@ import json
 import sys
 from pathlib import Path
 
-from convmerge.cli._common import encoding_advice
+from convmerge.cli._common import encoding_advice, skipped_line_reason
 from convmerge.cli._common import positive_int as _positive_int
 
 
@@ -125,9 +125,11 @@ def _cmd_filter(args: argparse.Namespace) -> None:
         print(f"warning: {stats.unreadable:,} rows are not in a format convmerge reads",
               file=sys.stderr)  # fmt: skip
     if stats.invalid_json:
-        print(f"warning: dropped {stats.invalid_json:,} invalid JSON lines "
-              f"(first at line {stats.first_invalid_line})", file=sys.stderr)  # fmt: skip
-        advice = encoding_advice(bad_bytes_before, "utf-8", has_encoding_flag=False)
+        line = stats.first_invalid_line
+        reason, fix = skipped_line_reason(args.input, line) if line else ("unreadable", None)
+        print(f"warning: dropped {stats.invalid_json:,} unreadable lines "
+              f"(first at line {line}: {reason})", file=sys.stderr)  # fmt: skip
+        advice = encoding_advice(bad_bytes_before, "utf-8", has_encoding_flag=False) or fix
         if advice:
             print(f"hint: {advice}", file=sys.stderr)
     for warning in stats.warnings():

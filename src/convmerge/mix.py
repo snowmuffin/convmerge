@@ -219,9 +219,25 @@ def _warn_off_target(result: MixResult) -> None:
                       for s in clipped)  # fmt: skip
     logger.warning(
         "the mix is off its weights: %s of the %s. Too few rows in %s; oversample them "
-        "(--oversample), ask for fewer rows, or change the weights",
+        "(--oversample, or mix.oversample in a recipe), ask for fewer rows (-n/--total, "
+        "or mix.total), or change the weights",
         detail, unit, short,
     )  # fmt: skip
+
+
+def _warn_unreadable(sources: list[tuple[Path, list[int]]]) -> None:
+    """Say which sources had lines that could not be read (they are left out)."""
+    hit = [(path, lines) for path, lines in sources if lines]
+    if not hit:
+        return
+    label = _labels([path for path, _ in sources])
+    detail = ", ".join(f"{label[path]} {len(lines):,} (first at line {lines[0]})"
+                       for path, lines in hit)  # fmt: skip
+    logger.warning(
+        "skipped unreadable lines (broken JSON, bad bytes, or too deeply nested): %s; "
+        "they are left out of the mix",
+        detail,
+    )
 
 
 def _labels(paths: list[Path]) -> dict[Path, str]:
@@ -332,10 +348,13 @@ def _mix_v1(
 ) -> MixResult:
     loaded: list[list[str]] = []
     traces: list[int] = []
+    unreadable: list[tuple[Path, list[int]]] = []
     for src in normalized:
-        lines, n_traces = _load_valid_lines(src.path, encoding)
+        lines, n_traces, invalid = _load_valid_lines(src.path, encoding)
         loaded.append(lines)
         traces.append(n_traces)
+        unreadable.append((src.path, invalid))
+    _warn_unreadable(unreadable)
 
     if total is None:
         targets = [len(recs) for recs in loaded]
@@ -397,6 +416,7 @@ def _mix_v2(
         _scan(src.path, encoding, measure, by_sample, random.Random(f"{seed}:{i}"), max_tokens)
         for i, src in enumerate(normalized)
     ]
+    _warn_unreadable([(src.path, sorted(scan.invalid)) for src, scan in zip(normalized, scans)])
     available = [scan.rows for scan in scans]
     if total is None:
         targets = list(available)
@@ -680,13 +700,16 @@ def load_mix_config(path: Path) -> tuple[list[MixSource], dict]:
     return sources, options
 
 
-def _load_valid_lines(path: Path, encoding: str) -> tuple[list[str], int]:
+def _load_valid_lines(path: Path, encoding: str) -> tuple[list[str], int, list[int]]:
     lines: list[str] = []
     traces = 0
-    for line in iter_jsonl(path, encoding=encoding):
+    invalid: list[int] = []
+    for line in iter_jsonl(
+        path, encoding=encoding, on_invalid=lambda e: invalid.append(e.line_number)
+    ):
         lines.append(line.raw)
         traces += _may_have_trace(line.value, line.raw) and _has_trace(line.value)
-    return lines, traces
+    return lines, traces, invalid
 
 
 def _allocate(sources: list[MixSource], total: int) -> list[int]:

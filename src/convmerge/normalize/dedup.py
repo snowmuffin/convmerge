@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from convmerge.io import ReadStats, iter_jsonl
+from convmerge.io import ReadStats, iter_jsonl, refuse_overwrite
 
 HashFn = Callable[[bytes], str]
 
@@ -149,6 +149,7 @@ def deduplicate_jsonl(
 
     Returns ``(total_rows, kept_rows)``.
     """
+    refuse_overwrite([src], [dst, rejects])
     from convmerge.progress import ProgressReporter
 
     reporter = ProgressReporter(f"dedupe {Path(src).name}", enabled=progress)

@@ -62,7 +62,13 @@ def main(argv: list[str] | None = None) -> None:
     parser = _build_parser()
     args = parser.parse_args(argv)
     _configure_logging()
-    _COMMANDS[args.command][1](args)
+    from convmerge.io import SamePathError
+
+    try:
+        _COMMANDS[args.command][1](args)
+    except SamePathError as e:
+        print(f"error: {e}", file=sys.stderr)
+        sys.exit(2)
 
 
 class _StderrHandler(logging.Handler):

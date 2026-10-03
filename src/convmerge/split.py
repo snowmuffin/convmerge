@@ -27,7 +27,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from convmerge.io import ReadStats, iter_jsonl
+from convmerge.io import ReadStats, iter_jsonl, refuse_overwrite
 
 _HASH_SPACE = 1 << 64
 
@@ -60,6 +60,7 @@ def split_jsonl(
     Give exactly one of ``val`` (a fraction in ``(0, 1)``) or ``val_rows``
     (an exact count). See the module docstring for how rows are assigned.
     """
+    refuse_overwrite([src], [train_out, val_out])
     if (val is None) == (val_rows is None):
         raise ValueError("give exactly one of val (a fraction) or val_rows (a count)")
     if val is not None and not 0.0 < val < 1.0:
