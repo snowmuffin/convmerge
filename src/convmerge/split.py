@@ -11,7 +11,10 @@ together.
   lowest 5% of the hash range. One streaming pass; the validation size is
   about 5% (not exact).
 - ``val_rows=1000``: the 1,000 rows with the lowest hashes go to
-  validation. Exact size, two passes, memory for ``val_rows`` hashes.
+  validation. Exact size, two passes, memory for ``val_rows + 1`` hashes.
+  If row 1,000 and 1,001 have the same hash (duplicates, or the same
+  ``keys`` projection), the split is refused rather than leaking that group
+  across train and validation; use ``val`` or choose a group boundary.
 
 Rows are written as read (surrounding whitespace trimmed). Blank lines are
 skipped; lines that are not valid JSON are dropped and counted.
@@ -121,14 +124,24 @@ def _hash(salt: bytes, value: Any, keys: list[str] | None) -> int:
 
 
 def _lowest(src: str | Path, encoding: str, row_hash: Any, k: int) -> set[int]:
-    """Indices of the ``k`` rows with the lowest hashes (ties broken by position)."""
+    """Indices of the ``k`` lowest hashes, refusing a tie at the boundary."""
     if k == 0:
         return set()
+    # Keep one extra row so a hash group cannot be cut at the k / k+1 boundary.
     heap: list[tuple[int, int]] = []  # max-heap of (-hash, -index)
+    limit = k + 1
     for index, line in enumerate(iter_jsonl(src, encoding=encoding)):
         item = (-row_hash(line.value), -index)
-        if len(heap) < k:
+        if len(heap) < limit:
             heapq.heappush(heap, item)
         elif item > heap[0]:
             heapq.heapreplace(heap, item)
-    return {-i for _, i in heap}
+    ordered = sorted((-h, -i) for h, i in heap)
+    if len(ordered) <= k:
+        return {i for _, i in ordered}
+    if ordered[k - 1][0] == ordered[k][0]:
+        raise ValueError(
+            f"val_rows={k} would split rows with the same content/hash between train and "
+            "validation; use val=<fraction> or choose a val_rows boundary between groups"
+        )
+    return {i for _, i in ordered[:k]}

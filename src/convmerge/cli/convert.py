@@ -206,10 +206,10 @@ def _cmd_convert(args: argparse.Namespace) -> None:
     if not args.input.is_file():
         print(f"error: input file not found: {args.input}", file=sys.stderr)
         sys.exit(1)
-    refuse_overwrite([args.input], [args.output, args.report])
     if args.preset is not None and not Path(args.preset).is_file():
         print(f"error: preset file not found: {args.preset}", file=sys.stderr)
         sys.exit(2)
+    refuse_overwrite([args.input, args.preset], [args.output, args.report])
     from convmerge.config import build_convert_config
 
     try:
@@ -568,7 +568,7 @@ def _cmd_preset_validate(args: argparse.Namespace) -> None:
 
     if not Path(args.path).is_file():
         print(f"error: preset file not found: {args.path}", file=sys.stderr)
-        sys.exit(1)
+        sys.exit(2)
     try:
         validate_preset_file(args.path)
     except config_errors() as e:

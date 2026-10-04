@@ -265,4 +265,16 @@ def test_fast_loads_matches_json_loads(raw: str) -> None:
             _loads(raw)
         assert str(got.value) == str(e)
     else:
-        assert _loads(raw) == expected
+        got = _loads(raw)
+        if len(raw) > 10_000:
+
+            def depth(value):
+                n = 0
+                while isinstance(value, list) and len(value) == 1:
+                    n += 1
+                    value = value[0]
+                return n, value
+
+            assert depth(got) == depth(expected)
+        else:
+            assert got == expected

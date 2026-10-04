@@ -124,6 +124,11 @@ def _too_deep(raw: str, value: Any) -> bool:
     """True when ``value`` nests lists / objects more than :data:`MAX_DEPTH` deep."""
     if raw.count("[") + raw.count("{") <= MAX_DEPTH:
         return False  # cannot nest that deep: the usual case, two C scans
+    return _value_too_deep(value)
+
+
+def _value_too_deep(value: Any) -> bool:
+    """True when an already-parsed value exceeds :data:`MAX_DEPTH`."""
     stack = [(value, 1)]
     while stack:
         v, depth = stack.pop()
@@ -149,6 +154,8 @@ def _parse_line(
         return None, e
     except RecursionError:
         return None, "nested too deeply"
+    except ValueError as e:
+        return None, str(e)
     if len(raw) >= _DEEP_LEN and _too_deep(raw, value):
         return None, "nested too deeply"
     if check_bytes or "\\u" in raw:
@@ -253,6 +260,8 @@ def iter_jsonl(
                 error = e
             except RecursionError:
                 error = "nested too deeply"
+            except ValueError as e:
+                error = str(e)
             else:
                 check_bytes = _bad_bytes_seen != bad_bytes_before
                 if len(raw) >= _DEEP_LEN and _too_deep(raw, value):

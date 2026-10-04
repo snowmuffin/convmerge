@@ -3,7 +3,11 @@
 from __future__ import annotations
 
 import json
+import os
+import stat
+import tempfile
 from collections.abc import Callable, Iterable, Iterator
+from contextlib import contextmanager
 from dataclasses import asdict, dataclass, field
 from functools import partial
 from pathlib import Path
@@ -236,7 +240,7 @@ def convert_file(
     if workers > 1 and _groups_rows(input_path, encoding):
         workers = 1  # a tree's rows must reach one process together; reading is fast anyway
 
-    with output_path.open("w", encoding="utf-8") as fout:
+    with _safe_output(output_path) as fout:
         if workers > 1:
             _run_parallel(
                 input_path,
@@ -270,6 +274,31 @@ def convert_file(
 
     reporter.done()
     return st.lines_read, st.written
+
+
+@contextmanager
+def _safe_output(path: Path) -> Iterator[TextIO]:
+    """Write ``path`` without leaving a partial result after a failed conversion."""
+    target = path.resolve()
+    if not target.exists():
+        try:
+            with target.open("w", encoding="utf-8") as fout:
+                yield fout
+        except BaseException:
+            target.unlink(missing_ok=True)
+            raise
+        return
+
+    fd, name = tempfile.mkstemp(prefix=f".{target.name}.", suffix=".tmp", dir=target.parent)
+    os.close(fd)
+    tmp = Path(name)
+    os.chmod(tmp, stat.S_IMODE(target.stat().st_mode))
+    try:
+        with tmp.open("w", encoding="utf-8") as fout:
+            yield fout
+        os.replace(tmp, target)
+    finally:
+        tmp.unlink(missing_ok=True)
 
 
 def check_transforms(options: TransformOptions | None, *, pairs: bool) -> None:
@@ -481,10 +510,11 @@ def convert_records(
 
 
 def _groups_rows(path: Path, encoding: str) -> bool:
-    """Whether the first record of ``path`` is an OpenAssistant message row."""
+    """Whether ``path`` contains OpenAssistant rows that must stay in one process."""
     try:
         for line in iter_jsonl(path, encoding=encoding):
-            return oasst.is_message(line.value)
+            if oasst.is_message(line.value):
+                return True
     except OSError:
         pass
     return False

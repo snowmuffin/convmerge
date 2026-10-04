@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import random
 import tempfile
 from dataclasses import dataclass, field
@@ -12,7 +13,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 from convmerge._text import count
-from convmerge.io import iter_jsonl, iter_raw_lines
+from convmerge.io import iter_jsonl, iter_raw_lines, refuse_overwrite
 
 logger = logging.getLogger(__name__)
 
@@ -165,6 +166,8 @@ def mix_files(
         if isinstance(max_tokens, bool) or not isinstance(max_tokens, int) or max_tokens < 1:
             raise ValueError(f"max_tokens must be a positive integer, got {max_tokens!r}")
 
+    if any(not math.isfinite(s.weight) for s in sources):
+        raise ValueError("weights must be finite")
     if any(s.weight < 0 for s in sources):
         raise ValueError("weights must not be negative")
     total_weight = sum(s.weight for s in sources)
@@ -172,6 +175,7 @@ def mix_files(
         raise ValueError("Weights must be positive")
 
     output_path = Path(output_path)
+    refuse_overwrite([s.path for s in sources], [output_path])
     normalized = [MixSource(Path(s.path), s.weight / total_weight) for s in sources]
     for src in normalized:
         if not src.path.is_file():
@@ -629,6 +633,7 @@ def write_mix_recipe(result: MixResult, *, encoding: str = "utf-8") -> Path:
         "created_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
     }
     sidecar = result.output.with_suffix(".mix.json")
+    refuse_overwrite([s.path for s in result.sources], [result.output, sidecar])
     sidecar.write_text(json.dumps(recipe, indent=2, ensure_ascii=False), encoding=encoding)
     return sidecar
 

@@ -7,6 +7,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.3] - 2026-10-04
+
+Safety and consistency fixes for unattended dataset builds: failed conversions no
+longer replace a good output with a partial file, exact validation splits never
+leak a duplicate/key group across train and validation, and worker count no
+longer changes mixed OpenAssistant conversion results.
+
+### Fixed
+
+- `convert_file` now commits its output only after conversion succeeds. If
+  `--on-invalid fail`, a worker error, or another exception stops the run, an
+  existing output is preserved and a newly-created partial output is removed.
+- `split --val-rows N` no longer puts copies of the same row, or rows sharing
+  `--keys`, on opposite sides when the exact N boundary cuts through their
+  shared hash. It now stops before creating outputs and asks for a fractional
+  split or a `val_rows` value between groups.
+- `convert --workers N` now detects OpenAssistant flat message rows anywhere in
+  a mixed input, not only on the first record, and falls back to one process so
+  trees are grouped identically to `--workers 1`.
+- JSON integers rejected by Python's integer-string safety limit are handled as
+  unreadable JSONL lines, consistently in one-worker and multi-worker paths,
+  instead of aborting the command with `ValueError`.
+- `normalize` applies the same 500-level nesting limit when rewriting top-level
+  JSON arrays, JSONL-of-arrays, and single-line JSON. It no longer reports
+  success for output that convmerge's shared JSONL reader immediately rejects.
+- `mix` now protects both its main output and automatic `.mix.json` sidecar
+  from replacing a source or the mix config, including through symlinks.
+  `mix_files` and `write_mix_recipe` enforce the corresponding library guards.
+- `convert --preset` treats the preset as an input for collision checks, so an
+  output or report cannot replace the preset that configured the conversion.
+- Non-finite mix weights such as `inf` are rejected instead of reaching the
+  allocator and failing with a numeric conversion error.
+- A missing file passed to `preset validate` is an invocation error (exit 2),
+  while an existing but invalid preset keeps the documented exit 1 behavior.
+- The Python 3.14 deep-JSON parity test compares extreme nesting iteratively,
+  avoiding a test-only recursion failure after both parsers succeeded.
+
+### Changed output
+
+- `split --val-rows` exits 1 with an explanatory error when exactly N rows would
+  require splitting one duplicate/key group. Previously it silently leaked the
+  group across train and validation.
+
 ## [1.6.2] - 2026-10-03
 
 Fixes only: the remaining ways an output could replace an input file, values

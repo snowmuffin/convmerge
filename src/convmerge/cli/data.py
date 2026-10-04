@@ -260,7 +260,7 @@ def _add_split(sub: argparse._SubParsersAction) -> None:
     )  # fmt: skip
     size.add_argument(
         "--val-rows", type=_non_negative_int, default=None, metavar="N",
-        help="Send exactly N rows to validation",
+        help="Send exactly N rows; errors if that would split a duplicate/--keys group",
     )  # fmt: skip
     p.add_argument("--seed", type=int, default=42)
     p.add_argument(
@@ -279,14 +279,20 @@ def _cmd_split(args: argparse.Namespace) -> None:
         print(f"error: input file not found: {args.input}", file=sys.stderr)
         sys.exit(1)
     val_output = args.val_output or default_val_path(args.output)
-    from convmerge.io import bad_bytes_seen
+    from convmerge.io import SamePathError, bad_bytes_seen
 
     stats = SplitStats()
     bad_bytes_before = bad_bytes_seen()
-    split_jsonl(
-        args.input, args.output, val_output,
-        val=args.val, val_rows=args.val_rows, seed=args.seed, keys=args.keys, stats=stats,
-    )  # fmt: skip
+    try:
+        split_jsonl(
+            args.input, args.output, val_output,
+            val=args.val, val_rows=args.val_rows, seed=args.seed, keys=args.keys, stats=stats,
+        )  # fmt: skip
+    except SamePathError:
+        raise
+    except ValueError as e:
+        print(f"error: {e}", file=sys.stderr)
+        sys.exit(1)
     print(
         f"train={stats.train:,} -> {args.output}\nval={stats.val:,} -> {val_output}",
         file=sys.stderr,

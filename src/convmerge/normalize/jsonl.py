@@ -8,7 +8,7 @@ from collections.abc import Iterator
 from pathlib import Path
 from typing import Any, Literal
 
-from convmerge.io import JsonlDecodeError, iter_jsonl
+from convmerge.io import JsonlDecodeError, _value_too_deep, iter_jsonl
 from convmerge.lfs import ensure_not_lfs_pointer
 
 logger = logging.getLogger(__name__)
@@ -187,6 +187,10 @@ def normalize_to_jsonl(
         raise ValueError(f"Cannot normalize {src_p}: {e}") from None
     except RecursionError:
         raise ValueError(f"Cannot normalize {src_p}: nested too deeply") from None
+    except ValueError as e:
+        if str(e).startswith(f"Cannot normalize {src_p}:"):
+            raise
+        raise ValueError(f"Cannot normalize {src_p}: {e}") from None
     raise ValueError(
         f"Cannot normalize {src_p}: not JSON, JSONL, or a JSON array "
         "(check that the file is complete and UTF-8)"
@@ -219,7 +223,8 @@ def _rewrite_jsonl_of_arrays(src: Path, dst: Path, array_key: str) -> int:
     n = 0
     with dst.open("w", encoding="utf-8") as fout:
         for line in iter_jsonl(src, on_error="raise"):
-            fout.write(_dumps(_wrap_array(line.value, array_key)) + "\n")
+            value = _wrap_array(line.value, array_key)
+            fout.write(_checked_dumps(src, value) + "\n")
             n += 1
     return n
 
@@ -234,6 +239,13 @@ def _dumps(value: Any) -> str:
     return text
 
 
+def _checked_dumps(src: Path, value: Any) -> str:
+    """Serialize one output record only when the common JSONL reader can read it back."""
+    if _value_too_deep(value):
+        raise ValueError(f"Cannot normalize {src}: nested too deeply")
+    return _dumps(value)
+
+
 def _rewrite_json_array(src: Path, dst: Path, array_key: str = DEFAULT_ARRAY_KEY) -> int:
     with src.open(encoding="utf-8-sig") as fin:
         data = json.load(fin)
@@ -242,7 +254,7 @@ def _rewrite_json_array(src: Path, dst: Path, array_key: str = DEFAULT_ARRAY_KEY
     n = 0
     with dst.open("w", encoding="utf-8") as fout:
         for obj in data:
-            fout.write(_dumps(_wrap_array(obj, array_key)) + "\n")
+            fout.write(_checked_dumps(src, _wrap_array(obj, array_key)) + "\n")
             n += 1
     return n
 
@@ -253,7 +265,7 @@ def _rewrite_single_line(src: Path, dst: Path) -> int:
     n = 0
     with dst.open("w", encoding="utf-8") as fout:
         for obj in records:
-            fout.write(_dumps(obj) + "\n")
+            fout.write(_checked_dumps(src, obj) + "\n")
             n += 1
     return n
 

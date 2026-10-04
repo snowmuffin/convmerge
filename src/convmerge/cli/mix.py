@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import math
 import sys
 from pathlib import Path
 
@@ -234,7 +235,7 @@ def _cmd_mix(args: argparse.Namespace) -> None:
     if output is None:
         print("error: --output / -o is required (or set 'output' in config)", file=sys.stderr)
         sys.exit(2)
-    bad = [s for s in sources if not s.weight > 0]
+    bad = [s for s in sources if not math.isfinite(s.weight) or not s.weight > 0]
     if bad:
         print(f"error: weight {bad[0].weight:g} for {bad[0].path}: expected a positive number",
               file=sys.stderr)  # fmt: skip
@@ -250,6 +251,14 @@ def _cmd_mix(args: argparse.Namespace) -> None:
     if problem:
         print(f"error: {problem}", file=sys.stderr)
         sys.exit(2)
+
+    from convmerge.io import refuse_overwrite
+
+    protected = [s.path for s in sources]
+    if args.config is not None:
+        protected.append(Path(args.config))
+    sidecar = None if args.no_recipe else Path(output).with_suffix(".mix.json")
+    refuse_overwrite(protected, [output, sidecar])
 
     try:
         result = mix_files(

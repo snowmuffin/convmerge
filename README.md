@@ -438,7 +438,8 @@ convmerge tokens -i ./train/decontam.jsonl --tokenizer Qwen/Qwen2.5-7B-Instruct 
   --max-tokens 4096 -o ./train/fit.jsonl
 
 # Train/validation split by content hash: reproducible, order-independent,
-# duplicates never straddle the two sides. --val-rows N for an exact count.
+# duplicates never straddle the two sides. --val-rows N is exact when N falls between groups;
+# it errors rather than splitting duplicate/--keys groups across train and validation.
 convmerge split -i ./train/fit.jsonl -o ./train/train.jsonl --val 0.02   # + train.val.jsonl
 
 # LLaMA-Factory: add the dataset_info.json entry for a --format sharegpt file.

@@ -164,7 +164,7 @@ Stages run in this order: sources → `mix` → `dedupe` → `filter` →
 | `tokens.max_tokens` | — | Drop rows longer than this (a preference pair counts as its longer side). |
 | `tokens.revision` | — | Tokenizer revision; pin it for fully reproducible builds. |
 | `tokens.chat_template` | the tokenizer's | A Jinja file to render with instead (a step input). |
-| `split.val` / `split.val_rows` | — | One of: a fraction of rows (hash-based, about that many) or an exact count. |
+| `split.val` / `split.val_rows` | — | One of: a fraction of rows (hash-based, about that many) or an exact count; `val_rows` errors if its boundary would split a duplicate/`keys` group. |
 | `split.seed` | `42` | |
 | `split.keys` | whole row | Hash only these top-level keys, so rows sharing them stay on one side. |
 | `split.val_output` | `<output stem>.val.jsonl` | Where the validation rows go; `output` gets the rest. |
