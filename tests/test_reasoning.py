@@ -245,7 +245,7 @@ def test_convert_counts_reasoning_and_cli_flags(tmp_path: Path, capsys) -> None:
         "content": "The answer is 4.",
         "thinking": "2+2=4",
     }
-    assert "1 examples carry a reasoning trace" in capsys.readouterr().err
+    assert "1 example carries a reasoning trace" in capsys.readouterr().err
 
     with pytest.raises(SystemExit) as e:
         main(["convert", "-i", str(src), "-o", str(out), "--from", "auto", "--format",

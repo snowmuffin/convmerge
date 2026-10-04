@@ -41,7 +41,7 @@ from pathlib import Path
 from typing import Any
 
 from convmerge import _parallel
-from convmerge._text import excerpt, fold, ngrams, without_code, words
+from convmerge._text import count, excerpt, fold, ngrams, without_code, words
 from convmerge.io import ReadStats, iter_jsonl, refuse_overwrite
 from convmerge.models import ChatMessage, TrainingExample
 
@@ -214,6 +214,10 @@ class FilterSpec:
                                  f"(known: {', '.join(_SCRIPTS)})")  # fmt: skip
             if not 0 < share <= 1:
                 raise ValueError(f"min_script.{script}: expected a fraction in (0, 1]")
+        if self.min_chars is not None and self.max_chars is not None:
+            if self.min_chars > self.max_chars:
+                raise ValueError(f"min_chars {self.min_chars} is greater than max_chars "
+                                 f"{self.max_chars}: every row would be rejected")  # fmt: skip
         if "length" in self.rules and self.min_chars is None and self.max_chars is None:
             raise ValueError("the length rule needs min_chars or max_chars")
         if "script" in self.rules and not self.min_script:
@@ -309,7 +313,8 @@ class FilterStats:
         if self.pairs >= 20 and self.chosen_longer / self.pairs > 0.7:
             share = self.chosen_longer / self.pairs
             out.append(
-                f"the chosen answer is the longer one in {share:.0%} of {self.pairs:,} pairs; "
+                f"the chosen answer is the longer one in {share:.0%} of "
+                f"{count(self.pairs, 'pair')}; "
                 "DPO on such data tends to learn length rather than quality"
             )
         return out

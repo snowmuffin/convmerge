@@ -8,6 +8,7 @@ import os
 import sys
 from pathlib import Path
 
+from convmerge._text import agree, count
 from convmerge.cli._common import add_progress_flag as _add_progress_flag
 from convmerge.cli._common import encoding_advice, skipped_line_reason
 from convmerge.cli._common import positive_int as _positive_int
@@ -24,13 +25,13 @@ def _add_inspect(sub: argparse._SubParsersAction) -> None:
     p.add_argument("--input", "-i", type=Path, required=True, help="Input .json or .jsonl path")
     p.add_argument(
         "--max-rows",
-        type=int,
+        type=_positive_int,
         default=None,
         help="Sample only the first N records (recommended for large files)",
     )
     p.add_argument(
         "--max-examples",
-        type=int,
+        type=_non_negative_int,
         default=3,
         help="Sample values to show per field (default: 3)",
     )
@@ -212,7 +213,7 @@ def _cmd_dedupe(args: argparse.Namespace) -> None:
         reason, fix = skipped_line_reason(Path(args.input), line)
         advice = encoding_advice(bad_bytes_before, "utf-8", has_encoding_flag=False) or fix
         print(
-            f"warning: dropped {stats.invalid_json:,} unreadable lines "
+            f"warning: dropped {count(stats.invalid_json, 'unreadable line')} "
             f"(first at line {line}: {reason})" + (f"; {advice}" if advice else ""),
             file=sys.stderr,
         )
@@ -290,11 +291,18 @@ def _cmd_split(args: argparse.Namespace) -> None:
         f"train={stats.train:,} -> {args.output}\nval={stats.val:,} -> {val_output}",
         file=sys.stderr,
     )
+    asked = f"--val-rows {args.val_rows}" if args.val_rows is not None else f"--val {args.val}"
+    if stats.train == 0 and stats.val:
+        print(f"warning: the train file is empty: {asked} sent every row to validation",
+              file=sys.stderr)  # fmt: skip
+    elif stats.val == 0 and stats.train and (args.val_rows or args.val):
+        print(f"warning: the validation file is empty: {asked} of "
+              f"{count(stats.train, 'row')} rounds to none", file=sys.stderr)  # fmt: skip
     if stats.first_invalid_line is not None:
         line = stats.first_invalid_line
         reason, fix = skipped_line_reason(args.input, line)
         print(
-            f"warning: dropped {stats.invalid_json:,} unreadable lines "
+            f"warning: dropped {count(stats.invalid_json, 'unreadable line')} "
             f"(first at line {line}: {reason})",
             file=sys.stderr,
         )
@@ -403,6 +411,9 @@ def _cmd_axolotl_config(args: argparse.Namespace) -> None:
     if args.output is None:
         print(text, end="")
         return
+    from convmerge.io import refuse_overwrite
+
+    refuse_overwrite([args.input, args.val], [args.output])
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(text, encoding="utf-8")
     print(f"wrote {args.output}", file=sys.stderr)
@@ -462,14 +473,16 @@ def _cmd_tokens(args: argparse.Namespace) -> None:
     failed = sum(stats.template_errors.values())
     if failed:
         top = max(stats.template_errors, key=stats.template_errors.__getitem__)
-        print(f"warning: {failed:,} rows fail the chat template (most common: {top})",
-              file=sys.stderr)  # fmt: skip
+        print(f"warning: {count(failed, 'row')} {agree(failed, 'fails', 'fail')} the chat "
+              f"template (most common: {top})", file=sys.stderr)  # fmt: skip
     if stats.over_limit:
-        print(f"warning: {stats.over_limit:,} rows exceed {args.max_tokens:,} tokens",
-              file=sys.stderr)  # fmt: skip
+        n = stats.over_limit
+        print(f"warning: {count(n, 'row')} {agree(n, 'exceeds', 'exceed')} "
+              f"{count(args.max_tokens, 'token')}", file=sys.stderr)  # fmt: skip
     if stats.double_encoded_arguments:
         print(
-            f"warning: {stats.double_encoded_arguments:,} rows store tool-call arguments as "
+            f"warning: {count(stats.double_encoded_arguments, 'row')} "
+            f"{agree(stats.double_encoded_arguments, 'stores', 'store')} tool-call arguments as "
             "JSON strings that this chat template encodes again; convert them with "
             "--tool-arguments object",
             file=sys.stderr,

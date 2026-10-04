@@ -86,3 +86,24 @@ def test_run_force_accepts_steps_sources_and_kinds(force, tmp_path, capsys) -> N
     recipe = _recipe(tmp_path)
     main(["run", str(recipe), "--plan", "--force", *force])
     assert "forced" in capsys.readouterr().out
+
+
+def test_counts_agree_with_their_number() -> None:
+    from convmerge._text import agree, count
+
+    assert count(1, "row") == "1 row"
+    assert count(0, "row") == "0 rows"
+    assert count(12345, "line") == "12,345 lines"
+    assert count(1, "entry", "entries") == "1 entry"
+    assert count(2, "entry", "entries") == "2 entries"
+    assert agree(1, "is", "are") == "is" and agree(3, "is", "are") == "are"
+
+
+def test_one_skipped_line_is_singular(tmp_path, capsys) -> None:
+    src = tmp_path / "in.jsonl"
+    src.write_text(ROW + "\n{bad\n", encoding="utf-8")
+    main(["convert", "-i", str(src), "-o", str(tmp_path / "o.jsonl"), "--from", "auto"])
+    main(["dedupe", "-i", str(src), "-o", str(tmp_path / "d.jsonl")])
+    err = capsys.readouterr().err
+    assert "read 2 lines, wrote 1 example\n" in err
+    assert "skipped 1 line (" in err and "dropped 1 unreadable line (" in err

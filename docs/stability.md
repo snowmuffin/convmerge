@@ -38,8 +38,10 @@ exception messages (the exception *types* are covered).
     steps out of date, a `decontam` evaluation set that cannot be read or
     downloaded, or any unexpected error;
   - `2` the invocation is invalid: bad flags or flag combinations, an
-    unsupported fetch URL, or a missing or invalid preset, manifest, mix
-    config, or recipe.
+    unsupported fetch URL, a missing or invalid preset, manifest, mix
+    config, or recipe, an output path that names an input file (or another
+    output), or a template (`run --init`, `preset init`) whose `-o` file
+    already exists.
 - Output streams: data goes to files or stdout; progress, warnings, and
   errors go to stderr only. `inspect`, `validate`, `turns`, `tokens`, `filter`,
   `decontam`, `formats`, and `run --plan` print their result to stdout, as do `preset init`,
