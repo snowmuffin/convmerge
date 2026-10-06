@@ -68,7 +68,7 @@ jobs:
           cache: pip
           cache-dependency-path: pyproject.toml
       - name: Install file-format test dependencies
-        run: python -m pip install -e ".[parquet,xlsx,preset]" pytest
+        run: python -m pip install -e ".[parquet,xlsx,preset,tokens]" pytest
       - name: Check source identity and platform newline behavior
         run: python scripts/verify_output_portability.py
       - name: Inject write and commit failures

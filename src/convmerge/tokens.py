@@ -247,7 +247,14 @@ def check_tokens(
     rows that render and are at most ``max_tokens`` long are written there
     and the others to ``rejects`` (if given).
     """
+    from convmerge._paths import protect_paths
+
     refuse_overwrite([path], [output, rejects])
+    name = tokenizer if isinstance(tokenizer, str) else getattr(tokenizer, "name_or_path", None)
+    local = Path(name).expanduser() if name else None
+    protect_paths(
+        [path, local if local is not None and local.exists() else None], [output, rejects]
+    )
     _require_template_support()
     tok = load_tokenizer(tokenizer) if isinstance(tokenizer, str) else tokenizer
     template = chat_template if chat_template is not None else getattr(tok, "chat_template", None)
@@ -308,7 +315,7 @@ def _render(
     prefixes: bool = False,
 ) -> Iterator[_Row]:
     from convmerge.adapter_resolve import resolve_adapter
-    from convmerge.emitters import ToolArguments, _message_dict, split_pair
+    from convmerge.emitters import _message_dict, split_pair
 
     adapter = resolve_adapter("auto", None, pairs=True)
     read = ReadStats()
@@ -316,11 +323,17 @@ def _render(
         for line in iter_jsonl(path, encoding=encoding, stats=read):
             st.rows += 1
             examples = list(adapter(line.value)) if isinstance(line.value, dict) else []
-            # Render tool-call arguments, content, and reasoning the way the file
-            # stores them, as a trainer would.
-            as_strings = _stores_string_arguments(line.value)
-            args: ToolArguments = "string" if as_strings else "object"
+            # Native message rows must be checked as stored, not reconstructed
+            # with one argument/reasoning type chosen for the whole row.
+            stored = _stored_sides(line.value)
+            if (
+                len(examples) != 1
+                or stored is not None
+                and len(stored) != (2 if examples[0].rejected is not None else 1)
+            ):
+                stored = None
             key = _reasoning_key(line.value)
+            side_index = 0
             double_encoded = missing_eos = dropped = dropped_final = False
             if not examples:
                 st.unreadable += 1
@@ -339,31 +352,40 @@ def _render(
                 else:
                     sides = [ex.messages]
                 for msgs in sides:
-                    dicts = [
-                        _message_dict(m, args, reasoning_key=key, tool_content="null") for m in msgs
-                    ]
+                    dicts = (
+                        stored[side_index]
+                        if stored is not None
+                        else [
+                            _message_dict(m, "object", reasoning_key=key, tool_content="null")
+                            for m in msgs
+                        ]
+                    )
+                    side_index += 1
+                    tools = line.value.get("tools", ex.tools) if stored is not None else ex.tools
                     try:
                         text = tok.apply_chat_template(
-                            dicts, tools=ex.tools, chat_template=template, tokenize=False
+                            dicts, tools=tools, chat_template=template, tokenize=False
                         )
+                        if not isinstance(text, str):
+                            raise TypeError("the template did not render text")
                     except ImportError:
                         raise  # a missing dependency, not a problem with this row
                     except Exception as e:  # noqa: BLE001 - templates raise anything
                         error = f"{type(e).__name__}: {e}"[:_REASON_CHARS]
                         break
                     texts.append(text)
-                    if as_strings and not double_encoded:
+                    if not double_encoded:
                         double_encoded = any(
-                            json.dumps(tc.arguments) in text for m in msgs for tc in m.tool_calls
+                            json.dumps(value) in text for value in _argument_strings(dicts)
                         )
+                    if prefixes and prefix is None:
+                        prefix = _render_prefix(tok, template, dicts, tools)
                     if st.stop_tokens and not missing_eos:
                         missing_eos = _missing_stop(msgs, text, st.stop_tokens)
                     lost, lost_final = _lost_reasoning(msgs, text)
                     dropped, dropped_final = dropped or lost, dropped_final or lost_final
                 if error:
                     break
-                if prefixes and prefix is None:
-                    prefix = _render_prefix(tok, template, sides[0], ex.tools, args, key)
             st.double_encoded_arguments += double_encoded
             if error:
                 st.template_errors[error] = st.template_errors.get(error, 0) + 1
@@ -381,16 +403,12 @@ def _render(
         st.first_invalid_line = read.first_invalid_line
 
 
-def _render_prefix(
-    tok: Any, template: str, msgs: list[Any], tools: Any, args: Any, key: str
-) -> str | None:
-    """The prompt before the first answer, as the model sees it when generating it."""
-    from convmerge.emitters import _message_dict
-
-    first = next((i for i, m in enumerate(msgs) if m.role == "assistant"), None)
+def _render_prefix(tok: Any, template: str, msgs: list[dict[str, Any]], tools: Any) -> str | None:
+    """The unmodified prompt before the first answer, with the generation prompt."""
+    first = next((i for i, m in enumerate(msgs) if m.get("role") == "assistant"), None)
     if not first:
         return None
-    dicts = [_message_dict(m, args, reasoning_key=key, tool_content="null") for m in msgs[:first]]
+    dicts = msgs[:first]
     try:
         text = tok.apply_chat_template(
             dicts, tools=tools, chat_template=template, tokenize=False, add_generation_prompt=True
@@ -479,21 +497,61 @@ def _generation_eos_ids(name_or_path: str | None) -> list[int]:
     return [i for i in ids if isinstance(i, int)] if isinstance(ids, list) else []
 
 
-def _stores_string_arguments(value: Any) -> bool:
-    """Whether an OpenAI-style row keeps tool-call arguments as JSON strings."""
+def _stored_sides(value: Any) -> list[list[dict[str, Any]]] | None:
+    """Native SFT/DPO messages, preserving each field's type and absence.
+
+    Non-native layouts still use their adapter's canonical representation.
+    This helper never rewrites an argument string, content, reasoning or train flag.
+    """
     if not isinstance(value, dict):
-        return False
-    for key in ("messages", "prompt", "chosen", "rejected"):
-        turns = value.get(key)
-        if not isinstance(turns, list):
-            continue
-        for turn in turns:
-            calls = turn.get("tool_calls") if isinstance(turn, dict) else None
-            for call in calls if isinstance(calls, list) else ():
-                fn = call.get("function") if isinstance(call, dict) else None
-                if isinstance(fn, dict) and "arguments" in fn:
-                    return isinstance(fn["arguments"], str)
-    return False
+        return None
+
+    def native(turns: Any) -> bool:
+        return isinstance(turns, list) and all(
+            isinstance(m, dict)
+            and isinstance(m.get("role"), str)
+            and m["role"] in {"system", "developer", "user", "assistant", "tool", "function"}
+            for m in turns
+        )
+
+    if "conversation_a" in value and "conversation_b" in value:
+        return None  # the adapter gives these higher priority than messages
+    if "chosen" in value and "rejected" in value:
+        prompt = value.get("prompt", value.get("messages", []))
+        if isinstance(prompt, str):
+            prompt = [{"role": "user", "content": prompt}] if prompt else []
+        if not native(prompt):
+            return None
+        sides = []
+        for key in ("chosen", "rejected"):
+            branch = value[key]
+            if isinstance(branch, str):
+                branch = [{"role": "assistant", "content": branch}]
+            if not native(branch) or not branch:
+                return None
+            combined = branch if prompt and branch[: len(prompt)] == prompt else prompt + branch
+            if not any(m["role"] == "user" for m in combined):
+                return None
+            sides.append(combined)
+        return sides
+    messages = value.get("messages")
+    if (
+        native(messages)
+        and messages
+        and messages[-1]["role"] in {"assistant", "tool", "function"}
+        and any(m["role"] == "user" for m in messages)
+    ):
+        return [messages]
+    return None
+
+
+def _argument_strings(messages: list[dict[str, Any]]) -> Iterator[str]:
+    for message in messages:
+        calls = message.get("tool_calls")
+        for call in calls if isinstance(calls, list) else ():
+            function = call.get("function") if isinstance(call, dict) else None
+            if isinstance(function, dict) and isinstance(function.get("arguments"), str):
+                yield function["arguments"]
 
 
 def _measure(
@@ -519,7 +577,13 @@ def _measure(
         texts = row.texts or []
         raw = row.raw
         length = max(len(ids[pos + i]) for i in range(len(texts)))
-        if marker_ids and texts and not all(_contains(ids[pos], m) for m in marker_ids):
+        if (
+            marker_ids
+            and texts
+            and any(
+                not all(_contains(ids[pos + i], m) for m in marker_ids) for i in range(len(texts))
+            )
+        ):
             st.markers_missing += 1
         pos += len(texts)
         if row.prefix is not None:

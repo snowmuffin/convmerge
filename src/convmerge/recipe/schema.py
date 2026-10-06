@@ -91,6 +91,8 @@ class SourceSpec:
     fetch_auth: AuthConfig | None = None
     license: str | None = None
     sheet: str | None = None
+    manifest: Path | None = None
+    """The manifest read to construct this source, protected from output writes."""
 
 
 @dataclass(frozen=True)
@@ -296,6 +298,9 @@ def _source(name: str, raw: Any, base: Path) -> SourceSpec:
         fetch_auth=fetch_auth,
         license=_str(spec["license"], f"{where}.license") if "license" in spec else None,
         sheet=sheet,
+        manifest=base / spec["fetch"]["manifest"]
+        if fetch is not None and isinstance(spec["fetch"], dict) and "manifest" in spec["fetch"]
+        else None,
     )
 
 

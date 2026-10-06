@@ -101,7 +101,12 @@ def dataset_info_entry(path: str | Path, *, file_name: str | None = None) -> dic
 
 def update_dataset_info(info_path: str | Path, name: str, entry: dict[str, Any]) -> bool:
     """Add or replace ``name`` in ``info_path`` (created if missing); True if it changed."""
+    from convmerge._paths import protect_paths
+
     info = Path(info_path)
+    file_name = entry.get("file_name")
+    if isinstance(file_name, str):
+        protect_paths([info.parent / file_name], [info])
     data: dict[str, Any] = {}
     if info.is_file():
         data = json.loads(info.read_text(encoding="utf-8") or "{}")

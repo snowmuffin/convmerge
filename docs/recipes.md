@@ -224,3 +224,15 @@ for step in plan(recipe):
 result = run(recipe, force=["tools"])
 print(result.ran, result.report["output"])
 ```
+
+### Protecting recipe files and outputs
+
+Since 1.6.5, the complete recipe path graph is checked before any step runs. Keep
+source/configuration paths separate from the work directory, output, lock and
+report. In particular, `report: train.jsonl` cannot coexist with
+`output: train.jsonl`, and the final output cannot be a source or the recipe
+itself. Links and overlapping directory trees are checked as well. See
+[output safety](output-safety.md) for the exact boundaries.
+
+A malformed lock is an explicit error, not an instruction to discard cached
+state. Back up and remove that lock to request a full rebuild.

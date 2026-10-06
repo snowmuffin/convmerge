@@ -21,9 +21,6 @@ JSONLShape = Literal["jsonl", "jsonl_of_arrays", "single_line", "json_array", "i
 # chat adapter reads (its default conversation keys include this one).
 DEFAULT_ARRAY_KEY = "conversation"
 
-# Bytes scanned from the head of a file to decide its shape without loading everything.
-_HEAD_PEEK_BYTES = 65536
-
 
 def iter_json_records(
     path: str | Path,
@@ -105,30 +102,26 @@ def detect_jsonl_shape(path: str | Path) -> JSONLShape:
     """
     p = Path(path)
     ensure_not_lfs_pointer(p)
-    with p.open("rb") as f:
-        head = f.read(_HEAD_PEEK_BYTES)
-    if not head.strip():
-        return "empty"
-    text = head.decode("utf-8", errors="ignore").removeprefix("\ufeff")
-
-    # A leading '[' means a top-level JSON array. Pretty-printed arrays span
-    # many lines, so detect this before the multi-line ``jsonl`` heuristic
-    # below — otherwise an array like ``[\n  {...},\n  {...}\n]`` is mistaken
-    # for line-delimited JSON and breaks normalization.
-    non_empty_lines = [line for line in text.splitlines() if line.strip()]
-    if text.lstrip()[:1] == "[":
-        # ...unless the first line is a complete array and more lines follow:
-        # that is JSONL whose records are arrays.
-        if len(non_empty_lines) >= 2 and _is_json_array(non_empty_lines[0]):
-            return "jsonl_of_arrays"
-        return "json_array"
-
-    if len(non_empty_lines) >= 2:
-        return "jsonl"
-
-    first = non_empty_lines[0].strip() if non_empty_lines else ""
+    # Only retain the first two nonblank physical lines, but read each completely.
+    # A peek limit is neither a record boundary nor proof that the file is empty.
+    first = ""
+    more = False
+    with p.open(encoding="utf-8-sig", errors="surrogateescape") as stream:
+        for line in stream:
+            if not line.strip():
+                continue
+            first = line.strip()
+            break
+        if first:
+            more = any(line.strip() for line in stream)
     if not first:
         return "empty"
+    if first.startswith("["):
+        if more and _is_json_array(first):
+            return "jsonl_of_arrays"
+        return "json_array"
+    if more:
+        return "jsonl"
 
     try:
         parsed = json.loads(first)

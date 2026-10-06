@@ -38,6 +38,41 @@ def main() -> None:
         else:
             raise AssertionError("broken input was not rejected")
         assert normalized.read_bytes() == before
+        long_record = {"instruction": "long", "output": "x" * 70000}
+        source.write_text("\n" * 70000 + json.dumps(long_record) + "\n", encoding="utf-8")
+        assert normalize_to_jsonl(source, normalized) == 1
+        assert json.loads(normalized.read_text(encoding="utf-8")) == long_record
+
+        from convmerge.io import SamePathError
+        from convmerge.recipe import RecipeError, load_lock, parse_recipe, run
+
+        recipe = parse_recipe(
+            {
+                "output": str(source),
+                "workdir": str(root / "build"),
+                "sources": {
+                    "a": {"path": str(source), "normalize": False, "convert": {"from": "auto"}}
+                },
+            },
+            path=root / "recipe.json",
+        )
+        before = source.read_bytes()
+        try:
+            run(recipe)
+        except SamePathError:
+            pass
+        else:
+            raise AssertionError("recipe source/output collision was accepted")
+        assert source.read_bytes() == before and not recipe.workdir.exists()
+        lock = root / "bad.lock.json"
+        lock.write_text("[]", encoding="utf-8")
+        try:
+            load_lock(lock)
+        except RecipeError:
+            pass
+        else:
+            raise AssertionError("malformed lock was accepted")
+        assert lock.read_text(encoding="utf-8") == "[]"
     print(json.dumps({"version": version, "import_path": convmerge.__file__, "smoke": "passed"}))
 
 

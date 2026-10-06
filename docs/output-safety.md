@@ -58,6 +58,26 @@ Fixed `.part`/`.old` filenames not created by this invocation are not removed.
 Lock/report files are published individually. Successful earlier steps remain
 committed if a later step fails; output and lock updates are not one transaction.
 
+## Recipe and configuration preflight (1.6.5)
+
+Before creating intermediate output, `run` checks the full publication graph:
+source files/trees, presets, referenced manifests, local tokenizer trees, Jinja
+and quality-rule files, local evaluation data and credential-file paths are
+protected. Final/intermediate outputs, lock and report paths must not alias or
+contain one another or an external input. This also applies to `--plan` and
+`--frozen`. A source tree must not contain the recipe's generated output tree.
+Ordinary dependencies on deliberately generated intermediate files are allowed.
+
+Standalone `filter` protects `--rules-file`, `tokens` protects `--chat-template`
+and local tokenizer files, and `llamafactory-info` protects its input dataset.
+Protection checks resolved paths and existing hardlink identities; it does not
+lock a filesystem against concurrent modification.
+
+An existing malformed recipe lock is never silently reset. The command reports
+its path and invalid field (exit 2); retain a backup and remove the lock explicitly
+to rebuild. A missing lock is a normal first run, and valid version-1 locks from
+older releases remain supported.
+
 ## Explicit exclusions
 
 - SIGKILL or process termination that bypasses Python cleanup can leave hidden

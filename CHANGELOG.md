@@ -7,6 +7,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.5] - 2026-10-06
+
+Correctness fixes for the six remaining issue families found by independent
+boundary tests, plus strict failure status for incomplete token check runs.
+
+### Fixed
+
+- Recipes preflight all external sources, presets, referenced manifests, local
+  tokenizers/templates, evaluation files, token files, step outputs, locks and
+  reports before writing. Aliases (including symlinks/hardlinks) and overlapping
+  directory trees are refused with exit 2, also for `--plan` and `--frozen`.
+  Source and configuration files can no longer be silently replaced by a final
+  output, lock or report; distinct publications cannot overwrite one another.
+- `normalize` reads complete physical lines while detecting the input layout.
+  A valid first record longer than 64 KiB is no longer rejected, and a large
+  blank prefix no longer makes a nonempty file silently normalize to zero rows.
+  Detection streams past whitespace and does not load the entire JSONL file.
+- `tokens` renders native SFT/DPO message dictionaries as stored, preserving
+  each call's argument type, absent/null/empty content, reasoning fields and
+  training flags. It no longer tests a normalized surrogate and then keeps an
+  original row that the same template rejects. Both preference sides are checked.
+- `filter` protects its rules file; `tokens` protects its explicit template and
+  local tokenizer tree, including direct API use with a local tokenizer;
+  `llamafactory-info` refuses an info destination that aliases its input.
+- Recipe locks validate root, step, report and digest-cache shapes before use.
+  Invalid JSON or a malformed/unreadable lock is reported without a traceback
+  and is not overwritten. Back it up and remove it to deliberately rebuild;
+  absent locks and valid older version-1 locks remain supported.
+- Individually finite mix weights whose sum overflows are rescaled before
+  normalization. `[1e308, 1e308]` now samples like `[1, 1]` with either sampler;
+  ordinary finite sums keep their existing rounding and seeded output.
+
+### Changed exit status
+
+- `tokens` without `-o` returns exit 1 when any input row is invalid/unreadable,
+  or no row was measurable. The JSON report is still printed with an actionable
+  stderr message. With `-o`, ordinary filtering/rejection remains successful.
+- Invalid recipe lock files return exit 2 without modifying the lock or outputs.
+
+### Testing
+
+- Promoted the independent 22-case reproducer into the repository and added
+  extended long-input, path-alias, raw-rendering, malformed-lock and scaling
+  tests. Cross-platform safety CI now includes these cases and tokenizer extras.
+- Successful data formats and filter defaults remain unchanged. File-level
+  atomic writes still do not imply multi-file transactions or concurrent-writer
+  protection; see [output safety](docs/output-safety.md).
+
 ## [1.6.4] - 2026-10-06
 
 File-output safety fixes only. Successful conversion formats, row order,

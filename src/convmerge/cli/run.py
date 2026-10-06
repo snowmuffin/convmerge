@@ -103,7 +103,11 @@ def _cmd_run(args: argparse.Namespace) -> None:
         sys.exit(2)
 
     if args.plan or args.frozen:
-        steps = plan(recipe, force=args.force)
+        try:
+            steps = plan(recipe, force=args.force)
+        except RecipeError as e:
+            print(f"error: {e}", file=sys.stderr)
+            sys.exit(2)
         width = max(len(s.step.name) for s in steps)
         for s in steps:
             print(f"{s.action:5} {s.step.name:{width}}  {s.reason}")
@@ -120,6 +124,9 @@ def _cmd_run(args: argparse.Namespace) -> None:
         result = run(
             recipe, force=args.force, hf_token=args.hf_token, github_token=args.github_token
         )
+    except RecipeError as e:
+        print(f"error: {e}", file=sys.stderr)
+        sys.exit(2)
     except RecipeRunError as e:
         print(f"error: {e}", file=sys.stderr)
         sys.exit(1)

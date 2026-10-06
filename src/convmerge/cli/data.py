@@ -356,7 +356,10 @@ def _add_llamafactory_info(sub: argparse._SubParsersAction) -> None:
 
 
 def _cmd_llamafactory_info(args: argparse.Namespace) -> None:
+    from convmerge._paths import protect_paths
     from convmerge.llamafactory import dataset_info_entry, relative_file_name, update_dataset_info
+
+    protect_paths([args.input], [args.info])
 
     if not args.input.is_file():
         print(f"error: input file not found: {args.input}", file=sys.stderr)
@@ -454,7 +457,14 @@ def _add_tokens(sub: argparse._SubParsersAction) -> None:
 
 
 def _cmd_tokens(args: argparse.Namespace) -> None:
+    from convmerge._paths import protect_paths
     from convmerge.convert import REPORT_VERSION
+
+    local = Path(args.tokenizer).expanduser()
+    protect_paths(
+        [args.input, args.chat_template, local if local.exists() else None],
+        [args.output, args.rejects],
+    )
     from convmerge.tokens import TokenStats, check_tokens, load_tokenizer
 
     if not args.input.is_file():
@@ -500,8 +510,26 @@ def _cmd_tokens(args: argparse.Namespace) -> None:
     if args.output is not None:
         print(f"kept {stats.kept:,} -> {args.output}; rejected {stats.rejected:,}",
               file=sys.stderr)  # fmt: skip
-    elif failed or stats.over_limit or stats.double_encoded_arguments:
-        sys.exit(1)  # check mode: problems found
+    elif (
+        failed
+        or stats.over_limit
+        or stats.double_encoded_arguments
+        or stats.invalid_json
+        or stats.unreadable
+        or stats.measured == 0
+    ):
+        if stats.measured == 0:
+            print(
+                "error: no rows could be measured; check the input format and chat template",
+                file=sys.stderr,
+            )
+        elif stats.invalid_json or stats.unreadable:
+            print(
+                f"error: {stats.invalid_json} invalid JSON and {stats.unreadable} unreadable "
+                "row(s); not every input row was checked",
+                file=sys.stderr,
+            )
+        sys.exit(1)  # check mode: failed or incomplete validation
 
 
 def _add_turns(sub: argparse._SubParsersAction) -> None:

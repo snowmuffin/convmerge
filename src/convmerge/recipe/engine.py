@@ -24,7 +24,7 @@ from typing import Any
 
 from convmerge import __version__
 from convmerge._output import _warn_cleanup, atomic_text_writer
-from convmerge.recipe.schema import Recipe, SourceSpec, convert_config_kwargs
+from convmerge.recipe.schema import Recipe, RecipeError, SourceSpec, convert_config_kwargs
 
 LOCK_VERSION = 1
 REPORT_VERSION = 1
@@ -110,7 +110,40 @@ def build_steps(
         steps.extend(_split_steps(recipe, last))
     elif last != recipe.output:
         steps.append(_copy_step(last, recipe.output))
+    _check_recipe_paths(recipe, steps)
     return steps
+
+
+def _check_recipe_paths(recipe: Recipe, steps: list[Step]) -> None:
+    """Protect external inputs and all publications before creating any stage or lock."""
+    from convmerge._paths import protect_paths
+
+    inputs: list[Path | None] = [recipe.path]
+    auths = [recipe.auth]
+    for source in recipe.sources.values():
+        inputs.extend([source.path, source.convert.preset, source.manifest])
+        if source.fetch_auth is not None:
+            auths.append(source.fetch_auth)
+    for auth in auths:
+        for token in (auth.hf, auth.github):
+            if token.file:
+                inputs.append(Path(token.file).expanduser())
+    if recipe.filter is not None:
+        inputs.append(recipe.filter.rules_file)
+    if recipe.tokens is not None:
+        inputs.extend([recipe.tokens.local, recipe.tokens.chat_template])
+    if recipe.mix is not None and recipe.mix.tokenizer:
+        local = Path(recipe.mix.tokenizer).expanduser()
+        if local.exists():
+            inputs.append(local)
+    if recipe.decontam is not None:
+        inputs.extend(Path(p) for p in recipe.decontam.against if not p.startswith("hf:"))
+    # Keep intentionally produced intermediates out of external protection, but
+    # include other inputs of supplied steps. Explicit source paths above always
+    # remain protected even if they alias a produced intermediate.
+    produced = {step.output.resolve() for step in steps}
+    inputs.extend(p for step in steps for p in step.inputs if p.resolve() not in produced)
+    protect_paths(inputs, [*(step.output for step in steps), recipe.lock_path, recipe.report_path])
 
 
 def _fetch_step(
@@ -472,14 +505,59 @@ def _files(root: Path) -> list[Path]:
 
 
 def load_lock(path: Path) -> dict[str, Any]:
+    """Read a version-1 lock without silently replacing malformed user data."""
     try:
-        lock = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
+        text = path.read_text(encoding="utf-8")
+    except FileNotFoundError:
         return {"version": LOCK_VERSION, "steps": {}, "files": {}}
-    if lock.get("version") != LOCK_VERSION:
-        return {"version": LOCK_VERSION, "steps": {}, "files": {}}
-    lock.setdefault("steps", {})
-    lock.setdefault("files", {})
+    except (OSError, UnicodeError) as e:
+        raise RecipeError(f"lock {path}: cannot read: {e}") from None
+    try:
+        lock = json.loads(text)
+    except (ValueError, RecursionError) as e:
+        raise RecipeError(
+            f"lock {path}: invalid JSON ({e}); back up and remove it to rebuild"
+        ) from None
+
+    def bad(key: str, expected: str) -> None:
+        raise RecipeError(
+            f"lock {path}: {key}: expected {expected}; back up and remove it to rebuild"
+        )
+
+    if not isinstance(lock, dict):
+        bad("root", "a JSON object")
+    if type(lock.get("version")) is not int or lock["version"] != LOCK_VERSION:
+        bad("version", f"supported lock version {LOCK_VERSION}")
+    for key in ("steps", "files"):
+        lock.setdefault(key, {})
+        if not isinstance(lock[key], dict):
+            bad(key, "an object")
+    for name, entry in lock["steps"].items():
+        if not isinstance(entry, dict):
+            bad(f"steps.{name}", "an object")
+        for key in ("options", "inputs", "report"):
+            if key in entry and not isinstance(entry[key], dict):
+                bad(f"steps.{name}.{key}", "an object")
+        if any(
+            not isinstance(value, (str, type(None))) for value in entry.get("inputs", {}).values()
+        ):
+            bad(f"steps.{name}.inputs", "path-to-digest entries")
+        for key in ("convmerge", "output"):
+            if key in entry and not isinstance(entry[key], str):
+                bad(f"steps.{name}.{key}", "a string")
+        report = entry.get("report", {})
+        if "stats" in report and not isinstance(report["stats"], dict):
+            bad(f"steps.{name}.report.stats", "an object")
+    for name, entry in lock["files"].items():
+        if not (
+            isinstance(entry, list)
+            and len(entry) == 3
+            and type(entry[0]) is int
+            and entry[0] >= 0
+            and type(entry[1]) is int
+            and isinstance(entry[2], str)
+        ):
+            bad(f"files.{name}", "[size, mtime_ns, digest]")
     return lock
 
 
@@ -546,6 +624,7 @@ def plan(recipe: Recipe, *, force: list[str] | None = None, steps: list[Step] | 
     <step>"); at run time it is skipped if its inputs turn out unchanged.
     """
     steps = steps if steps is not None else build_steps(recipe)
+    _check_recipe_paths(recipe, steps)
     lock = load_lock(recipe.lock_path)
     digests = _Digests(dict(lock["files"]), recipe.base_dir)
     will_run: dict[Path, str] = {}

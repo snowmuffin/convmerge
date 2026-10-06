@@ -21,6 +21,8 @@ SUITE = [
     "tests/test_normalize_jsonl.py",
     "tests/test_tables.py",
     "tests/test_same_path.py",
+    "tests/test_remaining_issues.py",
+    "tests/test_correctness_boundaries.py",
 ]
 
 

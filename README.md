@@ -576,3 +576,15 @@ GitHub Actions secret.
 ## License
 
 MIT
+
+### Token checks and raw message fidelity
+
+`tokens` checks native `messages` and conversational preference rows using their
+actual stored message dictionaries. In particular, mixed string/object tool-call
+arguments are not silently normalized during validation. Other source layouts
+are adapted to canonical messages as before. This checks rendering and token
+lengths, not the actual trainer's collator or loss mask.
+
+Without `-o`, unreadable/invalid rows or zero measurable rows make the command
+exit 1; the JSON report remains available on stdout. With `-o`, it filters rows
+and reports what was kept or rejected.

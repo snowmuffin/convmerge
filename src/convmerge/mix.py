@@ -171,13 +171,20 @@ def mix_files(
         raise ValueError("weights must be finite")
     if any(s.weight < 0 for s in sources):
         raise ValueError("weights must not be negative")
-    total_weight = sum(s.weight for s in sources)
+    weights = [s.weight for s in sources]
+    total_weight = sum(weights)
     if total_weight <= 0:
         raise ValueError("Weights must be positive")
+    if not math.isfinite(total_weight):
+        scale = max(weights)
+        weights = [weight / scale for weight in weights]
+        total_weight = sum(weights)
 
     output_path = Path(output_path)
     refuse_overwrite([s.path for s in sources], [output_path])
-    normalized = [MixSource(Path(s.path), s.weight / total_weight) for s in sources]
+    normalized = [
+        MixSource(Path(s.path), weight / total_weight) for s, weight in zip(sources, weights)
+    ]
     for src in normalized:
         if not src.path.is_file():
             raise FileNotFoundError(f"Source not found: {src.path}")

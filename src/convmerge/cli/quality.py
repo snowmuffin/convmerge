@@ -119,6 +119,9 @@ def _cmd_filter(args: argparse.Namespace) -> None:
     except (ImportError, OSError, ValueError) as e:
         print(f"error: {e}", file=sys.stderr)
         sys.exit(2)
+    from convmerge._paths import protect_paths
+
+    protect_paths([args.input, args.rules_file], [args.output, args.rejects])
     stats = FilterStats()
     from convmerge.io import bad_bytes_seen
 
