@@ -106,7 +106,7 @@ def _cmd_normalize(args: argparse.Namespace) -> None:
             sys.exit(2)
         except SamePathError:
             raise  # a usage error: main() exits with 2
-        except ValueError as e:
+        except (ValueError, OSError) as e:
             print(f"error: {e}", file=sys.stderr)
             sys.exit(1)
         print(f"{src} -> {dst}: {n} records", file=sys.stderr)
@@ -123,6 +123,8 @@ def _cmd_normalize(args: argparse.Namespace) -> None:
         sys.exit(2)
     result = normalize_path(src, dst, array_key=args.array_key, on_file=report)
     print(f"[done] {len(result.files)} files, {result.records} records", file=sys.stderr)
+    if result.failed:
+        sys.exit(1)
 
 
 def _add_dedupe(sub: argparse._SubParsersAction) -> None:

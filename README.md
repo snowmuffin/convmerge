@@ -285,6 +285,10 @@ walked recursively and mirrored under the output directory. A `.csv`,
 header (`instruction,input,output` spreadsheets convert with `--from auto`
 next; `.xlsx` needs `convmerge[xlsx]`, `--sheet NAME` picks a sheet).
 
+File outputs are published only after a successful write. Failed files keep
+their previous output; folder runs still commit independent successes and
+return exit 1 if any file failed. See [output safety](docs/output-safety.md).
+
 ### 3. `convert` — adapter + emitter pipeline
 
 ```bash

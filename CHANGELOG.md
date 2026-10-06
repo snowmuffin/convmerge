@@ -7,6 +7,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.4] - 2026-10-06
+
+File-output safety fixes only. Successful conversion formats, row order,
+filter defaults and public API signatures remain unchanged.
+
+### Fixed
+
+- `normalize` now stages every supported file output (JSON/JSONL, arrays,
+  concatenated JSON, CSV/TSV, XLSX/XLSM and Parquet) next to its destination,
+  flushes, syncs and closes it, and replaces the final file only on success.
+  A failed read, serialization, write or commit preserves an existing output;
+  a failed first run leaves no final output. Normal empty inputs still publish
+  an empty file. Direct normalization APIs also reject source/output aliases.
+- `convert` uses the same per-file writer. A new output is no longer visible
+  under its final name while it is being written. Existing basic permission
+  bits and output symlinks are preserved; new files honor the process umask.
+- Folder normalization preflights all output mappings, including collisions
+  between different input extensions and existing hardlink aliases. Outputs
+  equal to or nested under the input directory are refused to prevent later
+  runs from reading their own output. Independent successful files are still
+  committed when another input fails; a failed file keeps its previous output.
+- Both `mix` samplers and the `.mix.json` sidecar now use per-file safe writes.
+  The data and sidecar remain separate commits, not a multi-file transaction.
+- Recipe steps use unique staging paths instead of deleting fixed `.part` and
+  `.old` names. File commits no longer move the old output away first. Failed
+  directory publication restores its backup; if storage also prevents restore,
+  the error identifies a retained recovery copy. Lock/report JSON writes use
+  the common per-file writer. This is not whole-recipe rollback.
+- Cleanup failures report the temporary path without replacing the original
+  processing error. Output devices/FIFOs/directories and read-only files are
+  refused by the per-file writer rather than replaced as regular data files.
+
+### Changed output
+
+- Directory `normalize` exits 1 when any file fails (after reporting independent
+  successes), instead of reporting exit 0. Unsafe folder mappings exit 2.
+- Final `normalize`/`convert`/`mix` file paths expose completed files, not live
+  progress. See [output safety](docs/output-safety.md) for the exact guarantees,
+  temporary disk-space requirements, link semantics and exclusions.
+
+### Testing and release
+
+- Added offline fault-injection tests, including read/write/flush/fsync/close/
+  replace failures, direct API aliases, interruption and recipe recovery.
+- Added Linux/macOS/Windows file-safety CI alongside Python 3.10–3.14 tests.
+- CI builds a wheel from the sdist and tests an isolated installation. Publish
+  refuses tags without successful main CI on the same SHA and uploads that
+  already-tested artifact instead of rebuilding it.
+
 ## [1.6.3] - 2026-10-04
 
 Safety and consistency fixes for unattended dataset builds: failed conversions no

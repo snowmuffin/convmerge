@@ -24,8 +24,12 @@ import json
 import logging
 import sys
 from collections.abc import Iterable, Iterator
+from contextlib import ExitStack
 from pathlib import Path
 from typing import Any, TextIO
+
+from convmerge._output import atomic_text_writer
+from convmerge.io import refuse_overwrite
 
 TABLE_EXTENSIONS: tuple[str, ...] = (".csv", ".tsv")
 XLSX_EXTENSIONS: tuple[str, ...] = (".xlsx", ".xlsm")
@@ -35,12 +39,13 @@ logger = logging.getLogger(__name__)
 
 def table_to_jsonl(src: str | Path, dst: str | Path, *, encoding: str = "utf-8") -> int:
     """Rewrite a ``.csv`` (comma) or ``.tsv`` (tab) file as JSONL; return rows written."""
+    refuse_overwrite([src], [dst])
     src_p, dst_p = Path(src), Path(dst)
     delimiter = "\t" if src_p.suffix.lower() == ".tsv" else ","
     _allow_long_fields()
     dst_p.parent.mkdir(parents=True, exist_ok=True)
     enc = "utf-8-sig" if encoding.lower().replace("_", "-") in ("utf-8", "utf8") else encoding
-    with src_p.open(encoding=enc, newline="") as fin, dst_p.open("w", encoding="utf-8") as fout:
+    with atomic_text_writer(dst_p) as fout, src_p.open(encoding=enc, newline="") as fin:
         reader = csv.reader(fin, delimiter=delimiter, strict=True)
         try:
             written = _write_rows(reader, fout)
@@ -55,6 +60,7 @@ def xlsx_to_jsonl(src: str | Path, dst: str | Path, *, sheet: str | None = None)
     ``sheet`` names the sheet (default: the first). Needs ``openpyxl``
     (``pip install "convmerge[xlsx]"``).
     """
+    refuse_overwrite([src], [dst])
     src_p, dst_p = Path(src), Path(dst)
     if src_p.suffix.lower() == ".xls":
         raise ValueError(f"{src_p}: .xls (Excel 97-2003) is not read; save it as .xlsx or .csv")
@@ -64,31 +70,28 @@ def xlsx_to_jsonl(src: str | Path, dst: str | Path, *, sheet: str | None = None)
         raise ImportError(
             'reading .xlsx files needs openpyxl: pip install "convmerge[xlsx]" (or [all])'
         ) from None
-    try:
-        values = openpyxl.load_workbook(src_p, read_only=True, data_only=True)
-        formulas = openpyxl.load_workbook(src_p, read_only=True, data_only=False)
-    except Exception as e:  # noqa: BLE001 - zip, XML, and openpyxl's own errors
-        raise ValueError(
-            f"{src_p}: not a readable .xlsx workbook ({type(e).__name__}: {e})"
-        ) from None
-    try:
+    with atomic_text_writer(dst_p) as fout, ExitStack() as readers:
+        try:
+            values = openpyxl.load_workbook(src_p, read_only=True, data_only=True)
+            readers.callback(values.close)
+            formulas = openpyxl.load_workbook(src_p, read_only=True, data_only=False)
+            readers.callback(formulas.close)
+        except Exception as e:  # noqa: BLE001 - zip, XML, and openpyxl's own errors
+            raise ValueError(
+                f"{src_p}: not a readable .xlsx workbook ({type(e).__name__}: {e})"
+            ) from None
         name = sheet if sheet is not None else values.sheetnames[0]
         if name not in values.sheetnames:
             raise ValueError(f"{src_p}: no sheet {name!r}; sheets: {', '.join(values.sheetnames)}")
         missing = [0]
         rows = _xlsx_rows(values[name], formulas[name], missing)
-        dst_p.parent.mkdir(parents=True, exist_ok=True)
-        with dst_p.open("w", encoding="utf-8") as fout:
-            written = _write_rows(rows, fout)
-    finally:
-        values.close()
-        formulas.close()
-    if missing[0]:
-        logger.warning(
-            "%s: %d formula cell(s) have no saved value and were left empty; "
-            "open and save the file in Excel (or LibreOffice) to store the values",
-            src_p, missing[0],
-        )  # fmt: skip
+        written = _write_rows(rows, fout)
+        if missing[0]:
+            logger.warning(
+                "%s: %d formula cell(s) have no saved value and were left empty; "
+                "open and save the file in Excel (or LibreOffice) to store the values",
+                src_p, missing[0],
+            )  # fmt: skip
     return written
 
 

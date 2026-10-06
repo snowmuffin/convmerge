@@ -3,17 +3,14 @@
 from __future__ import annotations
 
 import json
-import os
-import stat
-import tempfile
 from collections.abc import Callable, Iterable, Iterator
-from contextlib import contextmanager
 from dataclasses import asdict, dataclass, field
 from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, TextIO
 
 from convmerge import _parallel
+from convmerge._output import atomic_text_writer as _safe_output
 from convmerge.adapter_resolve import resolve_adapter
 from convmerge.adapters import oasst
 from convmerge.config import AdapterOptions, ConvertConfig
@@ -274,31 +271,6 @@ def convert_file(
 
     reporter.done()
     return st.lines_read, st.written
-
-
-@contextmanager
-def _safe_output(path: Path) -> Iterator[TextIO]:
-    """Write ``path`` without leaving a partial result after a failed conversion."""
-    target = path.resolve()
-    if not target.exists():
-        try:
-            with target.open("w", encoding="utf-8") as fout:
-                yield fout
-        except BaseException:
-            target.unlink(missing_ok=True)
-            raise
-        return
-
-    fd, name = tempfile.mkstemp(prefix=f".{target.name}.", suffix=".tmp", dir=target.parent)
-    os.close(fd)
-    tmp = Path(name)
-    os.chmod(tmp, stat.S_IMODE(target.stat().st_mode))
-    try:
-        with tmp.open("w", encoding="utf-8") as fout:
-            yield fout
-        os.replace(tmp, target)
-    finally:
-        tmp.unlink(missing_ok=True)
 
 
 def check_transforms(options: TransformOptions | None, *, pairs: bool) -> None:

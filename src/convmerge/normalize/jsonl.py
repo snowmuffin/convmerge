@@ -8,7 +8,8 @@ from collections.abc import Iterator
 from pathlib import Path
 from typing import Any, Literal
 
-from convmerge.io import JsonlDecodeError, _value_too_deep, iter_jsonl
+from convmerge._output import atomic_text_writer
+from convmerge.io import JsonlDecodeError, _value_too_deep, iter_jsonl, refuse_overwrite
 from convmerge.lfs import ensure_not_lfs_pointer
 
 logger = logging.getLogger(__name__)
@@ -165,6 +166,7 @@ def normalize_to_jsonl(
       are themselves arrays are wrapped the same way.
     - Single-line concatenated objects (``{...}{...}{...}``).
     """
+    refuse_overwrite([src], [dst])
     src_p = Path(src)
     ensure_not_lfs_pointer(src_p)
     dst_p = Path(dst)
@@ -173,7 +175,8 @@ def normalize_to_jsonl(
     try:
         shape = detect_jsonl_shape(src_p)
         if shape == "empty":
-            dst_p.write_text("", encoding="utf-8")
+            with atomic_text_writer(dst_p):
+                pass
             return 0
         if shape == "jsonl":
             return _rewrite_jsonl(src_p, dst_p)
@@ -199,7 +202,7 @@ def normalize_to_jsonl(
 
 def _rewrite_jsonl(src: Path, dst: Path) -> int:
     n = 0
-    with dst.open("w", encoding="utf-8") as fout:
+    with atomic_text_writer(dst) as fout:
         try:
             # Raise on the first bad line so the output is guaranteed to round-trip.
             for line in iter_jsonl(src, on_error="raise"):
@@ -221,7 +224,7 @@ def _wrap_array(value: Any, array_key: str) -> Any:
 
 def _rewrite_jsonl_of_arrays(src: Path, dst: Path, array_key: str) -> int:
     n = 0
-    with dst.open("w", encoding="utf-8") as fout:
+    with atomic_text_writer(dst) as fout:
         for line in iter_jsonl(src, on_error="raise"):
             value = _wrap_array(line.value, array_key)
             fout.write(_checked_dumps(src, value) + "\n")
@@ -252,7 +255,7 @@ def _rewrite_json_array(src: Path, dst: Path, array_key: str = DEFAULT_ARRAY_KEY
     if not isinstance(data, list):
         raise ValueError(f"{src} is not a JSON array")
     n = 0
-    with dst.open("w", encoding="utf-8") as fout:
+    with atomic_text_writer(dst) as fout:
         for obj in data:
             fout.write(_checked_dumps(src, _wrap_array(obj, array_key)) + "\n")
             n += 1
@@ -263,7 +266,7 @@ def _rewrite_single_line(src: Path, dst: Path) -> int:
     text = src.read_text(encoding="utf-8-sig").strip()
     records = _split_concatenated_objects(text)
     n = 0
-    with dst.open("w", encoding="utf-8") as fout:
+    with atomic_text_writer(dst) as fout:
         for obj in records:
             fout.write(_checked_dumps(src, obj) + "\n")
             n += 1

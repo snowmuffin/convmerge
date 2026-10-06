@@ -12,6 +12,7 @@ from itertools import chain
 from pathlib import Path
 from typing import Any, Literal
 
+from convmerge._output import atomic_text_writer
 from convmerge._text import count
 from convmerge.io import iter_jsonl, iter_raw_lines, refuse_overwrite
 
@@ -392,7 +393,7 @@ def _mix_v1(
     rng.shuffle(all_records)
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    with output_path.open("w", encoding="utf-8") as f:
+    with atomic_text_writer(output_path) as f:
         for line in all_records:
             f.write(line + "\n")
 
@@ -475,7 +476,7 @@ def _mix_v2(
             for h in handles:
                 h.close()
 
-        with output_path.open("w", encoding="utf-8") as out:
+        with atomic_text_writer(output_path) as out:
             if not handles:
                 rng.shuffle(in_memory)
                 out.writelines(x + "\n" for x in in_memory)
@@ -634,7 +635,8 @@ def write_mix_recipe(result: MixResult, *, encoding: str = "utf-8") -> Path:
     }
     sidecar = result.output.with_suffix(".mix.json")
     refuse_overwrite([s.path for s in result.sources], [result.output, sidecar])
-    sidecar.write_text(json.dumps(recipe, indent=2, ensure_ascii=False), encoding=encoding)
+    with atomic_text_writer(sidecar, encoding=encoding) as stream:
+        stream.write(json.dumps(recipe, indent=2, ensure_ascii=False))
     return sidecar
 
 

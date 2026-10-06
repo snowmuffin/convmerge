@@ -5,9 +5,12 @@ This is the logic behind ``convmerge normalize``; recipes call it directly.
 
 from __future__ import annotations
 
+import os
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
+
+from convmerge.io import SamePathError
 
 NORMALIZE_EXTENSIONS: tuple[str, ...] = (".parquet", ".json", ".jsonl")
 
@@ -99,14 +102,15 @@ def normalize_path(
         raise FileNotFoundError(f"input not found: {src}")
     if sheet is not None:
         raise ValueError("sheet applies to one .xlsx file, not a directory")
-    if dst.exists() and dst.samefile(src):
-        from convmerge.io import SamePathError
-
+    if dst.resolve().is_relative_to(src.resolve()):
         raise SamePathError(
-            f"output directory {dst} is the input directory; write to a different directory"
+            f"output directory {dst} is inside or is the input directory; "
+            "write to a separate directory"
         )
-    for in_path in iter_data_files(src):
-        out_path = dst / in_path.relative_to(src).with_suffix(".jsonl")
+    inputs = list(iter_data_files(src))
+    outputs = [dst / p.relative_to(src).with_suffix(".jsonl") for p in inputs]
+    _check_output_map(inputs, outputs)
+    for in_path, out_path in zip(inputs, outputs):
         try:
             n = normalize_file(in_path, out_path, array_key=array_key)
         except Exception as e:  # noqa: BLE001 - one bad file must not stop the walk
@@ -119,3 +123,29 @@ def normalize_path(
         if on_file:
             on_file(in_path, out_path, n, None)
     return result
+
+
+def _path_keys(path: Path) -> set[str | tuple[int, int]]:
+    keys: set[str | tuple[int, int]] = {os.path.normcase(str(path.resolve()))}
+    try:
+        info = path.stat()
+    except FileNotFoundError:
+        pass
+    else:
+        keys.add((info.st_dev, info.st_ino))
+    return keys
+
+
+def _check_output_map(inputs: list[Path], outputs: list[Path]) -> None:
+    """Linear-size preflight, including cross-file and existing hardlink aliases."""
+    protected: set[str | tuple[int, int]] = set()
+    for path in inputs:
+        protected.update(_path_keys(path))
+    seen: set[str | tuple[int, int]] = set()
+    for path in outputs:
+        keys = _path_keys(path)
+        if keys & protected:
+            raise SamePathError(f"output {path} is one of the input files; choose another path")
+        if keys & seen:
+            raise SamePathError(f"output {path} is given twice; use distinct source stems")
+        seen.update(keys)

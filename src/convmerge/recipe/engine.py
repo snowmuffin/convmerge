@@ -23,6 +23,7 @@ from pathlib import Path
 from typing import Any
 
 from convmerge import __version__
+from convmerge._output import _warn_cleanup, atomic_text_writer
 from convmerge.recipe.schema import Recipe, SourceSpec, convert_config_kwargs
 
 LOCK_VERSION = 1
@@ -484,10 +485,9 @@ def load_lock(path: Path) -> dict[str, Any]:
 
 def _save_json(path: Path, data: dict[str, Any], *, sort_keys: bool = True) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_name(f".{path.name}.part")
     text = json.dumps(data, indent=2, ensure_ascii=False, sort_keys=sort_keys)
-    tmp.write_text(text + "\n", "utf-8")
-    os.replace(tmp, path)
+    with atomic_text_writer(path) as stream:
+        stream.write(text + "\n")
 
 
 # --- planning and running ---------------------------------------------------
@@ -644,22 +644,42 @@ def _licenses(recipe: Recipe, steps: dict[str, Any]) -> tuple[dict[str, dict[str
 
 def _execute(step: Step) -> dict[str, Any]:
     step.output.parent.mkdir(parents=True, exist_ok=True)
-    stage = step.output.with_name(f".{step.output.name}.part")
-    _remove(stage)
+    root = Path(tempfile.mkdtemp(prefix=".convmerge-step-", dir=step.output.parent))
+    stage = root / "new" / step.output.name
+    old = root / "previous"
+    committed = False
     try:
+        stage.parent.mkdir()
         stats = step.run(stage)
+        # A regular file can replace another directly: never remove the old
+        # final path first. Non-empty directory replacement needs a backup.
+        if step.output.is_dir():
+            os.replace(step.output, old)
+        try:
+            os.replace(stage, step.output)
+        except BaseException as commit_error:
+            if old.exists():
+                try:
+                    os.replace(old, step.output)
+                except BaseException as restore_error:
+                    raise RecipeRunError(
+                        f"commit failed ({commit_error}); restore failed ({restore_error}); "
+                        f"recovery copy retained at {old}"
+                    ) from commit_error
+            raise
+        committed = True
+        return stats
     except Exception as e:
-        _remove(stage)
         if isinstance(e, RecipeRunError):
             raise RecipeRunError(f"{step.name}: {e}") from e
         raise RecipeRunError(f"{step.name}: {type(e).__name__}: {e}") from e
-    old = step.output.with_name(f".{step.output.name}.old")
-    _remove(old)
-    if step.output.exists():
-        os.replace(step.output, old)
-    os.replace(stage, step.output)
-    _remove(old)
-    return stats
+    finally:
+        # Failed rollback must never delete the only remaining successful data.
+        if committed or not old.exists():
+            try:
+                _remove(root)
+            except OSError as cleanup_error:
+                _warn_cleanup(root, cleanup_error)
 
 
 def _remove(path: Path) -> None:
