@@ -72,10 +72,14 @@ jobs:
       - name: Check source identity and platform newline behavior
         run: python scripts/verify_output_portability.py
       - name: Inject write and commit failures
-        run: >-
-          python -m pytest tests/test_atomic_output.py tests/test_output_safety.py
-          tests/test_output_integrations.py tests/test_normalize_jsonl.py
-          tests/test_tables.py tests/test_same_path.py -q
+        run: python scripts/run_output_safety.py
+      - name: Retain exact platform test evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: safety-${{ matrix.os }}-${{ github.sha }}
+          path: safety-results/
+          if-no-files-found: warn
 
   distribution:
     name: Build and verify distribution
