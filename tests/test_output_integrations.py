@@ -34,7 +34,7 @@ def test_recipe_commit_failure_restores_previous_output(tmp_path, monkeypatch, k
     replace = os.replace
 
     def fail_publish(src, dst):
-        if Path(dst) == output and not ("old" in str(src) or "previous" in str(src)):
+        if Path(dst) == output and Path(src).name != "previous":
             raise OSError("injected commit failure")
         return replace(src, dst)
 

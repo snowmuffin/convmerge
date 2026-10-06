@@ -29,7 +29,9 @@ def _new_file(target: Path) -> tuple[Path, int]:
         try:
             # Unlike changing os.umask(), this honors the process's umask without
             # a process-global race. O_EXCL never opens another writer's file.
-            fd = os.open(path, os.O_RDWR | os.O_CREAT | os.O_EXCL, 0o666)
+            # Python's text wrapper handles newlines; never add CRT translation.
+            flags = os.O_RDWR | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0)
+            fd = os.open(path, flags, 0o666)
         except FileExistsError:
             continue
         return path, fd

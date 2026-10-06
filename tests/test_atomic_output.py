@@ -260,3 +260,12 @@ def test_unowned_temp_collision_is_never_deleted(tmp_path, monkeypatch):
             pass
     assert target.read_bytes() == b"old"
     assert collision.read_bytes() == b"belongs to someone else"
+
+
+@pytest.mark.parametrize("text", ["a\nb\n", "a\r\nb\r\n", "한글\n", "\ufeffhead\nend"])
+def test_text_writer_matches_native_open_bytes(tmp_path, text):
+    control, target = tmp_path / "control", tmp_path / "out"
+    control.write_text(text, encoding="utf-8")
+    with _output.atomic_text_writer(target) as stream:
+        stream.write(text)
+    assert target.read_bytes() == control.read_bytes()
