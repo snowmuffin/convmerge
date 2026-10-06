@@ -254,6 +254,8 @@ def test_cli_suggests_encoding_for_undecodable_input(tmp_path: Path, capsys) -> 
     "raw",
     ['{"a": [1, 2.5, null, true]}', ' {"a": 1}', '{"a": 1} ', '{"a": 1} x', "﻿{}",
      "{bad", "", '"\\ud800"', "[" * 100_000 + "]" * 100_000, '{"a": 1}{"b": 2}'],
+    ids=["valid", "leading-space", "trailing-space", "trailing-junk", "bom",
+         "invalid", "empty", "surrogate", "deep-array", "concatenated"],
 )  # fmt: skip
 def test_fast_loads_matches_json_loads(raw: str) -> None:
     from convmerge.io import _loads

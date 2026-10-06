@@ -165,6 +165,7 @@ def test_normalize_single_line_with_bom_and_crlf(tmp_path: Path) -> None:
         (b'[{"a": "\xff"}]', "can't decode"),
         (b'{"messages": [{"role": "user", "content": "q"}, {"role": "assis', "not JSON"),
     ],
+    ids=["bad-utf8-jsonl", "deep-jsonl", "deep-array", "bad-utf8-array", "truncated"],
 )
 def test_normalize_reports_bad_input_with_file_name(
     tmp_path: Path, data: bytes, match: str

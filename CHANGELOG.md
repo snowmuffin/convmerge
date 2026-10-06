@@ -52,6 +52,10 @@ filter defaults and public API signatures remain unchanged.
 - Added offline fault-injection tests, including read/write/flush/fsync/close/
   replace failures, direct API aliases, interruption and recipe recovery.
 - Added Linux/macOS/Windows file-safety CI alongside Python 3.10–3.14 tests.
+- Extreme JSON test payloads now have short test IDs. On Windows, embedding
+  a 200,000-character input in PYTEST_CURRENT_TEST exceeded the operating
+  system environment-value limit before the test could run; payloads and
+  assertions are unchanged. CI retains JUnit/source/fixture evidence.
 - CI builds a wheel from the sdist and tests an isolated installation. Publish
   refuses tags without successful main CI on the same SHA and uploads that
   already-tested artifact instead of rebuilding it.
