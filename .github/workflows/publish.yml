@@ -24,6 +24,7 @@ jobs:
             echo "::error::release tag and package versions differ"
             exit 1
           fi
+          python scripts/release_notes.py notes "$version" > /dev/null
       - name: Download the already-tested main-branch artifact
         env:
           GH_TOKEN: ${{ github.token }}
@@ -47,3 +48,11 @@ jobs:
         with:
           packages-dir: dist/
           password: ${{ secrets.PYPI_API_TOKEN }}
+
+  github-release:
+    needs: pypi
+    permissions:
+      contents: write
+    uses: ./.github/workflows/releases.yml
+    with:
+      tags: ${{ github.ref_name }}
