@@ -1,0 +1,60 @@
+# Create the GitHub Release for each v* tag that has none: CHANGELOG notes plus
+# the exact files PyPI serves for that version, checked against PyPI's sha256.
+# Publish calls this after each upload; run it by hand to backfill old tags.
+name: GitHub Releases
+
+on:
+  workflow_dispatch:
+    inputs:
+      tags:
+        description: "Space-separated tags (e.g. v1.6.5), or 'all' for every v* tag"
+        required: true
+        default: all
+  workflow_call:
+    inputs:
+      tags:
+        type: string
+        required: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: github-releases
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Create missing releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAGS: ${{ inputs.tags }}
+        run: |
+          set -euo pipefail
+          all=$(git tag --list 'v*')
+          if [ "$TAGS" = all ]; then wanted=$all; else wanted=$TAGS; fi
+          tags=$(python scripts/release_notes.py order $wanted)
+          latest=$(python scripts/release_notes.py latest $all)
+          for tag in $tags; do
+            git rev-parse -q --verify "refs/tags/$tag" >/dev/null || { echo "::error::no tag $tag"; exit 1; }
+            if gh release view "$tag" >/dev/null 2>&1; then
+              echo "$tag: release exists"
+              continue
+            fi
+            version=${tag#v}
+            python scripts/release_notes.py notes "$version" > notes.md
+            rm -rf assets
+            python scripts/release_notes.py assets "$version" assets --wait 300
+            flags=(--verify-tag --title "convmerge $version" --notes-file notes.md)
+            if python scripts/release_notes.py is-prerelease "$version"; then flags+=(--prerelease); fi
+            if [ "$tag" = "$latest" ]; then flags+=(--latest); else flags+=(--latest=false); fi
+            gh release create "$tag" assets/* "${flags[@]}"
+          done

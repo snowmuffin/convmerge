@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Every published tag gets a GitHub Release: the CHANGELOG section as notes,
+  with the exact sdist and wheel PyPI serves (sha256-checked) attached. The
+  publish workflow creates it after the PyPI upload and refuses a tag whose
+  version has no CHANGELOG section; run the `GitHub Releases` workflow by
+  hand to backfill existing tags.
+
 ## [1.6.5] - 2026-10-06
 
 Correctness fixes for the six remaining issue families found by independent
