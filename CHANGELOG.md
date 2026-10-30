@@ -14,6 +14,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   placeholders (`your-org/your-dataset`). The catalog
   (`tests/datasets/catalog.json`) and its weekly check on real rows stay;
   `scripts/datasets.py table`, which only wrote that README table, is removed.
+- The scope is stated once, in the README's "Out of scope": training models,
+  training-job orchestration, and removing personal information stay out;
+  model-based scoring and labeling, preference generation, rendered text,
+  packing and curriculum, media and HTML are listed as planned and not yet
+  available. The README no longer claims that no extra uses Transformers
+  (`[tokens]` does, without PyTorch). `docs/format.md` links there instead
+  of keeping its own list, CONTRIBUTING states when a core dependency is
+  acceptable, and `docs/stability.md` says how reproducibility will extend
+  to steps that call a model.
 - [Score-filter study](docs/design/score-filter-study.md): the draft
   pre-registered design for testing whether training on the best-scored rows
   beats random rows at the same token count, the gate before model-based
