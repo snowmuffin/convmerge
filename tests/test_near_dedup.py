@@ -186,3 +186,71 @@ def test_workers_match_one_process(tmp_path: Path, monkeypatch) -> None:
     assert results[1][2].invalid_json == 4 and results[1][2].first_invalid_line is not None
     with pytest.raises(ValueError, match="workers"):
         deduplicate_near_jsonl(src, tmp_path / "o.jsonl", workers=0)
+
+
+@pytest.mark.parametrize("workers", [1, 3])
+def test_sqlite_store_matches_memory(tmp_path: Path, monkeypatch, workers: int) -> None:
+    """The disk-backed index keeps and drops the same rows, across chunks and cache spills."""
+    from convmerge import _parallel
+    from convmerge.normalize import near_dedup
+
+    monkeypatch.setattr(_parallel, "CHUNK_LINES", 7)
+    monkeypatch.setattr(near_dedup, "_SQLITE_CACHE_KIB", 16)  # spill to the file many times
+    rows = _variants(300)
+    src = _write(tmp_path / "in.jsonl", rows)
+    rev = _write(tmp_path / "rev.jsonl", rows[::-1])
+    for path in (src, rev):  # input order decides which near-copy stays
+        results = []
+        for store in ("memory", "sqlite"):
+            st = NearDedupeStats()
+            out, rej = tmp_path / f"o-{store}.jsonl", tmp_path / f"r-{store}.jsonl"
+            deduplicate_near_jsonl(path, out, rejects=rej, stats=st, workers=workers,
+                                   seen_store=store)  # fmt: skip
+            results.append((out.read_bytes(), rej.read_bytes(), st))
+        assert results[0] == results[1]
+        assert results[1][2].near_duplicates > 0
+    kept = (tmp_path / "o-sqlite.jsonl").read_text().splitlines()
+    assert kept == _reference(rows[::-1], 0.8, 128)
+
+
+def test_sqlite_store_temp_file_is_removed(tmp_path: Path, monkeypatch) -> None:
+    import tempfile
+
+    from convmerge.normalize import near_dedup
+
+    tmp = tmp_path / "tmp"
+    tmp.mkdir()
+    monkeypatch.setattr(tempfile, "tempdir", str(tmp))
+    src = _write(tmp_path / "in.jsonl", ROWS)
+    _, kept = deduplicate_near_jsonl(src, tmp_path / "o.jsonl", seen_store="sqlite")
+    assert kept == 2 and list(tmp.iterdir()) == []
+
+    def failing(*args, **kwargs):
+        yield json.dumps(ROWS[0]), [1, 2, 3]
+        raise OSError(28, "No space left on device")
+
+    monkeypatch.setattr(near_dedup, "_signed_rows", failing)
+    with pytest.raises(OSError, match="No space"):
+        deduplicate_near_jsonl(src, tmp_path / "o2.jsonl", seen_store="sqlite")
+    assert list(tmp.iterdir()) == []
+
+
+def test_sqlite_store_seen_db(tmp_path: Path, capsys) -> None:
+    src = _write(tmp_path / "in.jsonl", ROWS)
+    db = tmp_path / "bands.sqlite"
+    _, kept = deduplicate_near_jsonl(src, tmp_path / "o.jsonl", seen_store="sqlite", seen_db=db)
+    assert kept == 2 and db.is_file()
+    # Keys already in the database count as seen: a second run keeps nothing.
+    _, kept = deduplicate_near_jsonl(src, tmp_path / "o2.jsonl", seen_store="sqlite", seen_db=db)
+    assert kept == 0
+    with pytest.raises(ValueError, match="seen_db needs"):
+        deduplicate_near_jsonl(src, tmp_path / "o3.jsonl", seen_db=tmp_path / "x.sqlite")
+    with pytest.raises(ValueError, match="seen_store"):
+        deduplicate_near_jsonl(src, tmp_path / "o3.jsonl", seen_store="rocksdb")
+    with pytest.raises(ValueError, match="is the input file"):
+        deduplicate_near_jsonl(src, tmp_path / "o3.jsonl", seen_store="sqlite", seen_db=src)
+
+    main(["dedupe", "-i", str(src), "-o", str(tmp_path / "c.jsonl"), "--near",
+          "--seen-store", "sqlite"])  # fmt: skip
+    assert "near_duplicates=2" in capsys.readouterr().err
+    assert (tmp_path / "c.jsonl").read_bytes() == (tmp_path / "o.jsonl").read_bytes()

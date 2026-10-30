@@ -8,10 +8,11 @@ Rows whose estimated Jaccard similarity to an earlier kept row reaches
 This catches the same source translated or reformatted slightly
 differently, which exact ``dedupe`` cannot.
 
-It is approximate (MinHash estimates similarity; LSH finds candidates) and
-keeps its index in memory (a 60-bit digest per LSH band, about 0.7 KB a row
-at the defaults), so it suits up to several million rows; for larger corpora
-use a distributed tool such as datatrove. Needs
+It is approximate (MinHash estimates similarity; LSH finds candidates). By
+default the index lives in memory (a 60-bit digest per LSH band, about 0.7 KB
+a kept row at the defaults), which suits up to several million rows;
+``seen_store="sqlite"`` keeps it in a disk-backed table instead, with memory
+bounded by SQLite's page cache and the same output. Needs
 ``pip install "convmerge[quality]"`` (datasketch).
 
 The index uses datasketch's ``MinHashLSH`` band layout and band bytes, so a
@@ -22,6 +23,8 @@ earlier kept row (up to a 2**-60 chance of a digest collision per band).
 from __future__ import annotations
 
 import hashlib
+import os
+import tempfile
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
@@ -48,6 +51,94 @@ class NearDedupeStats:
     threshold: float = 0.8
 
 
+# Page cache of the sqlite band store: the memory it uses however many rows
+# are kept. Pages beyond it are written to the database file and read back.
+_SQLITE_CACHE_KIB = 64 * 1024
+
+
+class _MemoryBands:
+    """Every kept row's band keys in a ``set`` (fastest; memory grows with kept rows)."""
+
+    def __init__(self) -> None:
+        self._seen: set[int] = set()
+
+    def add_if_new(self, bands: list[int]) -> bool:
+        """Remember ``bands`` and return True unless one of them was seen before."""
+        if not self._seen.isdisjoint(bands):
+            return False
+        self._seen.update(bands)
+        return True
+
+    def close(self) -> None:
+        self._seen.clear()
+
+
+class _SqliteBands:
+    """The same lookups against a SQLite table of every kept row's band keys.
+
+    Every key ever added stays queryable however much of the table has been
+    written out of the page cache, so the kept/dropped decisions are those of
+    :class:`_MemoryBands`. Without ``path`` the database is a temporary file
+    removed by :meth:`close`; a given ``path`` is kept, and keys already in it
+    count as seen (deduplicating against an earlier run).
+    """
+
+    def __init__(self, path: str | Path | None = None) -> None:
+        import sqlite3
+
+        if path is None:
+            fd, tmp = tempfile.mkstemp(prefix="convmerge-near-", suffix=".sqlite")
+            os.close(fd)
+            self._path, self._owns_file = tmp, True
+        else:
+            self._path, self._owns_file = str(path), False
+        try:
+            self._conn = sqlite3.connect(self._path)
+            # The index is disposable: trade durability for speed.
+            self._conn.execute("PRAGMA journal_mode=OFF")
+            self._conn.execute("PRAGMA synchronous=OFF")
+            self._conn.execute(f"PRAGMA cache_size=-{_SQLITE_CACHE_KIB}")
+            self._conn.execute("CREATE TABLE IF NOT EXISTS near_bands (k INTEGER PRIMARY KEY)")
+        except BaseException:
+            self._remove()
+            raise
+        self._query = ""
+
+    def add_if_new(self, bands: list[int]) -> bool:
+        if len(bands) != self._query.count("?"):
+            marks = ",".join("?" * len(bands))
+            self._query = f"SELECT 1 FROM near_bands WHERE k IN ({marks}) LIMIT 1"
+        if self._conn.execute(self._query, bands).fetchone() is not None:
+            return False
+        self._conn.executemany("INSERT OR IGNORE INTO near_bands(k) VALUES (?)",
+                               [(k,) for k in bands])  # fmt: skip
+        return True
+
+    def close(self) -> None:
+        try:
+            self._conn.commit()
+        finally:
+            self._conn.close()
+            self._remove()
+
+    def _remove(self) -> None:
+        if self._owns_file:
+            try:
+                os.remove(self._path)
+            except OSError:  # pragma: no cover - best-effort cleanup
+                pass
+
+
+def _band_store(kind: str, path: str | Path | None) -> _MemoryBands | _SqliteBands:
+    if kind == "memory":
+        if path is not None:
+            raise ValueError("seen_db needs seen_store='sqlite'")
+        return _MemoryBands()
+    if kind == "sqlite":
+        return _SqliteBands(path)
+    raise ValueError(f"Unknown seen_store {kind!r}. Choose 'memory' or 'sqlite'.")
+
+
 def _require_datasketch() -> Any:
     try:
         import datasketch
@@ -70,6 +161,8 @@ def deduplicate_near_jsonl(
     encoding: str = "utf-8",
     stats: NearDedupeStats | None = None,
     workers: int = 1,
+    seen_store: str = "memory",
+    seen_db: str | Path | None = None,
 ) -> tuple[int, int]:
     """Write the rows of ``src`` that are not near-copies of an earlier row to ``dst``.
 
@@ -77,8 +170,19 @@ def deduplicate_near_jsonl(
     Rows are written byte-for-byte as read; invalid JSON lines are dropped.
     ``workers`` > 1 computes MinHashes in that many processes; the output is
     the same as with one.
+
+    ``seen_store`` selects where the kept rows' band keys live:
+
+    - ``"memory"`` (default): a Python ``set``, fastest; memory grows by about
+      0.7 KB per kept row at the defaults.
+    - ``"sqlite"``: a disk-backed SQLite table; memory stays near the page
+      cache (64 MiB) and the disk file grows instead (about 140 bytes per kept
+      row). The output is the same as with ``"memory"``. ``seen_db`` chooses
+      the database path; without it a temporary file is created in the
+      system temporary directory and removed at the end, also on failure.
+      Keys already in a given ``seen_db`` count as seen.
     """
-    refuse_overwrite([src], [dst, rejects])
+    refuse_overwrite([src], [dst, rejects, seen_db])
     if not 0 < threshold < 1:
         raise ValueError("threshold: expected a fraction between 0 and 1")
     if num_perm < 16 or shingle < 1:
@@ -94,23 +198,24 @@ def deduplicate_near_jsonl(
     st = stats if stats is not None else NearDedupeStats()
     st.threshold = threshold
     signer = _Signer(num_perm, lsh.b, lsh.r, shingle, list(keys) if keys else None)
-    seen: set[int] = set()
-    Path(dst).parent.mkdir(parents=True, exist_ok=True)
-    rej = open(rejects, "w", encoding="utf-8") if rejects is not None else None
+    seen = _band_store(seen_store, seen_db)
+    rej = None
     invalid = ReadStats()
     try:
+        Path(dst).parent.mkdir(parents=True, exist_ok=True)
+        rej = open(rejects, "w", encoding="utf-8") if rejects is not None else None
         with open(dst, "w", encoding="utf-8") as out:
             for raw, bands in _signed_rows(src, encoding, signer, workers, invalid):
                 st.total += 1
-                if not seen.isdisjoint(bands):
+                if not seen.add_if_new(bands):
                     st.near_duplicates += 1
                     if rej is not None:
                         rej.write(raw + "\n")
                     continue
-                seen.update(bands)
                 st.kept += 1
                 out.write(raw + "\n")
     finally:
+        seen.close()
         if rej is not None:
             rej.close()
         st.invalid_json = invalid.invalid_json

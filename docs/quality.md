@@ -163,13 +163,23 @@ convmerge dedupe -i big.jsonl -o deduped.jsonl --near --workers 4  # same output
   reformatted slightly differently, or answers that differ in a few words.
 - It is approximate. MinHash estimates the similarity, and LSH finds the
   candidates.
-- The index stays in memory: a 60-bit digest per LSH band, about 0.7 KB a
-  row with the default `--num-perm 128`. One million chat rows (4 KB each)
-  peaked at 768 MB and took 89 s with `--workers 4`; 200,000 rows took
-  63 s in one process (235 MB). Before 1.1 the index took about 3.5 KB a
-  row. `--workers N` computes the MinHashes in N processes and does not
-  change which rows are kept. Beyond several million rows use a
-  distributed tool such as [datatrove](https://github.com/huggingface/datatrove).
+- By default the index stays in memory: a 60-bit digest per LSH band, about
+  0.7 KB a kept row with the default `--num-perm 128`. One million chat rows
+  (4 KB each) peaked at 768 MB and took 89 s with `--workers 4`; 200,000
+  rows took 63 s in one process (235 MB). Before 1.1 the index took about
+  3.5 KB a row. `--workers N` computes the MinHashes in N processes and does
+  not change which rows are kept.
+- `--seen-store sqlite` (1.7) keeps the index in a SQLite table on disk
+  instead. Memory stays near its 64 MiB page cache while the file grows with
+  the kept rows; the kept rows are exactly those of the in-memory index.
+  On rows of random words (all kept) it peaked at 115 MB instead of 232 MB
+  for 200,000 rows and at 160 MB instead of 690 MB for 600,000, stayed at
+  161 MB for 1.2 million rows, and took 19-25% longer; the database took
+  about 140 bytes a kept row. The temporary database goes to the system temporary
+  directory and is removed at the end, also on failure; if that directory
+  is in memory (tmpfs), pass `--seen-db` on a disk. Beyond tens of millions
+  of rows use a distributed tool such as
+  [datatrove](https://github.com/huggingface/datatrove).
 - `--threshold` must be below 1. Very high thresholds (0.95 and up) need a
   larger `--num-perm`.
 

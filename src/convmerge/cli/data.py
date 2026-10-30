@@ -148,7 +148,7 @@ def _add_dedupe(sub: argparse._SubParsersAction) -> None:
         choices=("memory", "sqlite"),
         default="memory",
         help="Duplicate tracking: 'memory' (default, fastest) or 'sqlite' "
-        "(disk-backed, bounded memory for huge unique-row counts)",
+        "(disk-backed, bounded memory for huge unique-row counts; also with --near)",
     )
     p.add_argument(
         "--seen-db",
@@ -229,6 +229,7 @@ def _near_dedupe(args: argparse.Namespace) -> None:
         total, kept = deduplicate_near_jsonl(
             args.input, args.output, threshold=args.threshold, num_perm=args.num_perm,
             keys=args.keys, stats=stats, workers=args.workers, rejects=args.rejects,
+            seen_store=args.seen_store, seen_db=args.seen_db,
         )  # fmt: skip
     except (ImportError, ValueError) as e:
         print(f"error: {e}", file=sys.stderr)
