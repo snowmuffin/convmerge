@@ -236,3 +236,13 @@ def test_validate_checks_preference_rows(tmp_path: Path, capsys) -> None:
     assert exc.value.code == 1
     report = json.loads(capsys.readouterr().out)
     assert report["drop_reasons"] == {"unrepresentable_identical_pair": 1}
+
+
+def test_rendered_text_is_pretraining_data(tmp_path: Path, capsys) -> None:
+    src = tmp_path / "text.jsonl"
+    src.write_text(json.dumps({"text": "<|im_start|>user q<|im_end|>", "meta": {}}) + "\n")
+    assert dataset_info_entry(src) == {"file_name": "text.jsonl", "columns": {"prompt": "text"}}
+    main(["llamafactory-info", "-i", str(src), "--name", "rendered"])
+    captured = capsys.readouterr()
+    assert json.loads(captured.out)["rendered"]["columns"] == {"prompt": "text"}
+    assert "stage: pt" in captured.err

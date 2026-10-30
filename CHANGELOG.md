@@ -36,6 +36,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   broken by a seeded hash so input order does not matter. `--stages N` cuts
   the ranking into N stages shuffled within; the report gives each stage's
   key range. `order_jsonl` and `OrderStats` are in the API.
+- `axolotl-config` and `llamafactory-info` accept the `{"text": ...}` files
+  `convmerge render` writes: axolotl gets `type: completion` (`field: text`)
+  and LLaMA-Factory `"columns": {"prompt": "text"}` (`stage: pt`), each with
+  a note that every token is trained on. The LLaMA-Factory guide names
+  `disable_shuffling: true` for keeping a `convmerge order` file in order.
 - `convmerge render` (and the recipe's `render:` step, after `tokens`) writes
   `{"text": ...}` rows rendered with the model's chat template for trainers
   that take plain text; `meta` is kept. `--assistant-spans` adds the

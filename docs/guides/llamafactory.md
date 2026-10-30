@@ -62,6 +62,19 @@ refused — LLaMA-Factory cannot read them — with a hint to use
 fields (LLaMA-Factory reads reasoning inline only; `--format sharegpt` and
 `--reasoning inline` write it that way).
 
+## Rendered text and curriculum order
+
+`{"text": ...}` files from [`convmerge render`](../format.md#rendered-text-convmerge-render)
+are registered with `"columns": {"prompt": "text"}`, the layout
+LLaMA-Factory reads for `stage: pt`. That stage trains on every token,
+prompts included, so for supervised fine-tuning register the `sharegpt` or
+`messages` file instead; `llamafactory-info` says so when it sees a text
+file.
+
+LLaMA-Factory shuffles training data by default. To keep the order
+[`convmerge order`](../format.md#curriculum-order-convmerge-order) wrote, set
+`disable_shuffling: true` in the training config.
+
 ## Reasoning data
 
 `--format sharegpt` writes traces inline as `<think>...</think>`, which the

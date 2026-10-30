@@ -14,6 +14,8 @@ entries into a YAML snippet for an axolotl config.
 - ``preference`` / ``sharegpt-preference`` → ``chat_template.default`` for
   ``rl: dpo`` (one answer per side: axolotl reads only the last message)
 - ``alpaca`` → ``type: alpaca``
+- rendered text from ``convmerge render`` → ``type: completion`` (every token
+  is trained on; axolotl does not read ``assistant_spans``)
 """
 
 from __future__ import annotations
@@ -96,8 +98,17 @@ def dataset_config(path: str | Path, *, file_path: str | None = None) -> dict[st
             entry["field_system"] = "system"
     elif "instruction" in keys and "output" in keys:
         entry["type"] = "alpaca"
+    elif "text" in keys:
+        entry.update(type="completion", field="text")
+        entry["_note"] = (
+            "completion trains on every token, prompts included"
+            + (" (axolotl does not read assistant_spans)" if "assistant_spans" in keys else "")
+            + "; for answer-only loss, use the messages file with type: chat_template"
+        )
     else:
-        raise ValueError(f"{path}: not a messages, sharegpt, preference, or alpaca file")
+        raise ValueError(
+            f"{path}: not a messages, sharegpt, preference, alpaca, or rendered text file"
+        )
     return entry
 
 
@@ -120,6 +131,7 @@ def render_config(
     lines = [f"# axolotl datasets for {source} (written by convmerge axolotl-config)"]
     if rl:
         lines.append(f"rl: {rl}")
+    lines += [f"# note: {e['_note']}" for e in (train, val) if e is not None and "_note" in e][:1]
     lines.append("datasets:")
     lines += _entry(train)
     if val is not None:

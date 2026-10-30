@@ -67,7 +67,7 @@ def test_alpaca_and_unknown(tmp_path: Path) -> None:
     row = {"instruction": "q", "input": "", "output": "a"}
     assert dataset_config(_write(tmp_path / "a.jsonl", [row]))["type"] == "alpaca"
     with pytest.raises(ValueError, match="not a messages"):
-        dataset_config(_write(tmp_path / "x.jsonl", [{"text": "hi"}]))
+        dataset_config(_write(tmp_path / "x.jsonl", [{"body": "hi"}]))
     with pytest.raises(ValueError, match="no JSON object rows"):
         dataset_config(_write(tmp_path / "e.jsonl", []))
 
@@ -108,3 +108,18 @@ def test_yaml_parses(tmp_path: Path) -> None:
     text = render_config(dataset_config(_write(tmp_path / "s.jsonl", rows), file_path="s.jsonl"))
     data = yaml.safe_load(text)
     assert data["datasets"][0]["roles"]["assistant"] == ["gpt", "assistant"]
+
+
+def test_rendered_text(tmp_path: Path) -> None:
+    yaml = pytest.importorskip("yaml")
+    rows = [{"text": "<|im_start|>user q<|im_end|>", "assistant_spans": [[0, 5]], "meta": {}}]
+    entry = dataset_config(_write(tmp_path / "t.jsonl", rows), file_path="t.jsonl")
+    assert {k: v for k, v in entry.items() if k != "_note"} == {
+        "path": "t.jsonl", "ds_type": "json", "type": "completion", "field": "text",
+    }  # fmt: skip
+    assert "does not read assistant_spans" in entry["_note"]
+    text = render_config(entry, source="t.jsonl")
+    assert "# note: completion trains on every token" in text
+    assert yaml.safe_load(text)["datasets"][0]["type"] == "completion"
+    plain = dataset_config(_write(tmp_path / "p.jsonl", [{"text": "hi"}]))
+    assert "assistant_spans" not in plain["_note"]

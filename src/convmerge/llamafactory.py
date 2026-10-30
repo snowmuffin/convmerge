@@ -3,7 +3,8 @@
 LLaMA-Factory only reads a dataset it finds in ``dataset_info.json``, with
 the column and role names spelled out. :func:`dataset_info_entry` scans a
 JSONL file written by ``convert`` (``sharegpt``, ``sharegpt-preference``,
-``alpaca``, or ``messages`` without tool calls) and returns that entry;
+``alpaca``, or ``messages`` without tool calls), or the ``{"text": ...}``
+rows of ``convmerge render`` (read by ``stage: pt``), and returns that entry;
 :func:`update_dataset_info` merges it into an existing file.
 """
 
@@ -94,8 +95,10 @@ def dataset_info_entry(path: str | Path, *, file_name: str | None = None) -> dic
         columns = {"prompt": "instruction", "query": "input", "response": "output"}
         columns.update({k: k for k in ("system", "history") if k in keys})
         entry["columns"] = columns  # formatting defaults to "alpaca"
+    elif "text" in keys:
+        entry["columns"] = {"prompt": "text"}  # pre-training layout (stage: pt)
     else:
-        raise ValueError(f"{path}: not a sharegpt, alpaca, or messages file")
+        raise ValueError(f"{path}: not a sharegpt, alpaca, messages, or rendered text file")
     return entry
 
 
