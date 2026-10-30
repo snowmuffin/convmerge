@@ -35,10 +35,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   of keeping its own list, CONTRIBUTING states when a core dependency is
   acceptable, and `docs/stability.md` says how reproducibility will extend
   to steps that call a model.
-- [Score-filter study](docs/design/score-filter-study.md): the draft
+- [Score-filter study](docs/design/score-filter-study.md): the
   pre-registered design for testing whether training on the best-scored rows
   beats random rows at the same token count, the gate before model-based
-  scoring features.
+  scoring features. `scripts/eval/score_filter/` and the `Score-filter study`
+  workflow run it; `scripts/eval/effect/train_eval.py` gains `--packing`
+  (off by default, so the effect study is unchanged).
 
 ## [1.7.0] - 2026-10-30
 

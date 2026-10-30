@@ -5,6 +5,9 @@
         --seed 0 --steps 400 --out results.json
 
 Training settings and metrics are fixed in docs/design/effect-study.md.
+``--packing`` (off by default, so the effect study is unchanged) packs rows
+into full ``--max-length`` sequences, as the score-filter study fixes in
+docs/design/score-filter-study.md.
 """
 
 from __future__ import annotations
@@ -128,6 +131,11 @@ def main() -> None:
     p.add_argument("--gen", type=int, default=100, help="evaluation prompts to generate for")
     p.add_argument("--max-new", type=int, default=256)
     p.add_argument("--max-length", type=int, default=512, help="training and eval-loss length")
+    p.add_argument(
+        "--packing",
+        action="store_true",
+        help="pack rows into full --max-length sequences (TRL 'wrapped', shuffled by --seed)",
+    )
     p.add_argument("--label", default="")
     p.add_argument("--out", type=Path, required=True)
     args = p.parse_args()
@@ -142,6 +150,13 @@ def main() -> None:
     model.config.eos_token_id = tok.convert_tokens_to_ids(END)
 
     train = Dataset.from_list(load_rows(args.data))
+    # "wrapped" fills every sequence to max_length, so each step trains the same
+    # token count; "bfd" would need padding-free attention, which CPU lacks.
+    packing = (
+        {"packing": True, "packing_strategy": "wrapped", "shuffle_dataset": True}
+        if args.packing
+        else {}
+    )
     config = SFTConfig(
         output_dir=str(args.out.parent / "trainer"),
         max_steps=args.steps,
@@ -158,6 +173,7 @@ def main() -> None:
         report_to=[],
         use_cpu=True,
         bf16=False,
+        **packing,
     )
     trainer = SFTTrainer(model=model, args=config, train_dataset=train, processing_class=tok)
     result = trainer.train()
@@ -170,6 +186,9 @@ def main() -> None:
         "label": args.label,
         "seed": args.seed,
         "train_rows": len(train),
+        "packing": args.packing,
+        "train_sequences": len(trainer.train_dataset),
+        "seconds_per_step": round(result.metrics["train_runtime"] / args.steps, 2),
         "train_loss": round(result.training_loss, 4),
         "eval_loss": round(loss, 4),
         "eval_ppl": round(math.exp(loss), 2),
