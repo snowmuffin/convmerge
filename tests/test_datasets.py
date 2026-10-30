@@ -95,14 +95,6 @@ def test_reasoning_datasets_keep_their_trace(tmp_path: Path, entry: dict) -> Non
         assert answer[key] and "<think>" not in answer["content"], (entry["id"], answer)
 
 
-def test_readme_table_matches_catalog() -> None:
-    readme = (ROOT / "README.md").read_text(encoding="utf-8")
-    table = script.render_table(CATALOG)
-    assert f"{script.START}\n{table}\n{script.END}" in readme, (
-        "README dataset table is stale: run `python scripts/datasets.py table --write`"
-    )
-
-
 def _catalog_rows(entry: dict, rows: int) -> list[dict]:
     """A stand-in for the Hub: the catalog record, repeated."""
     return script.sample_rows(entry) * min(rows, 3)

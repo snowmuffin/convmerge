@@ -156,7 +156,7 @@ convmerge dedupe -i big.jsonl -o deduped.jsonl --near --workers 4  # same output
   their words changed, `--threshold 0.8` removed 54% of the copies, 0.75
   removed 70%, and 0.7 removed 85%. None of the originals and none of 1,940
   copies with 25-35% of their words changed were removed at any of the three.
-  datatrove's default (14 bands of 8 hashes, about 0.72) removed 90%. Use
+  14 bands of 8 hashes (about 0.72) removed 90%. Use
   `--threshold 0.7` to catch lightly edited copies; the default stays 0.8
   within 1.x so existing outputs do not change.
 - This catches what exact `dedupe` misses: the same source translated or
@@ -178,16 +178,15 @@ convmerge dedupe -i big.jsonl -o deduped.jsonl --near --workers 4  # same output
   about 140 bytes a kept row. The temporary database goes to the system temporary
   directory and is removed at the end, also on failure; if that directory
   is in memory (tmpfs), pass `--seen-db` on a disk. Beyond tens of millions
-  of rows use a distributed tool such as
-  [datatrove](https://github.com/huggingface/datatrove).
+  of rows, use a distributed pipeline.
 - `--threshold` must be below 1. Very high thresholds (0.95 and up) need a
   larger `--num-perm`.
 
 ## How the defaults were chosen
 
 The rules are measured on real Hub rows. `scripts/quality.py` streams the
-first rows of every dataset in the [tested-datasets
-catalog](../README.md#tested-datasets) and runs every rule, `decontam`
+first rows of every dataset in the tested-datasets catalog
+(`tests/datasets/catalog.json`) and runs every rule, `decontam`
 against GSM8K, MMLU, KMMLU, and KoBEST, and `dedupe --near`. It lists
 example rows per rule, which are the data for judging false positives. The
 **Quality** GitHub workflow runs it on pull requests that change the rules.

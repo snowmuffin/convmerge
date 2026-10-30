@@ -89,14 +89,12 @@ entry in `CASES`.
 `tests/datasets/catalog.json` lists the public datasets convmerge is known to
 read, each with a record that reproduces its exact layout (made-up content —
 never copy real rows in, licenses vary). `tests/test_datasets.py` converts
-every entry and compares with `tests/datasets/expected.jsonl`; the README
-table is generated from the same file. To add a dataset:
+every entry and compares with `tests/datasets/expected.jsonl`. To add a dataset:
 
 ```bash
 # 1. add an entry to tests/datasets/catalog.json
 CONVMERGE_UPDATE_GOLDEN=1 pytest tests/test_datasets.py   # 2. pin its output
-python scripts/datasets.py table --write                   # 3. refresh the README table
-python scripts/datasets.py check --only org/name           # 4. try real rows (needs network)
+python scripts/datasets.py check --only org/name           # 3. try real rows (needs network)
 ```
 
 The `Datasets` workflow runs step 4 for every entry on pull requests that

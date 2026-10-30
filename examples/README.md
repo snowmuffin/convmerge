@@ -11,7 +11,7 @@ pip install "convmerge[all]"
 The manifests in `manifests/` use `<HF_ORG>/<DATASET>` and `ORG/REPO`
 **placeholders**; plug in whichever dataset your project uses. The recipes in
 `recipes/`, `trl/`, and `llamafactory/` name real public datasets from the
-[tested catalog](../README.md#tested-datasets) so they run as written; naming
+tested catalog (`tests/datasets/catalog.json`) so they run as written; naming
 them is not an endorsement.
 
 > You are responsible for the license of any data you download. Respect

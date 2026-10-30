@@ -1,8 +1,5 @@
 """The tested-datasets catalog (``tests/datasets/catalog.json``).
 
-``python scripts/datasets.py table [--write]``
-    Print the README "Tested datasets" table, or rewrite it in README.md.
-
 ``python scripts/datasets.py check [--rows N] [--only ID ...] [--summary PATH] [--show-drops N]``
     Stream the first N rows of every catalog dataset from the Hugging Face
     Hub (needs ``pip install "convmerge[fetch-all]"`` and network access),
@@ -30,8 +27,6 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 CATALOG = ROOT / "tests" / "datasets" / "catalog.json"
-README = ROOT / "README.md"
-START, END = "<!-- datasets:start -->", "<!-- datasets:end -->"
 KINDS = {
     "sft": "SFT",
     "reasoning": "Reasoning",
@@ -50,17 +45,6 @@ def sample_rows(entry: dict[str, Any]) -> list[dict[str, Any]]:
     return list(entry.get("records") or [entry["record"]])
 
 
-def flags(entry: dict[str, Any]) -> str:
-    out = f"--from {entry.get('adapter', 'auto')} --format {entry['format']}"
-    if entry.get("preference"):
-        out += f" --preference {entry['preference']}"
-    for key, value in {**entry.get("emit", {}), **entry.get("transforms", {})}.items():
-        out += f" --{key.replace('_', '-')} {value}"
-    if entry.get("adapter_kwargs"):
-        out += f" --adapter-kwargs '{json.dumps(entry['adapter_kwargs'], separators=(',', ':'))}'"
-    return out
-
-
 def convert_config(entry: dict[str, Any]) -> Any:
     """The ``ConvertConfig`` the catalog entry's flags describe."""
     from convmerge import build_convert_config
@@ -74,32 +58,6 @@ def convert_config(entry: dict[str, Any]) -> Any:
         adapter_kwargs_json=json.dumps(kwargs) if kwargs else None,
         transform_overrides=entry.get("transforms") or None,
     )
-
-
-def render_table(catalog: list[dict[str, Any]]) -> str:
-    lines = [
-        "| Dataset | Kind | Lang | Layout | `convmerge convert` flags |",
-        "|---------|------|------|--------|---------------------------|",
-    ]
-    for kind, label in KINDS.items():
-        for e in (e for e in catalog if e["kind"] == kind):
-            name = f"[{e['id']}](https://huggingface.co/datasets/{e['id']})"
-            if e.get("gated"):
-                name += " (gated)"
-            lang = e.get("lang", "en")
-            lines.append(f"| {name} | {label} | {lang} | {e['shape']} | `{flags(e)}` |")
-    return "\n".join(lines)
-
-
-def write_readme(table: str) -> bool:
-    text = README.read_text(encoding="utf-8")
-    if START not in text or END not in text:
-        raise SystemExit(f"README.md has no {START} ... {END} block")
-    head, _, rest = text.partition(START)
-    _, _, tail = rest.partition(END)
-    new = f"{head}{START}\n{table}\n{END}{tail}"
-    README.write_text(new, encoding="utf-8")
-    return new != text
 
 
 @dataclass
@@ -272,8 +230,6 @@ def check(
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Tested-datasets catalog tools")
     sub = parser.add_subparsers(dest="cmd", required=True)
-    table = sub.add_parser("table", help="Print (or --write) the README dataset table")
-    table.add_argument("--write", action="store_true", help="Rewrite the table in README.md")
     live = sub.add_parser("check", help="Convert real rows of every catalog dataset")
     live.add_argument("--rows", type=int, default=50)
     live.add_argument("--only", nargs="+", default=None, metavar="ID")
@@ -282,13 +238,6 @@ def main(argv: list[str] | None = None) -> int:
     live.add_argument("--show-drops", type=int, default=0, metavar="N",
                       help="Print up to N dropped rows per dataset")  # fmt: skip
     args = parser.parse_args(argv)
-    if args.cmd == "table":
-        rendered = render_table(load_catalog())
-        if args.write:
-            print("README.md updated" if write_readme(rendered) else "README.md already up to date")
-        else:
-            print(rendered)
-        return 0
     return check(args.rows, args.only, summary=args.summary, min_ok=args.min_ok,
                  show_drops=args.show_drops)  # fmt: skip
 

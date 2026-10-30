@@ -8,7 +8,7 @@
 [![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-2.1-4baaaa.svg)](CODE_OF_CONDUCT.md)
 
 > **Convert Alpaca, ShareGPT, tool-calling, preference, and mixed chat datasets into one training-ready JSONL.**  
-> Fetch from HuggingFace or GitHub, normalize messy Parquet / JSON / JSONL, convert [65 popular dataset layouts](#tested-datasets) into `messages` (SFT) or `{prompt, chosen, rejected}` (DPO) rows, weighted-mix multiple domain sources, deduplicate, filter, and decontaminate — one command each, or the whole pipeline from a reproducible recipe.
+> Fetch from HuggingFace or GitHub, normalize messy Parquet / JSON / JSONL, convert 65 tested dataset layouts into `messages` (SFT) or `{prompt, chosen, rejected}` (DPO) rows, weighted-mix multiple domain sources, deduplicate, filter, and decontaminate — one command each, or the whole pipeline from a reproducible recipe.
 
 `convmerge` is a **data-preparation CLI and library** for LLM supervised fine-tuning (SFT).
 It takes heterogeneous instruction-tuning datasets — **Alpaca**, **ShareGPT**, raw chat JSONL,
@@ -48,8 +48,8 @@ A dataset from the Hub (`fetch` needs the `[fetch-all]` extra):
 
 ```bash
 pip install "convmerge[fetch-all]"
-convmerge fetch hf://tatsu-lab/alpaca --max-rows 1000 -o raw
-convmerge convert -i raw/tatsu-lab_alpaca.jsonl -o train.jsonl --from auto
+convmerge fetch hf://your-org/your-dataset --max-rows 1000 -o raw
+convmerge convert -i raw/your-org_your-dataset.jsonl -o train.jsonl --from auto
 ```
 
 A file saved in another encoding (cp949 on Korean Windows, for example) is
@@ -58,7 +58,7 @@ read with `--encoding cp949`; the output is always UTF-8.
 ## When it helps, and when it doesn't
 
 convmerge is worth adding when **several datasets in different layouts** go into
-one training run. Of the 65 datasets in the [catalog](#tested-datasets), 10 load
+one training run. Of the 65 public datasets convmerge is tested against, 10 load
 into TRL's `SFTTrainer` / `DPOTrainer` as they are; the other 55 need a
 conversion script of their own (ShareGPT roles, Alpaca columns, message trees,
 tool calls in five encodings, scored or labeled preference pairs). Once there
@@ -75,8 +75,7 @@ It adds little when:
   safety labels. convmerge's `filter` is rule-based only (see
   [Out of scope](#out-of-scope)).
 - **You process web-scale corpora.** convmerge streams line by line on one
-  machine; for billions of documents use a distributed pipeline such as
-  [datatrove](https://github.com/huggingface/datatrove).
+  machine; billions of documents need a distributed pipeline.
 - **You need personal information removed.** Use a dedicated tool first (see
   [Out of scope](#out-of-scope)).
 
@@ -147,95 +146,6 @@ the target model's chat template and length, and a train/validation `split` —
 plus the trainer config. All three were run end to end (SFT and DPO).
 Korean data: [docs/guides/korean.md](docs/guides/korean.md) (한국어 가이드).
 
-## Tested datasets
-
-Every dataset below is converted in the test suite from a record with its exact
-layout, and `python scripts/datasets.py check` runs the same conversions on real
-rows from the Hub. The [Datasets workflow](.github/workflows/datasets.yml) runs
-that check weekly and on pull requests that touch the catalog or the adapters.
-For example:
-
-```bash
-convmerge fetch hf://NousResearch/hermes-function-calling-v1 --config func_calling --max-rows 1000 -o raw
-convmerge convert -i raw/NousResearch_hermes-function-calling-v1.jsonl -o tools.jsonl --from auto --format messages
-
-convmerge fetch hf://HuggingFaceH4/ultrafeedback_binarized --split train_prefs -o raw
-convmerge convert -i raw/HuggingFaceH4_ultrafeedback_binarized.jsonl -o dpo.jsonl --from auto --format preference
-```
-
-<!-- datasets:start -->
-| Dataset | Kind | Lang | Layout | `convmerge convert` flags |
-|---------|------|------|--------|---------------------------|
-| [HuggingFaceH4/ultrachat_200k](https://huggingface.co/datasets/HuggingFaceH4/ultrachat_200k) | SFT | en | messages | `--from auto --format messages` |
-| [allenai/tulu-3-sft-mixture](https://huggingface.co/datasets/allenai/tulu-3-sft-mixture) | SFT | en | messages | `--from auto --format messages` |
-| [HuggingFaceTB/smoltalk](https://huggingface.co/datasets/HuggingFaceTB/smoltalk) | SFT | en | messages | `--from auto --format messages` |
-| [lmsys/lmsys-chat-1m](https://huggingface.co/datasets/lmsys/lmsys-chat-1m) (gated) | SFT | en | messages | `--from auto --format messages` |
-| [teknium/OpenHermes-2.5](https://huggingface.co/datasets/teknium/OpenHermes-2.5) | SFT | en | sharegpt | `--from auto --format messages` |
-| [Open-Orca/SlimOrca](https://huggingface.co/datasets/Open-Orca/SlimOrca) | SFT | en | sharegpt | `--from auto --format messages` |
-| [Magpie-Align/Magpie-Pro-300K-Filtered](https://huggingface.co/datasets/Magpie-Align/Magpie-Pro-300K-Filtered) | SFT | en | sharegpt | `--from auto --format messages` |
-| [LDJnr/Capybara](https://huggingface.co/datasets/LDJnr/Capybara) | SFT | en | input/output turns | `--from auto --format messages` |
-| [tatsu-lab/alpaca](https://huggingface.co/datasets/tatsu-lab/alpaca) | SFT | en | alpaca | `--from auto --format messages` |
-| [yahma/alpaca-cleaned](https://huggingface.co/datasets/yahma/alpaca-cleaned) | SFT | en | alpaca | `--from auto --format messages` |
-| [databricks/databricks-dolly-15k](https://huggingface.co/datasets/databricks/databricks-dolly-15k) | SFT | en | instruction/context/response | `--from auto --format messages` |
-| [garage-bAInd/Open-Platypus](https://huggingface.co/datasets/garage-bAInd/Open-Platypus) | SFT | en | alpaca | `--from auto --format messages` |
-| [meta-math/MetaMathQA](https://huggingface.co/datasets/meta-math/MetaMathQA) | SFT | en | query/response | `--from auto --format messages` |
-| [microsoft/orca-math-word-problems-200k](https://huggingface.co/datasets/microsoft/orca-math-word-problems-200k) | SFT | en | question/answer | `--from auto --format messages` |
-| [nvidia/HelpSteer2](https://huggingface.co/datasets/nvidia/HelpSteer2) | SFT | en | prompt/response | `--from auto --format messages` |
-| [beomi/KoAlpaca-v1.1a](https://huggingface.co/datasets/beomi/KoAlpaca-v1.1a) | SFT | ko | alpaca | `--from auto --format messages` |
-| [kyujinpy/KOR-OpenOrca-Platypus-v3](https://huggingface.co/datasets/kyujinpy/KOR-OpenOrca-Platypus-v3) | SFT | ko | alpaca | `--from auto --format messages` |
-| [timdettmers/openassistant-guanaco](https://huggingface.co/datasets/timdettmers/openassistant-guanaco) | SFT | en | text (### Human:) | `--from auto --format messages` |
-| [OpenAssistant/oasst_top1_2023-08-25](https://huggingface.co/datasets/OpenAssistant/oasst_top1_2023-08-25) | SFT | en | text (ChatML) | `--from auto --format messages` |
-| [mlabonne/guanaco-llama2-1k](https://huggingface.co/datasets/mlabonne/guanaco-llama2-1k) | SFT | en | text (Llama 2) | `--from auto --format messages` |
-| [liuhaotian/LLaVA-Instruct-150K](https://huggingface.co/datasets/liuhaotian/LLaVA-Instruct-150K) | SFT | en | sharegpt + image | `--from auto --format messages` |
-| [nlpai-lab/kullm-v2](https://huggingface.co/datasets/nlpai-lab/kullm-v2) | SFT | ko | Alpaca + id | `--from auto --format messages` |
-| [maywell/koVast](https://huggingface.co/datasets/maywell/koVast) | SFT | ko | ShareGPT (multi-turn) | `--from auto --format messages` |
-| [heegyu/open-korean-instructions](https://huggingface.co/datasets/heegyu/open-korean-instructions) | SFT | ko | `text` with `<usr>` / `<bot>` / `<sys>` | `--from auto --format messages` |
-| [FreedomIntelligence/sharegpt-korean](https://huggingface.co/datasets/FreedomIntelligence/sharegpt-korean) | SFT | ko | ShareGPT (JSON array) | `--from auto --format messages` |
-| [microsoft/orca-agentinstruct-1M-v1](https://huggingface.co/datasets/microsoft/orca-agentinstruct-1M-v1) | SFT | en | messages as a JSON string | `--from auto --format messages` |
-| [nvidia/OpenMathInstruct-2](https://huggingface.co/datasets/nvidia/OpenMathInstruct-2) | SFT | en | problem / generated_solution | `--from auto --format messages` |
-| [facebook/natural_reasoning](https://huggingface.co/datasets/facebook/natural_reasoning) | SFT | en | question + responses[] list | `--from auto --format messages` |
-| [CohereLabs/aya_dataset](https://huggingface.co/datasets/CohereLabs/aya_dataset) | SFT | multi | inputs / targets | `--from auto --format messages` |
-| [CertifiedJoon/Korean-Instruction](https://huggingface.co/datasets/CertifiedJoon/Korean-Instruction) | SFT | ko | Instruction / Response (capitalised) | `--from auto --format messages` |
-| [heegyu/open-korean-instructions-v20231020](https://huggingface.co/datasets/heegyu/open-korean-instructions-v20231020) | SFT | ko | ShareGPT, `input` turn = system prompt | `--from auto --format messages` |
-| [OpenAssistant/oasst2](https://huggingface.co/datasets/OpenAssistant/oasst2) | SFT | multi | one message per row (`message_id` / `parent_id` / `rank`), read as trees along the best-ranked reply | `--from auto --format messages` |
-| [open-r1/OpenR1-Math-220k](https://huggingface.co/datasets/open-r1/OpenR1-Math-220k) | Reasoning | en | messages, inline `<think>` | `--from auto --format messages` |
-| [open-thoughts/OpenThoughts3-1.2M](https://huggingface.co/datasets/open-thoughts/OpenThoughts3-1.2M) | Reasoning | en | ShareGPT, inline `<think>` | `--from auto --format messages` |
-| [simplescaling/s1K-1.1](https://huggingface.co/datasets/simplescaling/s1K-1.1) | Reasoning | en | question / trace / attempt columns | `--from auto --format messages --adapter-kwargs '{"chat":{"output_keys":["deepseek_attempt"],"record_reasoning_keys":["deepseek_thinking_trajectory"]}}'` |
-| [nvidia/Llama-Nemotron-Post-Training-Dataset](https://huggingface.co/datasets/nvidia/Llama-Nemotron-Post-Training-Dataset) | Reasoning | en | `input` turns + `output` | `--from auto --format messages` |
-| [HuggingFaceH4/Multilingual-Thinking](https://huggingface.co/datasets/HuggingFaceH4/Multilingual-Thinking) | Reasoning | multi | messages + `thinking` field (gpt-oss) | `--from auto --format messages --reasoning thinking` |
-| [a-m-team/AM-Thinking-v1-Distilled](https://huggingface.co/datasets/a-m-team/AM-Thinking-v1-Distilled) | Reasoning | en | ShareGPT, `<think>` + `<answer>` | `--from auto --format messages` |
-| [nvidia/Nemotron-SFT-Instruction-Following-Chat-v3](https://huggingface.co/datasets/nvidia/Nemotron-SFT-Instruction-Following-Chat-v3) | Reasoning | en | messages + `reasoning_content`, first prompt withheld (`null`) | `--from auto --format messages --leading-assistant drop` |
-| [glaiveai/glaive-function-calling-v2](https://huggingface.co/datasets/glaiveai/glaive-function-calling-v2) | Tool calling | en | Glaive system + chat | `--from auto --format messages` |
-| [NousResearch/hermes-function-calling-v1](https://huggingface.co/datasets/NousResearch/hermes-function-calling-v1) | Tool calling | en | Hermes <tool_call> tags | `--from auto --format messages` |
-| [Salesforce/xlam-function-calling-60k](https://huggingface.co/datasets/Salesforce/xlam-function-calling-60k) (gated) | Tool calling | en | xLAM query/answers/tools | `--from auto --format messages` |
-| [llamafactory/glaive_toolcall_en](https://huggingface.co/datasets/llamafactory/glaive_toolcall_en) | Tool calling | en | LLaMA-Factory function_call | `--from auto --format messages` |
-| [Team-ACE/ToolACE](https://huggingface.co/datasets/Team-ACE/ToolACE) | Tool calling | en | [Func(k=v)] calls, functions in the system prompt | `--from auto --format messages` |
-| [Locutusque/function-calling-chatml](https://huggingface.co/datasets/Locutusque/function-calling-chatml) | Tool calling | en | function-call / function-response turns | `--from auto --format messages` |
-| [younissk/tool-calling-mix](https://huggingface.co/datasets/younissk/tool-calling-mix) | Tool calling | en | `messages_json` / `tools_json` / `target_json` strings, ToolBench ReAct turns | `--from auto --format messages` |
-| [ZeroAgency/gemma3-pythonic-function-tool-calling-v1](https://huggingface.co/datasets/ZeroAgency/gemma3-pythonic-function-tool-calling-v1) | Tool calling | en, ru | Gemma-rendered `conversation`, Python-style calls | `--from auto --format messages` |
-| [smolagents/toolcalling](https://huggingface.co/datasets/smolagents/toolcalling) | Tool calling | en | answer turns only (question in `original_question`), `<tool_call>` Python dicts | `--from auto --format messages --leading-assistant drop` |
-| [HuggingFaceH4/ultrafeedback_binarized](https://huggingface.co/datasets/HuggingFaceH4/ultrafeedback_binarized) | Preference | en | prompt + chosen/rejected lists | `--from auto --format preference` |
-| [trl-lib/ultrafeedback_binarized](https://huggingface.co/datasets/trl-lib/ultrafeedback_binarized) | Preference | en | chosen/rejected lists | `--from auto --format preference` |
-| [Anthropic/hh-rlhf](https://huggingface.co/datasets/Anthropic/hh-rlhf) | Preference | en | Human:/Assistant: transcripts | `--from auto --format preference` |
-| [Intel/orca_dpo_pairs](https://huggingface.co/datasets/Intel/orca_dpo_pairs) | Preference | en | system/question + chosen/rejected strings | `--from auto --format preference` |
-| [argilla/distilabel-capybara-dpo-7k-binarized](https://huggingface.co/datasets/argilla/distilabel-capybara-dpo-7k-binarized) | Preference | en | chosen/rejected lists | `--from auto --format preference` |
-| [llamafactory/DPO-En-Zh-20k](https://huggingface.co/datasets/llamafactory/DPO-En-Zh-20k) | Preference | en, zh | LLaMA-Factory ranking | `--from auto --format preference` |
-| [lmsys/chatbot_arena_conversations](https://huggingface.co/datasets/lmsys/chatbot_arena_conversations) (gated) | Preference | en | Arena conversation_a/b + winner | `--from auto --format preference` |
-| [maywell/ko_Ultrafeedback_binarized](https://huggingface.co/datasets/maywell/ko_Ultrafeedback_binarized) | Preference | ko | prompt / chosen / rejected strings | `--from auto --format preference` |
-| [kuotient/orca-math-korean-dpo-pairs](https://huggingface.co/datasets/kuotient/orca-math-korean-dpo-pairs) | Preference | ko | system / question / chosen / rejected | `--from auto --format preference` |
-| [PKU-Alignment/PKU-SafeRLHF](https://huggingface.co/datasets/PKU-Alignment/PKU-SafeRLHF) | Preference | en | response_0/1 + better_response_id | `--from auto --format preference` |
-| [stanfordnlp/SHP](https://huggingface.co/datasets/stanfordnlp/SHP) | Preference | en | human_ref_A/B + labels | `--from auto --format preference` |
-| [nvidia/HelpSteer3](https://huggingface.co/datasets/nvidia/HelpSteer3) | Preference | multi | context turns + response1/2 + overall_preference | `--from auto --format preference` |
-| [argilla/distilabel-math-preference-dpo](https://huggingface.co/datasets/argilla/distilabel-math-preference-dpo) | Preference | en | instruction + chosen_response / rejected_response | `--from auto --format preference` |
-| [shibing624/DPO-En-Zh-20k-Preference](https://huggingface.co/datasets/shibing624/DPO-En-Zh-20k-Preference) | Preference | en, zh | history pairs + question + response_chosen / response_rejected | `--from auto --format preference` |
-| [ChuGyouk/argilla-distilabel-math-preference-dpo-korean](https://huggingface.co/datasets/ChuGyouk/argilla-distilabel-math-preference-dpo-korean) | Preference | ko | English + `_ko` columns, chosen_response / rejected_response | `--from map --format preference --adapter-kwargs '{"map":{"user":"instruction_ko","chosen":"chosen_response_ko","rejected":"rejected_response_ko"}}'` |
-| [openbmb/UltraFeedback](https://huggingface.co/datasets/openbmb/UltraFeedback) | Preference | en | `instruction` + scored `completions` (best vs worst `fine-grained_score`) | `--from auto --format preference` |
-| [berkeley-nest/Nectar](https://huggingface.co/datasets/berkeley-nest/Nectar) | Preference | en | HH `prompt` + ranked `answers` (rank 1 vs the last) | `--from auto --format preference` |
-<!-- datasets:end -->
-
-A preference dataset can also feed SFT: `--format messages --preference chosen`
-trains on the chosen answers.
-
 ## Commands
 
 ### 1. `fetch` — pull raw data from HF + GitHub via a YAML manifest
@@ -252,7 +162,7 @@ version: 1
 defaults: { output_root: ./raw, resume: true }
 auth:     { hf_token_env: HF_TOKEN, github_token_env: GITHUB_TOKEN }
 datasets:
-  - { name: alpaca-ko, hf: MarkrAI/KoCommercial-Dataset, split: train }
+  - { name: hub-sft, hf: your-org/your-dataset, split: train }
   - { name: orca-raw,
       url: https://raw.githubusercontent.com/org/repo/main/data/train.jsonl }
   - { name: repo-tree,
@@ -428,8 +338,8 @@ convmerge filter -i ./train/mixed.dedup.jsonl -o ./train/clean.jsonl --rejects r
 
 # Drop rows that share a 13-word n-gram with a benchmark (prompts; --check all
 # for answers too). hf: sources need convmerge[fetch-all].
-convmerge decontam -i ./train/clean.jsonl --against hf:openai/gsm8k:main \
-  --against hf:cais/mmlu:all -o ./train/decontam.jsonl
+convmerge decontam -i ./train/clean.jsonl --against hf:your-org/your-eval-set:main \
+  --against ./evals/held_out.jsonl -o ./train/decontam.jsonl
 
 # Render every row with the model's chat template: length percentiles, rows the
 # template rejects (with line numbers), double-encoded tool arguments, answers
@@ -478,7 +388,7 @@ sources:
 mix: { total: 100000, seed: 42, weights: { alpaca: 0.7, tools: 0.3 } }
 dedupe: true
 filter: true                                                         # optional
-decontam: { against: [hf:openai/gsm8k:main] }                        # optional
+decontam: { against: [hf:your-org/your-eval-set:main] }              # optional
 tokens: { tokenizer: Qwen/Qwen2.5-7B-Instruct, max_tokens: 4096 }   # optional
 split: { val: 0.02 }                                                 # optional
 ```
@@ -508,7 +418,7 @@ To keep the package lean and dependency-free at its core, `convmerge` does
 - **Building preference data.** Existing pairs, rankings, scores, and labels
   are converted to `{prompt, chosen, rejected}`; generating or judging new
   answers is not.
-- **Training-job orchestration** (SkyPilot, RunPod, Modal, K8s operators).
+- **Training-job orchestration** (provisioning GPUs, scheduling and running training jobs).
 - **Writing chat-template-rendered text.** Output JSONL uses the standard
   `messages` / `alpaca` shapes and the trainer applies its own template;
   `tokens` renders the template only to measure and check rows.
@@ -521,9 +431,8 @@ To keep the package lean and dependency-free at its core, `convmerge` does
 - **Removing personal information (PII).** convmerge does not detect or mask
   names, emails, phone numbers, or IDs. Rules that rewrite training text are
   easy to get wrong without notice (version numbers taken for IP addresses,
-  long numbers for card numbers) and still miss names and addresses, so use
-  a dedicated tool such as [Presidio](https://github.com/microsoft/presidio)
-  before converting. `convmerge filter` with your own `patterns` can find or
+  long numbers for card numbers) and still miss names and addresses, so
+  remove personal information with a dedicated tool before converting. `convmerge filter` with your own `patterns` can find or
   drop rows that match a pattern you choose.
 
 If any of these are important to your workflow, wire `convmerge` in as one
