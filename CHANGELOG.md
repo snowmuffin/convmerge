@@ -67,6 +67,15 @@ it. Outputs are unchanged: the same input and seed give the same bytes as
   beyond 64 bits, duplicate keys, BOMs inside a file), the baseline a faster
   optional engine must match. (#61)
 
+### Testing
+
+- The `tokens` reasoning test no longer assumes transformers before 5.21.
+  Since 5.21, `apply_chat_template` copies a turn's `thinking` into
+  `reasoning_content`, so a gpt-oss style file is rendered by templates that
+  read `reasoning_content` and `tokens` rightly reports nothing dropped. The
+  test now checks a dropped final trace with a template that renders no
+  reasoning, and the `thinking` case against what the installed release does.
+
 ## [1.6.5] - 2026-10-06
 
 Correctness fixes for the six remaining issue families found by independent
