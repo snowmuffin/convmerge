@@ -24,15 +24,15 @@ __all__ = ["main"]
 
 _INSTALL_EXTRAS_EPILOG = """
 optional dependencies (pip install "convmerge[EXTRA]"):
-  (none)     convert, dedupe, filter, decontam, turns on JSONL; normalize on .json/.jsonl only
-  [fetch]      YAML manifests and GitHub sources (PyYAML)
-  [fetch-all]  above + HuggingFace (datasets); same packages as fetch-hf
+  (none)       every command on JSONL, YAML recipes/presets/manifests, GitHub fetch;
+               normalize on .json/.jsonl only
+  [fetch], [preset]  nothing beyond the core since 1.8 (kept so old installs work)
+  [fetch-all]  HuggingFace sources (datasets); same packages as fetch-hf
   [parquet]    .parquet input for normalize
-  [preset]     YAML presets (convert --preset, preset validate)
   [tokens]     token lengths and chat-template checks (transformers + jinja2, no PyTorch)
   [quality]    near-duplicate removal, dedupe --near (datasketch)
   [xlsx]       Excel .xlsx input for normalize (openpyxl)
-  [all]        fetch-all + parquet + preset + tokens + quality + xlsx (full CLI feature set)
+  [all]        fetch-all + parquet + tokens + quality + xlsx (full CLI feature set)
 """.strip()
 
 

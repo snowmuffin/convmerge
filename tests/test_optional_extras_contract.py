@@ -60,10 +60,8 @@ def test_top_level_help_lists_every_runtime_extra(capsys) -> None:
 
 def test_subcommand_help_mentions_its_runtime_extra(capsys) -> None:
     expected = {
-        "convert": "[preset]",
         "normalize": "[parquet]",
-        "fetch": "[fetch]",
-        "preset": "[preset]",
+        "fetch": "[fetch-all]",
         "tokens": "[tokens]",
         "dedupe": "[quality]",
     }
@@ -78,8 +76,6 @@ def test_subcommand_help_mentions_its_runtime_extra(capsys) -> None:
 def test_error_hints_include_narrow_and_umbrella_extras() -> None:
     expected = {
         "src/convmerge/normalize/parquet.py": "[parquet]",
-        "src/convmerge/preset.py": "[preset]",
-        "src/convmerge/fetch/manifest.py": "[fetch]",
         "src/convmerge/fetch/hf.py": "[fetch-all]",
         "src/convmerge/tokens.py": "[tokens]",
         "src/convmerge/normalize/near_dedup.py": "[quality]",
@@ -89,6 +85,14 @@ def test_error_hints_include_narrow_and_umbrella_extras() -> None:
         text = (ROOT / relative).read_text(encoding="utf-8")
         assert narrow in text
         assert "[all]" in text
+
+
+def test_yaml_needs_no_extra() -> None:
+    # PyYAML is a core dependency since 1.8; [fetch] and [preset] stay as aliases.
+    text = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    assert 'dependencies = ["pyyaml>=6.0"]' in text
+    extras = _optional_dependencies()
+    assert extras["fetch"] == extras["preset"] == ["pyyaml>=6.0"]
 
 
 def test_fetch_issue_template_covers_fetch_runtime_options() -> None:

@@ -16,11 +16,11 @@ def _add_fetch(sub: argparse._SubParsersAction) -> None:
         help=(
             "Fetch training data via a YAML manifest, or a single "
             "hf://org/dataset / GitHub URL shortcut "
-            "(convmerge[fetch] for YAML; [fetch-all], [fetch-hf], or [all] for HF entries)"
+            "(HF entries need convmerge[fetch-all], [fetch-hf], or [all])"
         ),
         description="Fetch training data via a YAML manifest, or a single "
         "hf://org/dataset / GitHub URL shortcut. "
-        "Use convmerge[fetch] for YAML, [fetch-all]/[fetch-hf] for HF, or [all].",
+        "HF entries need [fetch-all], [fetch-hf] or [all].",
     )
     p.add_argument(
         "source",

@@ -15,7 +15,7 @@ def _add_mix(sub: argparse._SubParsersAction) -> None:
         "mix",
         help=(
             "Sample from multiple converted JSONL sources at specified weights "
-            "and merge into one file (install convmerge[preset] for YAML configs)"
+            "and merge into one file (weights on the command line or a YAML/JSON config)"
         ),
     )
     p.add_argument(

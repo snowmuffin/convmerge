@@ -1,9 +1,8 @@
 """YAML-manifest driven fetcher for HuggingFace + GitHub training data.
 
-Requires the ``fetch`` extra (``pip install 'convmerge[fetch]'`` or
-``convmerge[all]``) for manifests and GitHub-only flows. HuggingFace manifest
-entries need ``datasets`` — use ``fetch-hf``, ``fetch-all`` (same
-dependencies), or the umbrella ``all`` extra.
+Manifests and GitHub-only flows need nothing beyond the core install.
+HuggingFace manifest entries need ``datasets`` — use ``fetch-hf``,
+``fetch-all`` (same dependencies), or the umbrella ``all`` extra.
 
 The names in ``__all__`` are public API (``docs/api.md``): parse a manifest
 with :func:`load_manifest` and run it with :func:`run_manifest`; each entry

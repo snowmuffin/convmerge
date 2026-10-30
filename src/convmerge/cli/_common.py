@@ -37,12 +37,9 @@ def refuse_existing(path: Path) -> None:
 
 def config_errors() -> tuple[type[Exception], ...]:
     """Exceptions that mean a config file (preset, manifest, mix config) is invalid."""
-    errors: tuple[type[Exception], ...] = (ValueError, ImportError, OSError)
-    try:
-        import yaml
-    except ImportError:
-        return errors
-    return (*errors, yaml.YAMLError)
+    import yaml
+
+    return (ValueError, ImportError, OSError, yaml.YAMLError)
 
 
 def encoding_advice(bad_bytes_before: int, encoding: str, *, has_encoding_flag: bool) -> str | None:

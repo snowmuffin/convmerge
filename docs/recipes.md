@@ -13,8 +13,8 @@ convmerge run recipe.yaml --frozen    # exit 1 unless everything is up to date
 ```
 
 Every step is an existing command called with the same options, so a recipe
-produces byte-for-byte the same files as typing the commands by hand. YAML
-recipes need PyYAML (`convmerge[preset]` or `[all]`); JSON recipes do not.
+produces byte-for-byte the same files as typing the commands by hand.
+Recipes can be YAML or JSON.
 
 ## Example
 

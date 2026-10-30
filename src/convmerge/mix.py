@@ -760,20 +760,13 @@ def load_mix_config(path: Path) -> tuple[list[MixSource], dict]:
     Returns ``(sources, options)`` where *options* may contain
     ``total``, ``seed``, ``output``, ``oversample``, ``sampler``, ``by``,
     ``tokenizer``, ``by_sample``, and ``max_tokens``.
-
-    YAML support requires ``pyyaml`` (``pip install 'convmerge[preset]'``).
     """
     suffix = path.suffix.lower()
     text = path.read_text(encoding="utf-8")
 
     if suffix in (".yaml", ".yml"):
-        try:
-            import yaml
-        except ImportError as e:
-            raise ImportError(
-                "pyyaml is required for YAML mix configs. "
-                "Install with: pip install 'convmerge[preset]'"
-            ) from e
+        import yaml
+
         raw = yaml.safe_load(text) or {}
     else:
         raw = json.loads(text)

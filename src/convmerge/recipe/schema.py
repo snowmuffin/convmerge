@@ -199,19 +199,14 @@ class Recipe:
 
 
 def load_recipe(path: str | Path) -> Recipe:
-    """Parse and validate a recipe file (YAML needs PyYAML; JSON does not)."""
+    """Parse and validate a recipe file (YAML or JSON)."""
     p = Path(path).resolve()
     text = p.read_text(encoding="utf-8")
     if p.suffix.lower() == ".json":
         raw = json.loads(text)
     else:
-        try:
-            import yaml
-        except ImportError as e:
-            raise ImportError(
-                "YAML recipes need PyYAML: pip install 'convmerge[preset]' (or [all]), "
-                "or write the recipe as JSON"
-            ) from e
+        import yaml
+
         try:
             raw = yaml.safe_load(text)
         except yaml.YAMLError as e:

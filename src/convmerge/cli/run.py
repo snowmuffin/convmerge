@@ -12,7 +12,7 @@ def _add_run(sub: argparse._SubParsersAction) -> None:
     p = sub.add_parser(
         "run",
         help="Run a recipe: fetch/normalize/convert each source, then mix and dedupe, "
-        "repeating only what changed (YAML recipes need convmerge[preset])",
+        "repeating only what changed",
     )
     p.add_argument("recipe", nargs="?", type=Path, help="Recipe YAML/JSON file")
     p.add_argument(
