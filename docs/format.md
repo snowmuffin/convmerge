@@ -227,6 +227,15 @@ convmerge convert -i kullm.jsonl -o kullm.messages.jsonl --from auto -f messages
   --meta dataset=kullm-v2 --meta license=apache-2.0
 ```
 
+`--keep-fields helpfulness,correctness` (`keep_fields:` in a recipe's
+convert block or a preset's `output_options`) copies those top-level fields
+of each source record, as they are, under `meta`. Use it for score or label
+columns that the conversation layout leaves behind, then drop rows by them
+with [`filter --meta-min`](quality.md#scores-under-meta---meta-min). A
+record without a field simply lacks it; a field with the same name as a
+`--keep-meta` key replaces it. For OpenAssistant message trees, the fields
+are those of the folded tree record, not of each message.
+
 ## Source adapters (`--from`)
 
 ### `alpaca`

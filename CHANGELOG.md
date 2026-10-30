@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `convert --keep-fields helpfulness,correctness` (`keep_fields` in a recipe
+  or preset, `EmitOptions.keep_fields`) copies those top-level fields of each
+  source record under `meta`, so score and label columns survive the
+  conversion.
+- The `meta_min` filter rule (off by default): `filter --meta-min
+  helpfulness=3` (repeatable), `meta_min:` in a rules file or the recipe's
+  filter block, `FilterSpec(meta_min=...)`. Rows whose meta value is
+  missing, not a number, or below the minimum are dropped; `--meta-key`
+  names the key the values are under.
+
 ### Documentation
 
 - The README no longer carries the tested-datasets table, Hub dataset IDs in

@@ -39,6 +39,19 @@ def _script_share(value: str) -> tuple[str, float]:
     return script.strip(), _fraction(share)
 
 
+def _meta_minimum(value: str) -> tuple[str, float]:
+    name, sep, least = value.partition("=")
+    try:
+        number = float(least)
+    except ValueError:
+        number = float("nan")
+    if not sep or not name.strip() or number != number:
+        raise argparse.ArgumentTypeError(
+            f"expected FIELD=NUMBER (e.g. helpfulness=3), got {value!r}"
+        )
+    return name.strip(), number
+
+
 def _add_filter(sub: argparse._SubParsersAction) -> None:
     from convmerge.quality import DEFAULT_RULES, RULES
 
@@ -81,8 +94,15 @@ def _add_filter(sub: argparse._SubParsersAction) -> None:
         "turns the rule on",
     )  # fmt: skip
     p.add_argument(
+        "--meta-min", action="append", type=_meta_minimum, default=[], metavar="FIELD=NUMBER",
+        help="meta_min: drop rows whose meta FIELD is missing or below NUMBER (repeatable; "
+        "e.g. a score kept by convert --keep-fields); turns the rule on",
+    )  # fmt: skip
+    p.add_argument("--meta-key", default="meta",
+                   help="meta_min: key the row's meta is under (default meta)")  # fmt: skip
+    p.add_argument(
         "--rules-file", type=Path, default=None, metavar="YAML",
-        help="Extra refusal / slop phrases and regex rules (see docs/quality.md)",
+        help="Extra refusal / slop phrases, regex rules and meta_min (see docs/quality.md)",
     )  # fmt: skip
     p.add_argument(
         "--workers", type=_positive_int, default=1, metavar="N",
@@ -113,6 +133,7 @@ def _cmd_filter(args: argparse.Namespace) -> None:
         spec = FilterSpec.from_options(
             enable=args.enable, disable=args.disable, min_chars=args.min_chars,
             max_chars=args.max_chars, min_script=dict(args.min_script),
+            meta_min=dict(args.meta_min), meta_key=args.meta_key,
             rules_file=args.rules_file, min_answer_chars=args.min_answer_chars,
             repetition_max=args.repetition_max, slop_max=args.slop_max,
         )  # fmt: skip

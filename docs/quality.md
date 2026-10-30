@@ -43,6 +43,7 @@ convmerge filter -i big.jsonl -o clean.jsonl --workers 4           # same output
 | `length` | off | The answer text is shorter than `--min-chars` or longer than `--max-chars`. Either flag turns the rule on. |
 | `slop` | off | The answers use `--slop-max` (default 3) or more stock phrases, such as "delve into", "it's important to note that", "a testament to", or "도움이 되셨길 바랍니다". |
 | `script` | off | Less than the given share of the conversation's letters are in a script. For example, `--min-script hangul=0.3` catches half-translated rows. Code blocks and inline code are ignored. Scripts: `hangul`, `latin`, `han`, `kana`, `cyrillic`. Texts under 20 letters are not checked. |
+| `meta_min` | off | A value under `meta` is missing, is not a number, or is below its minimum. `--meta-min helpfulness=3` turns it on; see [below](#scores-under-meta---meta-min). |
 
 `--enable RULE` and `--disable RULE` switch rules on and off, and both can
 be repeated.
@@ -57,6 +58,7 @@ or looping *rejected* answer is what DPO learns to avoid, so it is kept.
 refusal: ["I would rather not"]       # added to the built-in refusal phrases (matched anywhere)
 slop: ["synergy", "game-changer"]     # added to the slop phrases
 builtin_phrases: true                 # false: use only the phrases above
+meta_min: {helpfulness: 3}            # turns meta_min on (see below)
 patterns:                             # each pattern is a rule of its own
   url: "https?://"
   placeholder: "\\[(?:INSERT|TODO)[^\\]]*\\]"
@@ -65,6 +67,30 @@ patterns:                             # each pattern is a rule of its own
 Phrases are matched case-insensitively, with typographic quotes treated as
 plain ones. Patterns are Python regular expressions, searched in each
 answer.
+
+### Scores under meta (`--meta-min`)
+
+Datasets that rate their rows (human or model scores per response) keep the
+scores in their own columns. Carry them into `meta` at convert time, then
+keep the rows that reach a minimum:
+
+```bash
+convmerge convert -i rated.jsonl -o rated.messages.jsonl --from auto \
+  --keep-fields helpfulness,correctness
+convmerge filter -i rated.messages.jsonl -o good.jsonl \
+  --meta-min helpfulness=3 --meta-min correctness=3
+```
+
+`--meta-min FIELD=NUMBER` can be repeated; a row must reach every minimum.
+A row whose value is missing, is not a number (a string, `true`, `NaN`), or
+is below the minimum is dropped, and its sample in the report reads like
+`helpfulness=2 (min 3)`. `--meta-key` names the key the scores are under
+(default `meta`). In a rules file, `meta_min: {helpfulness: 3}` does the
+same; a minimum given on the command line wins for that field.
+
+The rule checks the row's own values; it does not say whether higher-scored
+rows train a better model. That is what the
+[score-filter study](design/score-filter-study.md) tests.
 
 ### Report
 

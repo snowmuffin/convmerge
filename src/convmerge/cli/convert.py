@@ -109,7 +109,17 @@ def _add_convert(sub: argparse._SubParsersAction) -> None:
         help="Also write provenance (source, id, branch) under 'meta'; "
         "optionally only these comma-separated keys, e.g. --keep-meta source,id",
     )
-    p.add_argument("--meta-key", default=None, help="Output key for --keep-meta (default: meta)")
+    p.add_argument(
+        "--keep-fields",
+        default=None,
+        metavar="FIELDS",
+        help="Copy these comma-separated top-level fields of each source record "
+        "under 'meta' as they are, e.g. --keep-fields helpfulness,correctness",
+    )
+    p.add_argument(
+        "--meta-key", default=None,
+        help="Output key for --keep-meta, --keep-fields and --meta (default: meta)",
+    )  # fmt: skip
     p.add_argument(
         "--meta",
         action="append",
@@ -358,6 +368,11 @@ def _emit_overrides(args: argparse.Namespace) -> dict[str, object]:
     if args.keep_meta is not None:
         keys = [k.strip() for k in args.keep_meta.split(",") if k.strip()]
         out["keep_meta"] = True if args.keep_meta == "*" else tuple(keys)
+    if args.keep_fields is not None:
+        fields = [k.strip() for k in args.keep_fields.split(",") if k.strip()]
+        if not fields:
+            raise ValueError("--keep-fields expects comma-separated field names")
+        out["keep_fields"] = tuple(fields)
     if args.meta_key is not None:
         out["meta_key"] = args.meta_key
     if args.meta:

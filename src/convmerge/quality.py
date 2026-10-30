@@ -24,6 +24,9 @@ byte-for-byte as read. The rules are deterministic and need no model:
 - ``script`` (off): less than the given share of the conversation's letters
   are in a script (``{"hangul": 0.3}`` catches half-translated rows); code is
   ignored.
+- ``meta_min`` (off): a score the row carries under ``meta`` (for example
+  one ``convert --keep-fields`` copied from the source) is missing, not a
+  number, or below its minimum.
 - ``patterns``: your own regular expressions, one rule each.
 
 For preference pairs the rules read the chosen answer (a refused or looping
@@ -33,6 +36,7 @@ statistics: how often the chosen answer is the longer one.
 
 from __future__ import annotations
 
+import json
 import re
 import statistics
 from collections.abc import Iterable, Mapping
@@ -54,6 +58,7 @@ RULES: dict[str, str] = {
     "length": "the answer text is outside min_chars / max_chars",
     "slop": "answers use slop_max or more stock phrases",
     "script": "too few of the letters are in the required script",
+    "meta_min": "a meta value is missing, not a number, or below meta_min",
 }
 DEFAULT_RULES: tuple[str, ...] = (
     "empty_answer",
@@ -189,6 +194,9 @@ class FilterSpec:
     """``False``: use only ``refusal_phrases`` / ``slop_phrases``."""
     patterns: Mapping[str, str] | None = None
     """Your own rules: name -> regular expression searched in the answers."""
+    meta_min: Mapping[str, float] | None = None
+    """``meta_min`` rule: field -> least value of ``row[meta_key][field]``."""
+    meta_key: str = "meta"
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "rules", tuple(dict.fromkeys(self.rules)))
@@ -222,6 +230,17 @@ class FilterSpec:
             raise ValueError("the length rule needs min_chars or max_chars")
         if "script" in self.rules and not self.min_script:
             raise ValueError("the script rule needs min_script, e.g. {'hangul': 0.3}")
+        for name, least in (self.meta_min or {}).items():
+            if not (isinstance(name, str) and name):
+                raise ValueError("meta_min: expected field names")
+            if isinstance(least, bool) or not isinstance(least, (int, float)) or least != least:
+                raise ValueError(f"meta_min.{name}: expected a number")
+        if self.meta_min is not None:
+            object.__setattr__(self, "meta_min", dict(self.meta_min))
+        if "meta_min" in self.rules and not self.meta_min:
+            raise ValueError("the meta_min rule needs meta_min, e.g. {'helpfulness': 3}")
+        if not self.meta_key:
+            raise ValueError("meta_key: expected a non-empty key")
         for name, pattern in (self.patterns or {}).items():
             if name in RULES:
                 raise ValueError(f"patterns.{name}: the name of a built-in rule")
@@ -239,14 +258,17 @@ class FilterSpec:
         min_chars: int | None = None,
         max_chars: int | None = None,
         min_script: Mapping[str, float] | None = None,
+        meta_min: Mapping[str, float] | None = None,
         rules_file: str | Path | None = None,
         **options: Any,
     ) -> FilterSpec:
         """The default rules plus ``enable``, minus ``disable``.
 
-        ``min_chars`` / ``max_chars`` turn ``length`` on and ``min_script``
-        turns ``script`` on; ``rules_file`` adds phrases and patterns (see
-        :func:`load_rules_file`). Other options are passed through.
+        ``min_chars`` / ``max_chars`` turn ``length`` on, ``min_script`` turns
+        ``script`` on, and ``meta_min`` turns ``meta_min`` on; ``rules_file``
+        adds phrases, patterns, and ``meta_min`` minimums (see
+        :func:`load_rules_file`; ``meta_min`` given here wins per field).
+        Other options are passed through.
         """
         off = set(disable)
         rules = [*DEFAULT_RULES, *enable]
@@ -255,6 +277,10 @@ class FilterSpec:
         if min_script:
             rules.append("script")
         extra = load_rules_file(rules_file) if rules_file is not None else {}
+        minimums = {**(extra.pop("meta_min", None) or {}), **(meta_min or {})}
+        if minimums:
+            rules.append("meta_min")
+            options["meta_min"] = minimums
         return cls(
             rules=tuple(r for r in rules if r not in off), min_chars=min_chars,
             max_chars=max_chars, min_script=dict(min_script) if min_script else None,
@@ -391,6 +417,10 @@ def _keep(value: Any, number: int, adapter: Any, checker: _Checker, st: FilterSt
         for ex in usable:
             for rule, text in checker.check(ex, st).items():
                 hits.setdefault(rule, text)
+        if "meta_min" in checker.spec.rules:
+            below = _meta_below(value, checker.spec)
+            if below is not None:
+                hits.setdefault("meta_min", below)
         for rule, text in hits.items():
             st.rules[rule] += 1
             samples = st.samples.setdefault(rule, [])
@@ -401,6 +431,18 @@ def _keep(value: Any, number: int, adapter: Any, checker: _Checker, st: FilterSt
         return False
     st.kept += 1
     return True
+
+
+def _meta_below(row: dict[str, Any], spec: FilterSpec) -> str | None:
+    """The first ``meta_min`` field the row fails, as ``"field=value (min M)"``."""
+    meta = row.get(spec.meta_key)
+    for name, least in (spec.meta_min or {}).items():
+        value = meta.get(name) if isinstance(meta, dict) else None
+        number = value if isinstance(value, (int, float)) and not isinstance(value, bool) else None
+        if number is None or not number >= least:  # NaN is never >= least
+            shown = "missing" if value is None else json.dumps(value, ensure_ascii=False)[:40]
+            return f"{name}={shown} (min {least:g})"
+    return None
 
 
 # --- filter --workers ---------------------------------------------------------
@@ -615,10 +657,9 @@ def load_rules_file(path: str | Path) -> dict[str, Any]:
     """Read a rules file (YAML or JSON) into :class:`FilterSpec` keyword arguments.
 
     Keys: ``refusal`` / ``slop`` (extra phrases), ``builtin_phrases`` (bool),
-    ``patterns`` (name -> regular expression).
+    ``patterns`` (name -> regular expression), ``meta_min`` (meta field ->
+    least value; turns the ``meta_min`` rule on).
     """
-    import json
-
     p = Path(path)
     text = p.read_text(encoding="utf-8")
     if p.suffix.lower() == ".json":
@@ -634,10 +675,11 @@ def load_rules_file(path: str | Path) -> dict[str, Any]:
         raw = yaml.safe_load(text)
     if not isinstance(raw, dict):
         raise ValueError(f"{path}: expected a mapping")
-    unknown = set(raw) - {"refusal", "slop", "builtin_phrases", "patterns"}
+    unknown = set(raw) - {"refusal", "slop", "builtin_phrases", "patterns", "meta_min"}
     if unknown:
         raise ValueError(f"{path}: unknown key(s): {', '.join(sorted(unknown))} "
-                         "(expected refusal, slop, builtin_phrases, patterns)")  # fmt: skip
+                         "(expected refusal, slop, builtin_phrases, patterns, "
+                         "meta_min)")  # fmt: skip
     kwargs: dict[str, Any] = {}
     for key, target in (("refusal", "refusal_phrases"), ("slop", "slop_phrases")):
         phrases = raw.get(key, [])
@@ -655,4 +697,16 @@ def load_rules_file(path: str | Path) -> dict[str, Any]:
     ):
         raise ValueError(f"{path}: patterns: expected a mapping of name -> regular expression")
     kwargs["patterns"] = patterns
+    if "meta_min" in raw:
+        minimums = raw["meta_min"]
+        if not (
+            isinstance(minimums, dict)
+            and minimums
+            and all(
+                isinstance(k, str) and isinstance(v, (int, float)) and not isinstance(v, bool)
+                for k, v in minimums.items()
+            )
+        ):
+            raise ValueError(f"{path}: meta_min: expected a mapping of field -> number")
+        kwargs["meta_min"] = dict(minimums)
     return kwargs

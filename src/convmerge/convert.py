@@ -267,6 +267,7 @@ def convert_file(
                 on_invalid,
                 notes,
                 transform,
+                _field_copier(emit_options),
             )
 
     reporter.done()
@@ -282,6 +283,7 @@ def check_transforms(options: TransformOptions | None, *, pairs: bool) -> None:
 
 
 Transform = Callable[[TrainingExample, dict[str, int]], list[TrainingExample]]
+FieldCopier = Callable[[dict[str, Any], dict[str, Any]], None]
 
 
 def _transformer(options: TransformOptions | None) -> Transform | None:
@@ -338,6 +340,7 @@ def _run(
     on_invalid: OnInvalid,
     notes: list[str],
     transform: Transform | None = None,
+    fields: FieldCopier | None = None,
 ) -> None:
     read = ReadStats()
     trees = oasst.TreeBuffer()  # OpenAssistant message rows, one tree at a time
@@ -346,7 +349,7 @@ def _run(
         if done is not None:
             st.grouped += done[2]
             for row in _process(done[1], done[0], adapter, emitter, st, on_invalid, notes,
-                                transform):  # fmt: skip
+                                transform, fields):  # fmt: skip
                 if fout is not None:
                     fout.write(row)
 
@@ -360,7 +363,8 @@ def _run(
                 continue
             if trees.rows:
                 flush(trees.flush())
-            rows = _process(value, line.number, adapter, emitter, st, on_invalid, notes, transform)
+            rows = _process(value, line.number, adapter, emitter, st, on_invalid, notes, transform,
+                            fields)  # fmt: skip
             for row in rows:
                 if fout is not None:
                     fout.write(row)
@@ -381,9 +385,10 @@ def _process(
     on_invalid: OnInvalid,
     notes: list[str],
     transform: Transform | None = None,
+    fields: FieldCopier | None = None,
 ) -> list[str]:
     """Convert one parsed record; return its output lines and update ``st``."""
-    rows = _process_rows(obj, number, adapter, emitter, st, on_invalid, notes, transform)
+    rows = _process_rows(obj, number, adapter, emitter, st, on_invalid, notes, transform, fields)
     return [json.dumps(row, ensure_ascii=False) + "\n" for row in rows]
 
 
@@ -396,6 +401,7 @@ def _process_rows(
     on_invalid: OnInvalid,
     notes: list[str],
     transform: Transform | None = None,
+    fields: FieldCopier | None = None,
 ) -> list[dict[str, Any]]:
     """Convert one parsed record; return its output rows and update ``st``."""
     if not isinstance(obj, dict):
@@ -424,6 +430,8 @@ def _process_rows(
             st.note([e.reason], number)
             st.dropped += 1
             continue
+        if fields is not None:
+            fields(obj, row)
         rows.append(row)
         st.written += 1
         if _has_reasoning(example):
@@ -484,10 +492,25 @@ def convert_records(
             st.lines_read += 1
             yield number, record
 
+    fields = _field_copier(emit_options)
     for number, record, grouped in oasst.group_messages(numbered()):
         st.grouped += grouped
         yield from _process_rows(record, number, adapter, emitter, st, on_invalid, notes,
-                                 transform)  # fmt: skip
+                                 transform, fields)  # fmt: skip
+
+
+def _field_copier(options: EmitOptions | None) -> FieldCopier | None:
+    """Copy ``options.keep_fields`` from a source record into an output row's meta."""
+    if options is None or not options.keep_fields:
+        return None
+    keys, meta_key = options.keep_fields, options.meta_key
+
+    def copy(record: dict[str, Any], row: dict[str, Any]) -> None:
+        picked = {k: record[k] for k in keys if k in record}
+        if picked:
+            row.setdefault(meta_key, {}).update(picked)
+
+    return copy
 
 
 def _groups_rows(path: Path, encoding: str) -> bool:
@@ -534,6 +557,7 @@ def _worker_init(spec: tuple) -> None:
         notes=notes,
         on_invalid=on_invalid,
         transform=_transformer(transforms),
+        fields=_field_copier(emit_options),
         encoding=encoding,
     )
 
@@ -552,6 +576,7 @@ def _worker_chunk(chunk: _parallel.Chunk) -> tuple[str, ConvertStats]:
                 _WORKER["on_invalid"],  # type: ignore[arg-type]
                 _WORKER["notes"],  # type: ignore[arg-type]
                 _WORKER["transform"],  # type: ignore[arg-type]
+                _WORKER["fields"],  # type: ignore[arg-type]
             )
         )
     return "".join(out), st

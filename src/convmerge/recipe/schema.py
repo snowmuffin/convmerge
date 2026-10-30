@@ -31,6 +31,7 @@ _CONVERT_KEYS = {
     "workers",
     "tool_arguments",
     "keep_meta",
+    "keep_fields",
     "meta_key",
     "alpaca_multiturn",
     "reasoning",
@@ -397,6 +398,11 @@ def _convert(raw: Any, base: Path, where: str) -> ConvertSpec:
             emit["keep_meta"] = tuple(km)
         else:
             raise RecipeError(f"{where}.keep_meta: expected true/false or a list of keys")
+    if "keep_fields" in spec:
+        kf = spec["keep_fields"]
+        if not (isinstance(kf, list) and kf and all(isinstance(k, str) and k for k in kf)):
+            raise RecipeError(f"{where}.keep_fields: expected a list of field names")
+        emit["keep_fields"] = tuple(kf)
 
     convert = ConvertSpec(
         adapter=spec.get("from"),
@@ -555,6 +561,8 @@ _FILTER_KEYS = {
     "repetition_max": float,
     "slop_max": int,
     "min_script": dict,
+    "meta_min": dict,
+    "meta_key": str,
     "rules_file": str,
     "workers": int,
 }

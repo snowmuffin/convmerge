@@ -78,6 +78,10 @@ class EmitOptions:
       in order in an ``images`` column (``videos`` / ``audios`` likewise),
       and every content as a list of parts so all rows share one Arrow type;
       ``images`` is present (maybe empty) on every row.
+    - ``keep_fields``: top-level fields of each source record copied as they
+      are under ``meta_key`` (``convert`` only), e.g. ``("helpfulness",)`` to
+      keep a dataset's own scores for ``filter --meta-min`` or a weighted
+      mix. A field the record lacks is left out.
     """
 
     tool_arguments: ToolArguments = "string"
@@ -89,6 +93,7 @@ class EmitOptions:
     meta_values: Mapping[str, str] | None = None
     train_turns: TrainTurns = "all"
     media: MediaMode = "urls"
+    keep_fields: Sequence[str] = ()
 
     def __post_init__(self) -> None:
         if self.tool_arguments not in ("string", "object"):
@@ -114,6 +119,12 @@ class EmitOptions:
             raise ValueError(f"media must be 'urls' or 'placeholders', got {self.media!r}")
         if not isinstance(self.keep_meta, bool):
             object.__setattr__(self, "keep_meta", tuple(self.keep_meta))
+        if isinstance(self.keep_fields, str):
+            raise ValueError("keep_fields must be a sequence of field names, not a string")
+        fields = tuple(dict.fromkeys(self.keep_fields))
+        if not all(isinstance(k, str) and k for k in fields):
+            raise ValueError("keep_fields must be non-empty field names")
+        object.__setattr__(self, "keep_fields", fields)
         if self.meta_values is not None:
             values = dict(self.meta_values)
             if not all(isinstance(k, str) and isinstance(v, str) for k, v in values.items()):

@@ -76,6 +76,7 @@ class ConvertConfig:
 _EMIT_OPTION_KEYS = (
     "tool_arguments",
     "keep_meta",
+    "keep_fields",
     "meta_key",
     "alpaca_multiturn",
     "reasoning",
@@ -126,6 +127,11 @@ def emit_options_from_mapping(data: dict[str, Any]) -> EmitOptions:
             kw["keep_meta"] = tuple(str(k) for k in km)
         else:
             raise ValueError("output_options.keep_meta must be true/false or a list of keys")
+    if "keep_fields" in data:
+        kf = data["keep_fields"]
+        if not (isinstance(kf, list) and all(isinstance(k, str) and k for k in kf)):
+            raise ValueError("output_options.keep_fields must be a list of field names")
+        kw["keep_fields"] = tuple(kf)
     return EmitOptions(**kw)
 
 
