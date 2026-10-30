@@ -1,7 +1,8 @@
 # Score-filter study: does keeping the best-scored rows train a better model?
 
 Status: **design fixed** when it was merged to `main`, before any run; that
-commit is the pre-registration. Changes after that go in an "Amendment"
+commit is the pre-registration. Run on 2026-10-30; gate A failed. Results:
+[docs/score-filter.md](../score-filter.md). Changes after that go in an "Amendment"
 section, written before any result is seen, as in the
 [effect study](effect-study.md).
 
@@ -137,8 +138,6 @@ How packing is done, fixed while writing the tooling and before any run:
 3. Done: the `Score-filter study` workflow
    (`.github/workflows/score-filter.yml`): two arms and five seeds by
    default.
-4. Do a dry run at a small scale and record the step time. In the effect
-   study a step at 1,024 tokens took about 34 s on a standard runner, so 400
-   steps at 512 should take about 2 hours. That is an estimate, and the dry
-   run checks it against the 6-hour job limit. If the setup has to change to
-   fit, the change is recorded as an amendment before any full run.
+4. Done: a dry run at 20 steps took 22.1 s per step, so no change to the
+   setup was needed. The full run, ten jobs at once, took 3 h 21 min to
+   4 h 20 min per job, inside the 340-minute limit.
