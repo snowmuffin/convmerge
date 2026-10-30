@@ -706,19 +706,10 @@ functions expose the same behavior via a `progress=True` keyword argument.
 
 ## Non-goals (current)
 
-- **Model loading, inference, or training.** `convmerge` never imports
-  PyTorch / Transformers / vLLM / etc. See the README's "Out of scope"
-  section.
-- **Automatic labeling or classification of samples.** No topic, quality,
-  or safety classifier ships with this package.
-- **Prompt-template rendering for specific model families.** Output JSONL
-  uses the standard `messages` / `alpaca` shapes; downstream trainers apply
-  their own chat template.
-- **Tokenizer-aware length filtering or packing.** These live in the
-  training stack.
-- **HTML / raw web pages.** Full-site scraping and boilerplate removal are
-  out of scope for core; a future optional extra may wrap libraries like
-  `trafilatura`.
+What convmerge does not do, and what is planned, is listed once, in the
+README's [Out of scope](../README.md#out-of-scope) section. Specific to the
+formats on this page:
+
 - **Binary / proprietary formats.** Not supported unless added as explicit
   adapters.
 - **Guaranteed lossless round-trip** across all formats: not guaranteed;

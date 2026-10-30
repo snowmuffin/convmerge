@@ -136,8 +136,19 @@ error, so the package itself never uses its deprecated API.
   text) are fine when the test is specifically exercising multi-language
   handling.
 - Follow the existing 100-character line length (`tool.ruff.line-length`).
-- Keep the **core package dependency-free**. New runtime deps must go
-  behind a named extras marker in `pyproject.toml`.
+- Keep the **core package light**. A runtime dependency goes in the core
+  only when it meets all of these; otherwise it goes behind a named extras
+  marker in `pyproject.toml`:
+  1. It is not an ML runtime (PyTorch, Transformers, vLLM, JAX, ...).
+  2. It does not pull in libraries that ML environments often pin, such as
+     NumPy or PyArrow.
+  3. It is pure Python or ships wheels for every supported platform.
+  4. It is declared with a lower bound only (`>=`), never an upper bound or
+     an exact version.
+  5. Its API has been stable for a long time and it is widely used.
+
+  A core dependency is hard to take back (code that imported it indirectly
+  breaks), so propose one in an issue first.
 - Prefer small, composable functions. Public entry points live in
   `src/convmerge/__init__.py`; keep them stable.
 - Don't add comments that only narrate what the code does (`# loop over

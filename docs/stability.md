@@ -81,6 +81,10 @@ accepting the previous one for the rest of the major version.
   bug (for example a field that was read wrongly); the changelog says so
   under "Changed output". A recipe lock notices the new convmerge version
   and re-runs those steps.
+- Planned steps that call a model (not in this release) will keep their
+  results as cached files and record the model, its revision, and the
+  request settings in the recipe lock. The guarantees above then hold given
+  the same cached results: every step after them is byte-identical.
 
 ### Quality rules
 

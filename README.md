@@ -18,9 +18,9 @@ Parquet dumps — and produces a single clean JSONL file in the standard `messag
 (or `alpaca` shape, or DPO preference pairs) that TRL, LLaMA-Factory, axolotl, and other
 fine-tuning frameworks consume directly.
 
-It is intentionally scoped to the **pre-training-loop** step: no model
-loading, no inference, no labeling, no training orchestration. See
-[Out of scope](#out-of-scope) below.
+It is scoped to the step **before the training loop**: it does not train
+models or orchestrate training jobs, and this release does not run models
+either. See [Out of scope](#out-of-scope) below.
 
 **Repository:** [github.com/snowmuffin/convmerge](https://github.com/snowmuffin/convmerge)  
 **Status:** stable since 1.0: the CLI, the Python API, and the file formats
@@ -406,37 +406,32 @@ options changed. See [docs/recipes.md](docs/recipes.md).
 
 ## Out of scope
 
-To keep the package lean and dependency-free at its core, `convmerge` does
-**not** include — and has no plans to include — the following:
+`convmerge` prepares data for a trainer; it is not one. These stay out:
 
-- **Model loading / inference / training.** No PyTorch, Transformers, vLLM,
-  or similar runtime is imported by the core or any shipped extra.
-- **Model-based labeling or classification of samples** (e.g. topic tagging,
-  LLM-as-judge or classifier quality scores, safety classification). These
-  are left to upstream tools or private pipelines; `filter` covers the
-  deterministic, rule-based checks.
-- **Building preference data.** Existing pairs, rankings, scores, and labels
-  are converted to `{prompt, chosen, rejected}`; generating or judging new
-  answers is not.
-- **Training-job orchestration** (provisioning GPUs, scheduling and running training jobs).
-- **Writing chat-template-rendered text.** Output JSONL uses the standard
-  `messages` / `alpaca` shapes and the trainer applies its own template;
-  `tokens` renders the template only to measure and check rows.
-- **Packing or curriculum scheduling.** Those live in the training stack.
-- **Downloading, decoding, or transforming media.** Images, audio, and video
-  are carried through as references (URLs or paths) exactly as the source
-  gave them; fetching and preprocessing the files is the trainer's job.
-- **Scraping HTML pages or running browser automation.** Structured JSON /
-  JSONL / Parquet inputs only.
-- **Removing personal information (PII).** convmerge does not detect or mask
-  names, emails, phone numbers, or IDs. Rules that rewrite training text are
-  easy to get wrong without notice (version numbers taken for IP addresses,
-  long numbers for card numbers) and still miss names and addresses, so
-  remove personal information with a dedicated tool before converting. `convmerge filter` with your own `patterns` can find or
-  drop rows that match a pattern you choose.
+- **Training models.** No training loop and no wrapper around a trainer.
+  convmerge writes files that TRL, LLaMA-Factory, and axolotl read directly,
+  plus the settings they need (`llamafactory-info`, `axolotl-config`), and
+  checks rows against the target model's chat template (`tokens`).
+- **Training-job orchestration**: provisioning GPUs, scheduling and running
+  training jobs.
+- **Removing personal information (PII).** convmerge does not mask names,
+  emails, phone numbers, or IDs. Rules that rewrite training text are easy
+  to get wrong without notice (version numbers taken for IP addresses, long
+  numbers for card numbers) and still miss names and addresses, so remove
+  personal information with a dedicated tool before converting.
+  `convmerge filter` with your own `patterns` can find or drop rows that
+  match a pattern you choose.
 
-If any of these are important to your workflow, wire `convmerge` in as one
-step of a larger pipeline rather than expecting it to grow into those areas.
+No PyTorch is imported by the core or any extra. The `[tokens]` extra uses
+Transformers (without PyTorch) only to render chat templates and count
+tokens.
+
+**Not available yet.** These are planned as optional, opt-in steps and are
+not part of this release: scoring and labeling rows with a model served over
+an HTTP endpoint, building preference pairs, writing chat-template-rendered
+text, packing and curriculum ordering, downloading and converting media, and
+extracting text from HTML pages. Until then, run them as separate steps of
+a larger pipeline and bring the results in as JSON / JSONL / Parquet.
 
 ## Development
 
