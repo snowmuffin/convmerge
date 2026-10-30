@@ -142,6 +142,42 @@ Pairs are built as for [`preference`](#preference). Answers that are
 multi-turn or tool calls are dropped as `unrepresentable_pair_continuation`
 (use `preference` with TRL for those).
 
+### Rendered text (`convmerge render`)
+
+For trainers that take plain text, `convmerge render` writes each
+conversation rendered with the model's chat template, the way the trainer
+would render it. It reads any layout `convert` reads and keeps `meta`:
+
+```bash
+convmerge render -i train.jsonl -o train.text.jsonl --tokenizer Qwen/Qwen2.5-7B-Instruct \
+  --assistant-spans
+```
+
+```json
+{"text": "<|im_start|>user\nName a fruit.<|im_end|>\n<|im_start|>assistant\nApple.<|im_end|>\n",
+ "assistant_spans": [[63, 80]], "meta": {"dataset": "fruits"}}
+```
+
+`assistant_spans` (with `--assistant-spans`) are `[start, end)` character
+offsets into `text`: each assistant answer with the end-of-turn text the
+template adds after it, so the model learns to stop. Map them to tokens with
+the tokenizer's offset mapping and train only on those tokens. Turns marked
+`"train": false` (see [`--train-turns`](#training-on-the-last-turn-only---train-turns-last))
+are not included.
+
+The offsets come from rendering the conversation up to each answer, which
+works when the template renders a shorter conversation as a prefix of a
+longer one. Some templates do not: Qwen3-style templates drop the reasoning
+of earlier turns once a later user turn follows. Such rows are dropped and
+counted (`unstable_spans`) rather than written with a wrong mask; `convert
+--reasoning-turns last` first makes them render as prefixes.
+
+Run `render` last. `filter`, `decontam` and `tokens` read conversations, not
+rendered text. Preference rows are not rendered, because preference trainers
+apply the template themselves; they are counted as `pairs`. In a recipe, the
+`render:` step does the same after `tokens` (see
+[recipes.md](recipes.md#tokens-and-split)). Needs `convmerge[tokens]`.
+
 ### Reasoning traces (`--reasoning`)
 
 An assistant turn's reasoning is stored one of two ways, and chat templates

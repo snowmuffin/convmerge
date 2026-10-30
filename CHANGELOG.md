@@ -25,6 +25,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   answer-length distributions. `--card README.md` writes a dataset card with
   Hub front matter (license, size, sources, steps, how to rebuild); nothing
   is uploaded. The functions are in `convmerge.report`.
+- `convmerge render` (and the recipe's `render:` step, after `tokens`) writes
+  `{"text": ...}` rows rendered with the model's chat template for trainers
+  that take plain text; `meta` is kept. `--assistant-spans` adds the
+  `[start, end)` character offsets of the assistant turns to train on (turns
+  marked `"train": false` are left out); rows whose template does not render
+  each turn as a prefix are dropped and counted rather than masked wrongly.
+  Preference rows are counted, not rendered. `render_jsonl` and
+  `RenderStats` are in the API. Needs `convmerge[tokens]`.
 
 ### Documentation
 

@@ -102,6 +102,14 @@
   --max-tokens
   --output, -o
   --rejects
+[convmerge render]
+  --input, -i required
+  --output, -o required
+  --tokenizer required
+  --revision
+  --hf-token
+  --chat-template
+  --assistant-spans (switch)
 [convmerge llamafactory-info]
   --input, -i required
   --name required

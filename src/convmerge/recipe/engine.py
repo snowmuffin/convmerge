@@ -100,6 +100,8 @@ def build_steps(
         stages.append(("decontaminated", lambda src, out: _decontam_step(recipe, src, out)))
     if recipe.tokens is not None:
         stages.append(("filtered", lambda src, out: _tokens_step(recipe, src, out)))
+    if recipe.render is not None:
+        stages.append(("rendered", lambda src, out: _render_step(recipe, src, out)))
     last = converted[names[0]]
     for i, (label, make) in enumerate(stages):
         final = i == len(stages) - 1 and recipe.split is None
@@ -132,6 +134,8 @@ def _check_recipe_paths(recipe: Recipe, steps: list[Step]) -> None:
         inputs.append(recipe.filter.rules_file)
     if recipe.tokens is not None:
         inputs.extend([recipe.tokens.local, recipe.tokens.chat_template])
+    if recipe.render is not None:
+        inputs.extend([recipe.render.local, recipe.render.chat_template])
     if recipe.mix is not None and recipe.mix.tokenizer:
         local = Path(recipe.mix.tokenizer).expanduser()
         if local.exists():
@@ -417,6 +421,41 @@ def _tokens_step(recipe: Recipe, src: Path, out: Path) -> Step:
         else None,
     }
     return Step("tokens", "tokens", inputs, out, options, run)
+
+
+def _render_step(recipe: Recipe, src: Path, out: Path) -> Step:
+    from convmerge.fetch.auth import resolve_token
+    from convmerge.render import RenderStats, render_jsonl
+    from convmerge.tokens import load_tokenizer
+
+    spec = recipe.render
+    assert spec is not None
+    inputs = [src]
+    if spec.local is not None:
+        inputs.append(spec.local)
+    if spec.chat_template is not None:
+        inputs.append(spec.chat_template)
+
+    def run(stage: Path) -> dict[str, Any]:
+        name = str(spec.local) if spec.local is not None else spec.tokenizer
+        tok = load_tokenizer(name, revision=spec.revision, token=resolve_token(recipe.auth.hf))
+        template = spec.chat_template.read_text(encoding="utf-8") if spec.chat_template else None
+        st = RenderStats()
+        render_jsonl(src, stage, tokenizer=tok, chat_template=template,
+                     assistant_spans=spec.assistant_spans, stats=st)  # fmt: skip
+        report = st.to_report()
+        report["tokenizer"] = spec.tokenizer
+        return report
+
+    options = {
+        "tokenizer": spec.tokenizer,
+        "revision": spec.revision,
+        "assistant_spans": spec.assistant_spans,
+        "chat_template": _display(spec.chat_template, recipe.base_dir)
+        if spec.chat_template
+        else None,
+    }
+    return Step("render", "render", inputs, out, options, run)
 
 
 def _split_steps(recipe: Recipe, src: Path) -> list[Step]:

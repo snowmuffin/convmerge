@@ -356,6 +356,12 @@ convmerge tokens -i ./train/decontam.jsonl --tokenizer Qwen/Qwen2.5-7B-Instruct 
 # it errors rather than splitting duplicate/--keys groups across train and validation.
 convmerge split -i ./train/fit.jsonl -o ./train/train.jsonl --val 0.02   # + train.val.jsonl
 
+# For trainers that take plain text: {"text": ...} rendered with the model's chat
+# template (meta kept). --assistant-spans adds the [start, end) character offsets
+# of the assistant turns to train on. Run it last. Needs convmerge[tokens].
+convmerge render -i ./train/train.jsonl -o ./train/train.text.jsonl \
+  --tokenizer Qwen/Qwen2.5-7B-Instruct --assistant-spans
+
 # LLaMA-Factory: add the dataset_info.json entry for a --format sharegpt file.
 convmerge llamafactory-info -i ./data/sft.jsonl --name my_sft --info ./data/dataset_info.json
 
@@ -432,8 +438,7 @@ tokens.
 
 **Not available yet.** These are planned as optional, opt-in steps and are
 not part of this release: scoring and labeling rows with a model served over
-an HTTP endpoint, building preference pairs, writing chat-template-rendered
-text, packing and curriculum ordering, downloading and converting media, and
+an HTTP endpoint, building preference pairs, packing and curriculum ordering, downloading and converting media, and
 extracting text from HTML pages. Until then, run them as separate steps of
 a larger pipeline and bring the results in as JSON / JSONL / Parquet.
 

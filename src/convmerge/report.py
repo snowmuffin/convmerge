@@ -147,6 +147,15 @@ def _step(name: str, entry: dict[str, Any]) -> dict[str, Any] | None:
             **_nonzero(st, "over_limit", "unreadable", "invalid_json"),
             **({"template_errors": errors} if errors else {}),
         }
+    elif name == "render":
+        rows_in, rows_out = st.get("rows"), st.get("written")
+        errors = sum(st.get("template_errors", {}).values())
+        reasons = {
+            **_nonzero(
+                st, "pairs", "unstable_spans", "no_trained_turn", "unreadable", "invalid_json"
+            ),
+            **({"template_errors": errors} if errors else {}),
+        }
     elif name.startswith("split."):
         part = name.split(".", 1)[1]
         rows_in, rows_out = st.get("total"), st.get(part)

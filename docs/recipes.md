@@ -157,7 +157,7 @@ decontam:
 ### Tokens and split
 
 Stages run in this order: sources → `mix` → `dedupe` → `filter` →
-`decontam` → `tokens` → `split`.
+`decontam` → `tokens` → `render` → `split`.
 
 | Key | Default | Meaning |
 |-----|---------|---------|
@@ -165,6 +165,9 @@ Stages run in this order: sources → `mix` → `dedupe` → `filter` →
 | `tokens.max_tokens` | — | Drop rows longer than this (a preference pair counts as its longer side). |
 | `tokens.revision` | — | Tokenizer revision; pin it for fully reproducible builds. |
 | `tokens.chat_template` | the tokenizer's | A Jinja file to render with instead (a step input). |
+| `render` | — | `true`, or a mapping: write `{"text": ...}` rows rendered with the chat template (see `convmerge render`). The other stages read conversations, so it runs after them. |
+| `render.tokenizer`, `render.revision`, `render.chat_template` | the `tokens` step's | Required when the recipe has no `tokens` step. |
+| `render.assistant_spans` | `false` | Add `assistant_spans`, the character offsets of the assistant turns to train on. |
 | `split.val` / `split.val_rows` | — | One of: a fraction of rows (hash-based, about that many) or an exact count; `val_rows` errors if its boundary would split a duplicate/`keys` group. |
 | `split.seed` | `42` | |
 | `split.keys` | whole row | Hash only these top-level keys, so rows sharing them stay on one side. |
@@ -172,7 +175,10 @@ Stages run in this order: sources → `mix` → `dedupe` → `filter` →
 
 `tokens` drops rows the chat template rejects and rows over `max_tokens`
 (the report lists both, with the length distribution, and the warnings and
-`hints` described under `convmerge tokens` in the README). `split` assigns rows
+`hints` described under `convmerge tokens` in the README). `render` drops
+rows the template rejects, preference rows, and, with `assistant_spans`,
+rows whose turns cannot be located (see [format.md](format.md#rendered-text-convmerge-render)).
+`split` assigns rows
 by content hash, so duplicates never straddle train and validation; it runs
 as two steps, `split.train` and `split.val`, that re-run independently.
 

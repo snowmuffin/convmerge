@@ -79,6 +79,8 @@ dedupe: true                    # or { keys: [messages], algorithm: md5 }
 # tokens:                       # needs convmerge[tokens]; keeps rows that render and fit
 #   tokenizer: Qwen/Qwen2.5-7B-Instruct
 #   max_tokens: 4096
+# render:                       # last: {"text": ...} rows with the tokens step's template
+#   assistant_spans: true       # + character spans of the assistant turns to train on
 # split:                        # train -> output, validation -> <output>.val.jsonl
 #   val: 0.02                   # or val_rows: 1000
 """
