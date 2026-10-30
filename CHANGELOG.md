@@ -7,13 +7,74 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-10-30
+
+Bounded memory for near-duplicate removal and for large mixes, written
+contracts for the large-scale roadmap ([design
+note](docs/design/large-scale-strategy.md)), and baseline measurements behind
+it. Outputs are unchanged: the same input and seed give the same bytes as
+1.6.5.
+
 ### Added
 
+- `dedupe --near --seen-store sqlite` (`deduplicate_near_jsonl(seen_store=
+  "sqlite", seen_db=...)`) keeps the LSH band index in a disk-backed SQLite
+  table instead of a Python `set`. Every earlier kept row's band keys stay
+  queryable however much of the table has left the 64 MiB page cache, so the
+  kept and dropped rows are exactly those of the in-memory index, with any
+  `--workers`. The temporary database is removed at the end, also on failure;
+  `--seen-db PATH` keeps it, and keys already in it count as seen. On 200,000
+  high-uniqueness rows, peak memory was 115 MB instead of 232 MB; at 600,000
+  rows 160 MB instead of 690 MB, and still 161 MB at 1.2 million rows. Runs
+  take 19-25% longer. (#60)
+- `benchmarks/bench.py` measures exact and near-duplicate removal with both
+  stores on a high-uniqueness input, and `--json` records the measurement
+  conditions (Python, platform, CPU count, input sizes) with the results. (#64)
 - Every published tag gets a GitHub Release: the CHANGELOG section as notes,
   with the exact sdist and wheel PyPI serves (sha256-checked) attached. The
   publish workflow creates it after the PyPI upload and refuses a tag whose
   version has no CHANGELOG section; run the `GitHub Releases` workflow by
   hand to backfill existing tags.
+
+### Changed
+
+- `mix` (sampler v2) keeps at most 128 shuffle bucket files open. Beyond 128
+  buckets (outputs over 3.2 million rows), consecutive buckets share a file
+  and are split apart when the output is written, so a mix of any size stays
+  within the open-file limit; 1.6.5 failed with "Too many open files" once
+  the buckets outnumbered it (about 6 million output rows on macOS's default
+  limit of 256). Buckets are deleted as soon as they are read, so the
+  temporary disk space drops from about twice the output size to about once.
+  The sampled and skipped line numbers, and the numbers of unreadable lines,
+  take 8 bytes each instead of about 66 in a `frozenset`. Outputs for a given
+  seed are byte-for-byte those of 1.6.5, now pinned by tests. (#63)
+
+### Documentation
+
+- [Large-scale processing strategy](docs/design/large-scale-strategy.md): the
+  roadmap draft reviewed in #59-#64, with measured, cited and hypothetical
+  figures kept apart; the shard and batch contract for OpenAssistant message
+  rows (#59); the global lookup contract and lifecycle of the disk-backed
+  near-duplicate index (#60); a JSON engine compatibility table measured
+  against orjson (#61); the corrected Ray `ActorPoolStrategy` example, marked
+  as a design sketch (#62); mix v2's memory, open-file and temporary-disk
+  budget (#63); and baseline benchmarks (#64).
+- `convert_records` documents how to batch OpenAssistant message rows: cut
+  between trees, concatenate in input order, add up stats with
+  `ConvertStats.merge`. Tests pin a split inside a tree being dropped and
+  counted, never silently lost. (#59)
+- A test pins what the JSON reader accepts today (NaN, Infinity, integers
+  beyond 64 bits, duplicate keys, BOMs inside a file), the baseline a faster
+  optional engine must match. (#61)
+
+### Testing
+
+- The `tokens` reasoning test no longer assumes transformers before 5.21.
+  Since 5.21, `apply_chat_template` copies a turn's `thinking` into
+  `reasoning_content`, so a gpt-oss style file is rendered by templates that
+  read `reasoning_content` and `tokens` rightly reports nothing dropped. The
+  test now checks a dropped final trace with a template that renders no
+  reasoning, and the `thinking` case against what the installed release does.
 
 ## [1.6.5] - 2026-10-06
 

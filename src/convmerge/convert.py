@@ -456,6 +456,15 @@ def convert_records(
     records). ``on_invalid="fail"`` raises :class:`InvalidExampleError` with
     the 1-based record number.
 
+    OpenAssistant message rows are folded into one conversation per run of
+    consecutive rows of the same tree, within one call. To convert in batches
+    or shards, cut only between trees: a tree split across calls is converted
+    part by part, and the parts are dropped and counted in ``stats`` (for
+    example as ``missing_root``) instead of becoming the conversation.
+    Concatenating the outputs of tree-aligned batches in input order, and
+    adding up their stats with :meth:`ConvertStats.merge`, gives the result of
+    one call.
+
     >>> rows = list(convert_records([{"instruction": "Hi", "output": "Hello"}]))
     >>> rows[0]["messages"][1]
     {'role': 'assistant', 'content': 'Hello'}

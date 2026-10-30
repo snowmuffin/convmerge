@@ -420,3 +420,67 @@ def test_labeled_layouts_need_every_key() -> None:
                    {"response1": "a", "response2": "b", "context": "x"},
                    {"human_ref_A": "a", "human_ref_B": "b", "labels": 1}):  # fmt: skip
         assert not is_preference_record(record)
+
+
+# Batch boundaries (issue #59): the message rows of one tree are one unit. A
+# shard or batch split must fall between trees; a split inside a tree converts
+# each part on its own, and the parts are counted, never silently lost.
+_COUNTERS = ("lines_read", "written", "no_example", "grouped", "dropped", "skipped")
+
+
+def _counts(st: ConvertStats) -> tuple[int, ...]:
+    return tuple(getattr(st, name) for name in _COUNTERS)
+
+
+def test_a_batch_split_inside_a_tree_is_counted_not_lost() -> None:
+    rows = [
+        {"message_tree_id": "tree-1", "message_id": "root", "parent_id": None,
+         "role": "prompter", "text": "Hello"},
+        {"message_tree_id": "tree-1", "message_id": "reply", "parent_id": "root",
+         "role": "assistant", "text": "Hi"},
+    ]  # fmt: skip
+    whole = ConvertStats()
+    assert len(list(convert_records(rows, stats=whole))) == 1
+    split = ConvertStats()
+    for row in rows:
+        part = ConvertStats()
+        assert list(convert_records([row], stats=part)) == []
+        split.merge(part)
+    # Each half is a tree of its own, without an answer or without its root:
+    # both are dropped with a reason, as a file that starts mid-tree is.
+    assert _counts(whole) == (2, 1, 0, 1, 0, 0)
+    assert _counts(split) == (2, 0, 0, 0, 2, 0)
+    assert sum(split.drop_reasons.values()) == 2 and "missing_root" in split.drop_reasons
+
+
+def test_batches_cut_between_trees_match_one_pass() -> None:
+    trees = [[{**r, "message_tree_id": f"t{n}", "message_id": f"{n}{r['message_id']}",
+               "parent_id": r["parent_id"] and f"{n}{r['parent_id']}"} for r in FLAT]
+             for n in range(4)]  # fmt: skip
+    plain = [{"instruction": f"q{n}", "output": f"a{n}"} for n in range(3)]
+    stream = [*trees[0], plain[0], *trees[1], *trees[2], plain[1], plain[2], *trees[3]]
+    whole = ConvertStats()
+    expected = list(convert_records(stream, stats=whole))
+    # Cut only where a tree ends: at every row that is not followed by the same tree.
+    cuts = [i + 1 for i in range(len(stream) - 1)
+            if stream[i].get("message_tree_id") is None
+            or stream[i]["message_tree_id"] != stream[i + 1].get("message_tree_id")]  # fmt: skip
+    for size in (1, 2, 3):
+        bounds = [0, *cuts[size - 1 :: size], len(stream)]
+        merged, out = ConvertStats(), []
+        for lo, hi in zip(bounds, bounds[1:]):
+            part = ConvertStats()
+            out += convert_records(stream[lo:hi], stats=part)
+            merged.merge(part)
+        assert out == expected  # batches concatenated in input order
+        assert _counts(merged) == _counts(whole)
+    assert _counts(whole) == (len(stream), 7, 0, 20, 0, 0)
+
+
+def test_trees_group_by_consecutive_rows() -> None:
+    """One tree's rows interleaved with another's are separate units, as in one pass."""
+    t2 = [_msg("x", None, "prompter", "Hola", tree="t2"),
+          _msg("y", "x", "assistant", "¡Hola!", rank=0, tree="t2")]  # fmt: skip
+    st = ConvertStats()
+    out = list(convert_records([*FLAT[:3], *t2, *FLAT[3:]], stats=st))
+    assert len(out) == 2 and st.drop_reasons == {"missing_root": 1}  # t1's tail

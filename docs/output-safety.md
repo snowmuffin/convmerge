@@ -18,7 +18,10 @@ also fails, a warning names the leftover path and preserves the original error.
 Normal empty input is a successful empty result, not a failure.
 
 Temporary output needs disk space for the new file in addition to the previous
-file. `mix` can additionally use its existing shuffle buckets. Streaming is
+file. `mix` also keeps its shuffle buckets next to the output: about one more
+copy of the output, given back bucket by bucket as the final file is written
+(since 1.7; before, the buckets stayed until the end, so twice the output
+size was needed). Streaming is
 preserved: safety staging does not buffer the dataset in Python memory.
 Final paths are completed artifacts, not a way to tail progress.
 

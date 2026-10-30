@@ -7,6 +7,8 @@ import logging
 import math
 import random
 import tempfile
+from array import array
+from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass, field
 from itertools import chain
 from pathlib import Path
@@ -83,6 +85,10 @@ MIX_UNITS: tuple[str, ...] = ("rows", "chars", "tokens")
 # each, so peak memory is bounded by one bucket rather than the whole output.
 # A constant (not tuned to the machine) keeps results reproducible anywhere.
 _BUCKET_LINES = 25_000
+# At most this many bucket files are open at once (macOS allows 256 open
+# files by default). More buckets share files, split up again when read; the
+# output is the same either way.
+_MAX_OPEN_FILES = 128
 
 
 def mix_files(
@@ -240,7 +246,7 @@ def _warn_off_target(result: MixResult) -> None:
     )  # fmt: skip
 
 
-def _warn_unreadable(sources: list[tuple[Path, list[int]]]) -> None:
+def _warn_unreadable(sources: Sequence[tuple[Path, Sequence[int]]]) -> None:
     """Say which sources had lines that could not be read (they are left out)."""
     hit = [(path, lines) for path, lines in sources if lines]
     if not hit:
@@ -431,7 +437,7 @@ def _mix_v2(
         _scan(src.path, encoding, measure, by_sample, random.Random(f"{seed}:{i}"), max_tokens)
         for i, src in enumerate(normalized)
     ]
-    _warn_unreadable([(src.path, sorted(scan.invalid)) for src, scan in zip(normalized, scans)])
+    _warn_unreadable([(src.path, scan.invalid) for src, scan in zip(normalized, scans)])
     available = [scan.rows for scan in scans]
     if total is None:
         targets = list(available)
@@ -465,38 +471,131 @@ def _mix_v2(
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     with tempfile.TemporaryDirectory(prefix=".convmerge-mix-", dir=output_path.parent) as tmp:
-        buckets = [Path(tmp) / f"{i}.jsonl" for i in range(n_buckets)]
-        handles = [b.open("w", encoding="utf-8") for b in buckets] if n_buckets > 1 else []
+        buckets = _Buckets(Path(tmp), n_buckets) if n_buckets > 1 else None
         in_memory: list[str] = []
         try:
             # Pass 2: stream each source, emit chosen lines to random buckets.
             for src, plan, scan in zip(normalized, plans, scans):
                 if not plan.size:
                     continue
+                copies = plan.counter()
                 for i, raw in enumerate(_valid_raw_lines(src.path, encoding, scan.invalid)):
-                    for _ in range(plan.copies(i)):
-                        if handles:
-                            handles[rng.randrange(n_buckets)].write(raw + "\n")
+                    for _ in range(copies(i)):
+                        if buckets is not None:
+                            buckets.write(rng.randrange(n_buckets), raw)
                         else:
                             in_memory.append(raw)
         finally:
-            for h in handles:
-                h.close()
+            if buckets is not None:
+                buckets.close()
 
         with atomic_text_writer(output_path) as out:
-            if not handles:
+            if buckets is None:
                 rng.shuffle(in_memory)
                 out.writelines(x + "\n" for x in in_memory)
-            for bucket in buckets if handles else []:
-                with bucket.open(encoding="utf-8") as f:
-                    lines = f.readlines()
-                rng.shuffle(lines)
-                out.writelines(lines)
-                del lines
+            else:
+                # A bucket holds about _BUCKET_LINES lines; it is shuffled whole.
+                for lines in buckets.contents():
+                    rng.shuffle(lines)
+                    out.writelines(lines)
+                    del lines
 
     return MixResult(total_written=n_out, seed=seed, output=output_path, sources=stats,
                      sampler="v2", by=by, by_sample=by_sample,
                      max_tokens=max_tokens)  # fmt: skip
+
+
+class _Buckets:
+    """``n`` shuffle buckets as files under ``root``, at most ``_MAX_OPEN_FILES`` open.
+
+    Up to that many buckets, each is a file of its own. Beyond it, each file
+    holds a run of consecutive buckets with every line tagged ``"<bucket>\\t"``,
+    and :meth:`contents` splits it into its buckets (in stages, within the
+    same limit) before reading them. Lines keep their order within a bucket,
+    so the buckets hold the same lines either way. A line never contains a
+    newline (sources are read in text mode), so the tag is unambiguous.
+    """
+
+    def __init__(self, root: Path, n: int) -> None:
+        self._n = n
+        self._per = -(-n // _MAX_OPEN_FILES)  # buckets per file
+        self._files = [root / f"{i}.jsonl" for i in range(-(-n // self._per))]
+        self._handles: list[Any] = []
+        try:
+            for path in self._files:
+                self._handles.append(path.open("w", encoding="utf-8"))
+        except BaseException:
+            self.close()
+            raise
+
+    def write(self, bucket: int, raw: str) -> None:
+        if self._per == 1:
+            self._handles[bucket].write(raw + "\n")
+        else:
+            self._handles[bucket // self._per].write(f"{bucket}\t{raw}\n")
+
+    def close(self) -> None:
+        for h in self._handles:
+            h.close()
+
+    def contents(self) -> Iterator[list[str]]:
+        """Each bucket's lines (with their newlines), bucket 0 first.
+
+        Each file is deleted once read, so the buckets give back their disk
+        space while the output grows.
+        """
+        for i, path in enumerate(self._files):
+            lo = i * self._per
+            yield from _bucket_lines(path, lo, min(self._n, lo + self._per), self._per > 1)
+
+
+def _bucket_lines(path: Path, lo: int, hi: int, tagged: bool) -> Iterator[list[str]]:
+    """Buckets ``lo`` .. ``hi - 1`` from ``path``, whose lines are ``tagged`` or one bucket's.
+
+    A tagged file can hold a single bucket: the last of a run.
+    """
+    if not tagged:
+        with path.open(encoding="utf-8") as f:
+            lines = f.readlines()
+        path.unlink()
+        yield lines
+        return
+    per = -(-(hi - lo) // _MAX_OPEN_FILES)
+    parts = [path.with_name(f"{path.stem}.{i}.jsonl") for i in range(-(-(hi - lo) // per))]
+    handles: list[Any] = []
+    try:
+        for part in parts:
+            handles.append(part.open("w", encoding="utf-8"))
+        with path.open(encoding="utf-8") as f:
+            for line in f:
+                tag, _, raw = line.partition("\t")
+                handles[(int(tag) - lo) // per].write(line if per > 1 else raw)
+    finally:
+        for h in handles:
+            h.close()
+    path.unlink()
+    for i, part in enumerate(parts):
+        sub = lo + i * per
+        yield from _bucket_lines(part, sub, min(hi, sub + per), per > 1)
+
+
+def _ordinals(values: list[int]) -> array:
+    """``values`` sorted, at 8 bytes each instead of a ``frozenset``'s ~66."""
+    values.sort()
+    return array("q", values)
+
+
+def _member(ordinals: Sequence[int]) -> Callable[[int], bool]:
+    """Test membership in sorted ``ordinals``, for numbers asked in increasing order."""
+    pos = 0
+
+    def has(i: int) -> bool:
+        nonlocal pos
+        while pos < len(ordinals) and ordinals[pos] < i:
+            pos += 1
+        return pos < len(ordinals) and ordinals[pos] == i
+
+    return has
 
 
 @dataclass
@@ -505,16 +604,22 @@ class _Plan:
 
     base: int = 0
     """Every line is emitted this many times..."""
-    extra: frozenset[int] = frozenset()
-    """...plus once more for these ordinals..."""
-    skip: frozenset[int] = frozenset()
-    """...except these ordinals, which are emitted ``base - 1`` times."""
+    extra: Sequence[int] = ()
+    """...plus once more for these sorted ordinals..."""
+    skip: Sequence[int] = ()
+    """...except these sorted ordinals, which are emitted ``base - 1`` times."""
     size: int = 0
 
-    def copies(self, i: int) -> int:
-        if i in self.skip:
-            return self.base - 1
-        return self.base + (1 if i in self.extra else 0)
+    def counter(self) -> Callable[[int], int]:
+        """``copies(i)``: how many times to emit line ``i``, for ``i`` = 0, 1, 2, ..."""
+        in_skip, in_extra = _member(self.skip), _member(self.extra)
+
+        def copies(i: int) -> int:
+            if in_skip(i):
+                return self.base - 1
+            return self.base + (1 if in_extra(i) else 0)
+
+        return copies
 
 
 def _plan(rng: random.Random, available: int, target: int, oversample: bool) -> _Plan:
@@ -523,19 +628,20 @@ def _plan(rng: random.Random, available: int, target: int, oversample: bool) -> 
     if target <= available:
         # Remember whichever set is smaller: the chosen lines or the rest.
         if target * 2 <= available:
-            return _Plan(extra=frozenset(rng.sample(range(available), target)), size=target)
-        skipped = frozenset(rng.sample(range(available), available - target))
+            return _Plan(extra=_ordinals(rng.sample(range(available), target)), size=target)
+        skipped = _ordinals(rng.sample(range(available), available - target))
         return _Plan(base=1, skip=skipped, size=target)
     if not oversample:
         return _Plan(base=1, size=available)
     base, rest = divmod(target, available)
-    return _Plan(base=base, extra=frozenset(rng.sample(range(available), rest)), size=target)
+    return _Plan(base=base, extra=_ordinals(rng.sample(range(available), rest)), size=target)
 
 
 @dataclass
 class _Scan:
     rows: int
-    invalid: frozenset[int]
+    invalid: Sequence[int]
+    """Line numbers that could not be read, in increasing order."""
     units: float
     reasoning: int
     measured: int = 0
@@ -558,7 +664,7 @@ def _scan(
     times the row count. With ``cap``, a row counts as at most ``cap`` units
     and ``over`` counts the rows above it (scaled like ``units`` when sampled).
     """
-    invalid: list[int] = []
+    invalid = array("q")
     rows = units = reasoning = over = 0
     if measure is not None and cap is not None:
         full = measure
@@ -593,17 +699,18 @@ def _scan(
         measured = len(reservoir)
         units = sum(measure(v) for v in reservoir) * rows / measured
         over = round(over * rows / measured)
-    return _Scan(rows, frozenset(invalid), units, reasoning, measured, over)
+    return _Scan(rows, invalid, units, reasoning, measured, over)
 
 
-def _valid_raw_lines(path: Path, encoding: str, invalid: frozenset[int]):
+def _valid_raw_lines(path: Path, encoding: str, invalid: Sequence[int]):
     """Yield the same lines as :func:`iter_jsonl` (as ``raw``) without parsing.
 
     Mirrors its blank-line and BOM handling; ``invalid`` holds the line numbers
-    :func:`_scan` found unparseable.
+    :func:`_scan` found unparseable, in increasing order.
     """
+    is_invalid = _member(invalid)
     for number, raw in iter_raw_lines(path, encoding=encoding):
-        if raw and number not in invalid:
+        if raw and not is_invalid(number):
             yield raw
 
 

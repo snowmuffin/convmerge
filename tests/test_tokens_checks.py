@@ -122,13 +122,29 @@ def test_reasoning_dropped(tmp_path: Path, tok_dir: Path) -> None:
     assert (st.reasoning_dropped, st.reasoning_dropped_final) == (1, 0)
     assert any("--reasoning-turns last" in h for h in st.hints())
 
-    # A gpt-oss style file (thinking) against a template that reads reasoning_content.
-    thinking = _write(
-        tmp_path / "t.jsonl", [_msgs(("user", "q"), ("assistant", "a"), thinking="t r")]
+    # The final answer's trace, against a template that renders no reasoning at all.
+    final = _write(
+        tmp_path / "f.jsonl",
+        [_msgs(("user", "q"), ("assistant", "a"), reasoning_content="t r")],
     )
-    st = check_tokens(thinking, tokenizer=str(tok_dir))
+    st = check_tokens(final, tokenizer=str(tok_dir), chat_template=NO_END)
     assert (st.reasoning_dropped, st.reasoning_dropped_final) == (1, 1)
     assert any("--reasoning thinking" in h for h in st.hints())
+
+    # A gpt-oss style file (thinking) against a template that reads reasoning_content:
+    # transformers 5.21+ copies `thinking` into `reasoning_content` before rendering,
+    # older releases do not. The check reports what the installed release renders.
+    from transformers import AutoTokenizer
+
+    row = _msgs(("user", "q"), ("assistant", "a"), thinking="t r")
+    thinking = _write(tmp_path / "t.jsonl", [row])
+    rendered = AutoTokenizer.from_pretrained(str(tok_dir)).apply_chat_template(
+        row["messages"], tokenize=False
+    )
+    lost = "t r" not in rendered
+    st = check_tokens(thinking, tokenizer=str(tok_dir))
+    assert (st.reasoning_dropped, st.reasoning_dropped_final) == (lost, lost)
+    assert any("--reasoning thinking" in h for h in st.hints()) == lost
 
     inline = _write(
         tmp_path / "i.jsonl", [_msgs(("user", "q"), ("assistant", "<think>t</think> a"))]
