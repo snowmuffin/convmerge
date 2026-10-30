@@ -170,6 +170,36 @@ byte-for-byte, and `--rejects` gets the rest; without `-o` the command exits
 1 when a reference is broken. Nothing is downloaded, and without
 `--check-urls` nothing is sent over the network.
 
+### Curriculum order (`convmerge order`)
+
+`convmerge order` writes the rows of a file in a deterministic order for
+curriculum training, byte-for-byte:
+
+```bash
+convmerge order -i train.jsonl -o train.ordered.jsonl --by length --stages 3
+convmerge order -i train.jsonl -o train.ordered.jsonl --by meta:difficulty --seed 7
+```
+
+| `--by` | Ranks rows by |
+|---|---|
+| `length` (default) | characters of the conversation (a preference row: prompt and chosen answer) |
+| `turns` | user turns |
+| `meta:FIELD` | a number under `meta`, such as a score `convert --keep-fields` carried there |
+
+Rows go smallest first (`--descending` for largest first). Ties are broken
+by a hash of the row and `--seed`, never by input order, so the same rows in
+any order give the same file. `--stages N` cuts the ranked rows into N
+stages of nearly equal size and shuffles each stage by the same seeded hash,
+so the model sees the stages in order without meeting near-identical rows
+back to back. The report gives each stage's row count and key range. Rows the
+key cannot rank (no readable conversation, a missing or non-numeric `meta`
+value) go last and are counted as `unranked`.
+
+The order only matters if the trainer reads the file in order. Most shuffle
+training data by default. LLaMA-Factory has `disable_shuffling: true`; for
+other trainers, look for their sequential-sampling option. In a recipe, the
+`order:` step runs after `tokens` (see [recipes.md](recipes.md#tokens-and-split)).
+
 ### Rendered text (`convmerge render`)
 
 For trainers that take plain text, `convmerge render` writes each

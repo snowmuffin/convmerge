@@ -51,6 +51,7 @@ _COMMANDS: dict[str, tuple[Callable, Callable]] = {
     "tokens": (_data._add_tokens, _data._cmd_tokens),
     "render": (_data._add_render, _data._cmd_render),
     "media": (_data._add_media, _data._cmd_media),
+    "order": (_data._add_order, _data._cmd_order),
     "llamafactory-info": (_data._add_llamafactory_info, _data._cmd_llamafactory_info),
     "axolotl-config": (_data._add_axolotl_config, _data._cmd_axolotl_config),
     "fetch": (_fetch._add_fetch, _fetch._cmd_fetch),

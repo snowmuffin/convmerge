@@ -30,6 +30,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   answer (each requested once, only with `--check-urls`), and placeholders
   without a reference are reported. `-o` / `--rejects` split the rows;
   nothing is downloaded. `check_media` and `MediaStats` are in the API.
+- `convmerge order` (and the recipe's `order:` step, after `tokens`) writes a
+  file's rows in a deterministic curriculum order, byte-for-byte: by
+  `length`, user `turns`, or a number under `meta` (`meta:FIELD`), ties
+  broken by a seeded hash so input order does not matter. `--stages N` cuts
+  the ranking into N stages shuffled within; the report gives each stage's
+  key range. `order_jsonl` and `OrderStats` are in the API.
 - `convmerge render` (and the recipe's `render:` step, after `tokens`) writes
   `{"text": ...}` rows rendered with the model's chat template for trainers
   that take plain text; `meta` is kept. `--assistant-spans` adds the

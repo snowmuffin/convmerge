@@ -360,6 +360,10 @@ convmerge split -i ./train/fit.jsonl -o ./train/train.jsonl --val 0.02   # + tra
 # paths; --check-urls requests each URL once). -o keeps the rows that pass.
 convmerge media -i ./train/vl.jsonl --root ./data -o ./train/vl.ok.jsonl
 
+# Curriculum order: by length, user turns, or a meta score, optionally in stages
+# shuffled within (deterministic for --seed). Turn off the trainer's shuffling.
+convmerge order -i ./train/train.jsonl -o ./train/train.ordered.jsonl --by length --stages 3
+
 # For trainers that take plain text: {"text": ...} rendered with the model's chat
 # template (meta kept). --assistant-spans adds the [start, end) character offsets
 # of the assistant turns to train on. Run it last. Needs convmerge[tokens].
@@ -442,7 +446,7 @@ tokens.
 
 **Not available yet.** These are planned as optional, opt-in steps and are
 not part of this release: scoring and labeling rows with a model served over
-an HTTP endpoint, building preference pairs, packing and curriculum ordering, downloading and converting media, and
+an HTTP endpoint, building preference pairs, packing, downloading and converting media, and
 extracting text from HTML pages. Until then, run them as separate steps of
 a larger pipeline and bring the results in as JSON / JSONL / Parquet.
 

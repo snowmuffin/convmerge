@@ -147,6 +147,10 @@ def _step(name: str, entry: dict[str, Any]) -> dict[str, Any] | None:
             **_nonzero(st, "over_limit", "unreadable", "invalid_json"),
             **({"template_errors": errors} if errors else {}),
         }
+    elif name == "order":
+        rows_in = rows_out = st.get("rows")
+        reasons = {}
+        note = f"by {st.get('by')}" + (f", {len(st['stages'])} stages" if st.get("stages") else "")
     elif name == "render":
         rows_in, rows_out = st.get("rows"), st.get("written")
         errors = sum(st.get("template_errors", {}).values())
