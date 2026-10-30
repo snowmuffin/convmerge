@@ -7,12 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Changed
+## [1.8.0] - 2026-10-30
 
-- PyYAML is a core dependency: YAML recipes, presets, fetch manifests, mix
-  configs and rules files work with `pip install convmerge`. The `[fetch]`
-  and `[preset]` extras add nothing now and are kept so existing install
-  commands keep working.
+Steps around the conversion that used to need a script of your own: score
+columns carried into `meta` and filtered on, a readable build report and a
+dataset card, chat-template-rendered text with assistant spans, media
+reference checks, and deterministic curriculum order. PyYAML is now part of
+the core install. Existing commands, flags and outputs are unchanged.
 
 ### Added
 
@@ -32,6 +33,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   answer-length distributions. `--card README.md` writes a dataset card with
   Hub front matter (license, size, sources, steps, how to rebuild); nothing
   is uploaded. The functions are in `convmerge.report`.
+- `convmerge render` (and the recipe's `render:` step, after `tokens`) writes
+  `{"text": ...}` rows rendered with the model's chat template for trainers
+  that take plain text; `meta` is kept. `--assistant-spans` adds the
+  `[start, end)` character offsets of the assistant turns to train on (turns
+  marked `"train": false` are left out); rows whose template does not render
+  each turn as a prefix are dropped and counted rather than masked wrongly.
+  Preference rows are counted, not rendered. `render_jsonl` and
+  `RenderStats` are in the API. Needs `convmerge[tokens]`.
 - `convmerge media` checks the image, audio and video references a file
   holds: local paths must exist (relative to `--root`), `http(s)` URLs must
   answer (each requested once, only with `--check-urls`), and placeholders
@@ -48,14 +57,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and LLaMA-Factory `"columns": {"prompt": "text"}` (`stage: pt`), each with
   a note that every token is trained on. The LLaMA-Factory guide names
   `disable_shuffling: true` for keeping a `convmerge order` file in order.
-- `convmerge render` (and the recipe's `render:` step, after `tokens`) writes
-  `{"text": ...}` rows rendered with the model's chat template for trainers
-  that take plain text; `meta` is kept. `--assistant-spans` adds the
-  `[start, end)` character offsets of the assistant turns to train on (turns
-  marked `"train": false` are left out); rows whose template does not render
-  each turn as a prefix are dropped and counted rather than masked wrongly.
-  Preference rows are counted, not rendered. `render_jsonl` and
-  `RenderStats` are in the API. Needs `convmerge[tokens]`.
+
+### Changed
+
+- PyYAML is a core dependency: YAML recipes, presets, fetch manifests, mix
+  configs and rules files work with `pip install convmerge`. The `[fetch]`
+  and `[preset]` extras add nothing now and are kept so existing install
+  commands keep working.
 
 ### Documentation
 
@@ -66,9 +74,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `scripts/datasets.py table`, which only wrote that README table, is removed.
 - The scope is stated once, in the README's "Out of scope": training models,
   training-job orchestration, and removing personal information stay out;
-  model-based scoring and labeling, preference generation, rendered text,
-  packing and curriculum, media and HTML are listed as planned and not yet
-  available. The README no longer claims that no extra uses Transformers
+  model-based scoring and labeling, preference generation, packing, media
+  download and HTML extraction are listed as planned and not yet available. The README no longer claims that no extra uses Transformers
   (`[tokens]` does, without PyTorch). `docs/format.md` links there instead
   of keeping its own list, CONTRIBUTING states when a core dependency is
   acceptable, and `docs/stability.md` says how reproducibility will extend
