@@ -25,6 +25,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   answer-length distributions. `--card README.md` writes a dataset card with
   Hub front matter (license, size, sources, steps, how to rebuild); nothing
   is uploaded. The functions are in `convmerge.report`.
+- `convmerge media` checks the image, audio and video references a file
+  holds: local paths must exist (relative to `--root`), `http(s)` URLs must
+  answer (each requested once, only with `--check-urls`), and placeholders
+  without a reference are reported. `-o` / `--rejects` split the rows;
+  nothing is downloaded. `check_media` and `MediaStats` are in the API.
 - `convmerge render` (and the recipe's `render:` step, after `tokens`) writes
   `{"text": ...}` rows rendered with the model's chat template for trainers
   that take plain text; `meta` is kept. `--assistant-spans` adds the

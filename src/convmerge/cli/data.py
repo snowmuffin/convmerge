@@ -457,6 +457,49 @@ def _add_tokens(sub: argparse._SubParsersAction) -> None:
     p.add_argument("--rejects", type=Path, default=None, help="Write the other rows here")
 
 
+def _add_media(sub: argparse._SubParsersAction) -> None:
+    p = sub.add_parser(
+        "media",
+        help="Check the images, audio and video a file refers to: local files exist, "
+        "URLs answer (--check-urls); -o keeps rows whose references all pass",
+        description="Media is kept by reference; this finds broken references before "
+        "training does. Nothing is downloaded. Exits 1 when a reference is broken and no "
+        "-o is given.",
+    )
+    p.add_argument("--input", "-i", type=Path, required=True)
+    p.add_argument("--root", type=Path, default=None,
+                   help="Resolve relative paths here (default: the input's directory)")  # fmt: skip
+    p.add_argument("--check-urls", action="store_true",
+                   help="Request each http(s) URL once (HEAD); off by default")  # fmt: skip
+    p.add_argument("--timeout", type=float, default=10.0, help="Seconds per URL (default 10)")
+    p.add_argument("--workers", type=_positive_int, default=8,
+                   help="URLs requested at once (default 8)")  # fmt: skip
+    p.add_argument("--output", "-o", type=Path, default=None,
+                   help="Write rows whose references all pass here")  # fmt: skip
+    p.add_argument("--rejects", type=Path, default=None, help="Write the other rows here")
+
+
+def _cmd_media(args: argparse.Namespace) -> None:
+    from convmerge.convert import REPORT_VERSION
+    from convmerge.media import MediaStats, check_media, summary_line
+
+    if not args.input.is_file():
+        print(f"error: input file not found: {args.input}", file=sys.stderr)
+        sys.exit(1)
+    stats = MediaStats()
+    check_media(args.input, root=args.root, check_urls=args.check_urls, timeout=args.timeout,
+                workers=args.workers, output=args.output, rejects=args.rejects,
+                stats=stats)  # fmt: skip
+    print(json.dumps({"version": REPORT_VERSION, **stats.to_report()}, ensure_ascii=False,
+                     indent=2))  # fmt: skip
+    print(summary_line(stats), file=sys.stderr)
+    if stats.not_checked.get("url"):
+        print(f"note: {count(stats.not_checked['url'], 'URL')} not checked; add --check-urls "
+              "to request them", file=sys.stderr)  # fmt: skip
+    if args.output is None and (stats.problems.total() or stats.unreadable):
+        sys.exit(1)
+
+
 def _add_render(sub: argparse._SubParsersAction) -> None:
     p = sub.add_parser(
         "render",

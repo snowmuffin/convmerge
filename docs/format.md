@@ -44,6 +44,8 @@ exactly like the line above; richer data adds only what it needs:
   (`videos` / `audios` likewise), every content as a list of parts, and
   `images` on every row (empty for text-only rows), so the file has one
   Arrow schema. See the [TRL guide](guides/trl.md#images-vision-language-models).
+  [`convmerge media`](#checking-media-references-convmerge-media) checks
+  that the references point at something.
 - `name` on a message when the source had one.
 
 ```json
@@ -141,6 +143,32 @@ LLaMA-Factory ranking rows for DPO / ORPO / reward modeling: the prompt as
 Pairs are built as for [`preference`](#preference). Answers that are
 multi-turn or tool calls are dropped as `unrepresentable_pair_continuation`
 (use `preference` with TRL for those).
+
+### Checking media references (`convmerge media`)
+
+Media stays a reference, so a moved folder or a dead link shows up only
+when training loads it. `convmerge media` reads any layout and checks every
+image, audio and video reference before that:
+
+```bash
+convmerge media -i vl.jsonl --root ./data              # local paths only, no network
+convmerge media -i vl.jsonl --check-urls -o ok.jsonl --rejects broken.jsonl
+```
+
+| Reference | Check |
+|---|---|
+| a path (relative ones against `--root`, default the input's directory), or `file://` | an existing file |
+| `http://`, `https://` | with `--check-urls`: answers below 400 to `HEAD` (or to a one-byte `GET` when the server refuses `HEAD`); each URL is requested once |
+| `data:` | inline, passes |
+| other schemes (`s3://`, `gs://`, …) | counted under `not_checked` |
+| a placeholder with no reference | `unresolved` |
+
+The JSON report counts references by type, problems (`missing_file`,
+`unresolved`, `bad_url`, `unreachable`) with up to three samples each, and
+what was not checked. `-o` keeps the rows whose references all pass,
+byte-for-byte, and `--rejects` gets the rest; without `-o` the command exits
+1 when a reference is broken. Nothing is downloaded, and without
+`--check-urls` nothing is sent over the network.
 
 ### Rendered text (`convmerge render`)
 

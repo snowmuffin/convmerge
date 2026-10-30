@@ -110,6 +110,14 @@
   --hf-token
   --chat-template
   --assistant-spans (switch)
+[convmerge media]
+  --input, -i required
+  --root
+  --check-urls (switch)
+  --timeout default=10.0
+  --workers default=8
+  --output, -o
+  --rejects
 [convmerge llamafactory-info]
   --input, -i required
   --name required
