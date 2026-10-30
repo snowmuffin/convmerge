@@ -14,6 +14,7 @@
   --report
   --tool-arguments choices=string|object
   --keep-meta nargs=?
+  --keep-fields
   --meta-key
   --meta
   --alpaca-multiturn choices=flatten|history|drop
@@ -70,14 +71,16 @@
   --input, -i required
   --output, -o
   --rejects
-  --enable choices=empty_answer|refusal|repetition|near_identical_pair|rejected_empty|length|slop|script default=[]
-  --disable choices=empty_answer|refusal|repetition|near_identical_pair|rejected_empty|length|slop|script default=[]
+  --enable choices=empty_answer|refusal|repetition|near_identical_pair|rejected_empty|length|slop|script|meta_min default=[]
+  --disable choices=empty_answer|refusal|repetition|near_identical_pair|rejected_empty|length|slop|script|meta_min default=[]
   --min-answer-chars default=1
   --min-chars
   --max-chars
   --repetition-max default=0.7
   --slop-max default=3
   --min-script default=[]
+  --meta-min default=[]
+  --meta-key default='meta'
   --rules-file
   --workers default=1
 [convmerge decontam]

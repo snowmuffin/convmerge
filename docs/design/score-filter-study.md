@@ -1,8 +1,8 @@
 # Score-filter study: does keeping the best-scored rows train a better model?
 
-Status: **draft design**. It becomes fixed when merged to `main`, before any
-full run; that commit is the pre-registration. Changes after that go in an
-"Amendment" section, written before any result is seen, as in the
+Status: **design fixed** when it was merged to `main`, before any run; that
+commit is the pre-registration. Changes after that go in an "Amendment"
+section, written before any result is seen, as in the
 [effect study](effect-study.md).
 
 This is gate A of the improvement plan: convmerge builds model-based scoring
@@ -113,15 +113,30 @@ those where R does better.
 - Anything about scores from a model judge, larger models or longer training.
 - Whether filtering helps for preference (DPO) data.
 
+## Amendment 1 (before any run)
+
+How packing is done, fixed while writing the tooling and before any run:
+
+- Packing uses TRL's `wrapped` strategy. It is the only one that runs on CPU:
+  the other strategies (`bfd`, `bfd_split`) need padding-free attention,
+  which needs FlashAttention. `wrapped` fills every sequence to exactly 512
+  tokens, as the design requires, but a row can be split across two
+  neighbouring sequences. The 512-token limit in preparation still means no
+  row is cut off and lost. Both arms are affected alike.
+- Rows are shuffled with the training seed before packing, so arm S is not
+  packed in score order.
+
 ## Before the run (not part of the fixed design)
 
-1. Implement the plan's first-stage item: carry score columns into `meta` at
-   convert time and filter by them. The study runs on that release.
-2. Add a preparation script that builds the pool and both arms, and add
-   `--packing` to `scripts/eval/effect/train_eval.py`. Packing is off by
-   default, so the effect study stays reproducible.
-3. Add a workflow, or inputs to `.github/workflows/effect.yml`, for the two
-   arms and five seeds.
+1. Done: `convert --keep-fields` and the `meta_min` filter rule. The study
+   runs from the repository checkout that has them.
+2. Done: `scripts/eval/score_filter/prepare.py` builds the pool and both
+   arms, `scripts/eval/score_filter/report.py` applies the reading rule (it
+   imports the effect study's code for it) and states the gate decision, and
+   `scripts/eval/effect/train_eval.py` has `--packing`, off by default.
+3. Done: the `Score-filter study` workflow
+   (`.github/workflows/score-filter.yml`): two arms and five seeds by
+   default.
 4. Do a dry run at a small scale and record the step time. In the effect
    study a step at 1,024 tokens took about 34 s on a standard runner, so 400
    steps at 512 should take about 2 hours. That is an estimate, and the dry

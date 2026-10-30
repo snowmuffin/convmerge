@@ -41,6 +41,7 @@ output_options:              # optional; CLI flags override each key
   media: urls                # urls | placeholders (TRL VLM: {"type": "image"} + images)
   meta:                      # constant fields under meta on every row
     dataset: my_dataset
+  keep_fields: []            # source fields copied under meta, e.g. [helpfulness]
 
 transforms:                  # optional; fixes for strict chat templates
   system: keep               # keep | fold | drop
@@ -51,7 +52,7 @@ transforms:                  # optional; fixes for strict chat templates
 ```
 
 CLI flags `--from`, `--format`, `--adapter-kwargs`, `--tool-arguments`, `--keep-meta`,
-`--meta-key`, `--alpaca-multiturn`, `--reasoning`, `--tool-content`, `--train-turns`, `--media`,
+`--meta-key`, `--keep-fields`, `--alpaca-multiturn`, `--reasoning`, `--tool-content`, `--train-turns`, `--media`,
 `--system`, `--merge-consecutive`, `--split-turns`, `--reasoning-turns`, and
 `--leading-assistant` override the preset
 when provided.
