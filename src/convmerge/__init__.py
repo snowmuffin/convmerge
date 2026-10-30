@@ -58,6 +58,8 @@ _EXPORTS: dict[str, str] = {
     "check_tokens": "convmerge.tokens",
     "TokenStats": "convmerge.tokens",
     "render_jsonl": "convmerge.render",
+    "check_media": "convmerge.media",
+    "MediaStats": "convmerge.media",
     "RenderStats": "convmerge.render",
     # quality
     "filter_jsonl": "convmerge.quality",
@@ -94,6 +96,7 @@ __all__ = [
     "JsonlDecodeError",
     "JsonlLine",
     "MapSpec",
+    "MediaStats",
     "MixResult",
     "MixSource",
     "NearDedupeStats",
@@ -111,6 +114,7 @@ __all__ = [
     "available_formats",
     "build_convert_config",
     "build_index",
+    "check_media",
     "check_tokens",
     "convert_file",
     "convert_records",
@@ -172,6 +176,7 @@ if TYPE_CHECKING:  # pragma: no cover - for type checkers and IDEs only
         register_emitter,
     )
     from convmerge.io import JsonlDecodeError, JsonlLine, ReadStats, iter_jsonl
+    from convmerge.media import MediaStats, check_media
     from convmerge.mix import MixResult, MixSource, mix_files
     from convmerge.models import ChatMessage, ContentPart, ToolCall, TrainingExample
     from convmerge.normalize.dedup import DedupeStats, deduplicate_jsonl

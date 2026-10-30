@@ -356,6 +356,10 @@ convmerge tokens -i ./train/decontam.jsonl --tokenizer Qwen/Qwen2.5-7B-Instruct 
 # it errors rather than splitting duplicate/--keys groups across train and validation.
 convmerge split -i ./train/fit.jsonl -o ./train/train.jsonl --val 0.02   # + train.val.jsonl
 
+# Vision-language data: check that every image/audio/video reference exists (local
+# paths; --check-urls requests each URL once). -o keeps the rows that pass.
+convmerge media -i ./train/vl.jsonl --root ./data -o ./train/vl.ok.jsonl
+
 # For trainers that take plain text: {"text": ...} rendered with the model's chat
 # template (meta kept). --assistant-spans adds the [start, end) character offsets
 # of the assistant turns to train on. Run it last. Needs convmerge[tokens].
