@@ -207,6 +207,39 @@ Each step writes to a hidden `.part` path and is renamed into place only
 when it succeeds, so a failed run leaves the previous outputs and the lock
 file intact.
 
+## Reading a run (`convmerge report`)
+
+```bash
+convmerge report recipe.yaml                          # Markdown to stdout
+convmerge report recipe.yaml --html build/report.html # one self-contained page
+convmerge report recipe.yaml --card README.md --title my-sft-mix
+```
+
+`report` reads what the last `convmerge run` wrote (`report.json`, the lock
+file, and the output) and shows:
+
+- **Sources**: where each came from, its license (⚠ marks a license that
+  needs a look), rows read, rows after conversion, and rows taken into the
+  mix.
+- **Steps**: rows in, rows out, and why the rest were dropped, per step
+  (convert, mix, dedupe, filter, decontam, tokens, split). A filter row can
+  match several rules, so its rule counts can add up to more than it
+  removed.
+- **Examples of removed rows**: the samples the steps recorded. Line numbers
+  are lines of that step's input file.
+- **Output**: user turns per row and final-answer length in characters,
+  read from the output file (`--no-scan` skips that).
+
+`--card PATH` writes a dataset card: a `README.md` with Hub front matter
+(`license` is the sources' license when they share one, else `other`;
+`size_categories`; the `convmerge` tag), the source table with licenses, the
+step table, and how to rebuild the file from the recipe and its lock. The
+card is written locally only; convmerge does not upload anything. Review it
+and add what only you know (intended use, known gaps) before you publish it.
+
+The report and card describe the run that is on disk: run the recipe first,
+and run `report` again after the next run.
+
 ## Using recipes in CI
 
 Commit the recipe and the lock file. `convmerge run recipe.yaml --frozen`

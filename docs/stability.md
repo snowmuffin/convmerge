@@ -11,8 +11,10 @@ and changed nothing else ([migration-1.0.md](migration-1.0.md)).
 ### Python API
 
 - The names in `convmerge.__all__` ([api.md](api.md)).
-- The names in `convmerge.recipe.__all__` and `convmerge.fetch.__all__`
-  (these two modules are public as modules).
+- The names in `convmerge.recipe.__all__`, `convmerge.fetch.__all__` and
+  `convmerge.report.__all__` (these modules are public as modules). The
+  summary dict `convmerge.report` builds and the text it renders may gain
+  keys and sections in minor versions.
 - For each of those: the import path, the parameter names and kinds
   (positional vs keyword-only), defaults, return types, and dataclass fields.
   New optional keyword parameters and new fields may be added in minor
