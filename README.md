@@ -94,32 +94,33 @@ preference layouts, and a tool-calling mix checked against a Qwen chat template.
 ## Install
 
 ```bash
-pip install convmerge                    # core: convert, dedupe, filter, decontam; normalize for .json/.jsonl
-pip install "convmerge[all]"             # full CLI: fetch (HF+GitHub), parquet, YAML presets, tokens, near dedupe
+pip install convmerge                    # core: every JSONL command, YAML recipes/presets/manifests, GitHub fetch
+pip install "convmerge[all]"             # full CLI: + Hugging Face fetch, parquet, xlsx, tokens, near dedupe
 ```
 
 Granular extras:
 
 ```bash
-pip install "convmerge[fetch]"           # YAML manifests + GitHub (PyYAML)
-pip install "convmerge[fetch-all]"       # fetch + HuggingFace (``datasets``)
+pip install "convmerge[fetch-all]"       # fetch from Hugging Face (``datasets``)
 pip install "convmerge[fetch-hf]"        # same dependencies as ``fetch-all`` (backward-compatible name)
 pip install "convmerge[parquet]"         # Parquet input for ``normalize``
-pip install "convmerge[preset]"          # YAML convert presets (`--preset`, `preset validate`)
 pip install "convmerge[tokens]"          # `tokens`: lengths + chat-template checks (transformers, no PyTorch)
 pip install "convmerge[quality]"         # `dedupe --near`: near-duplicate removal (datasketch)
 pip install "convmerge[xlsx]"            # Excel (.xlsx) input for ``normalize`` (openpyxl)
 ```
 
+PyYAML is part of the core install since 1.8, so YAML recipes, presets,
+manifests and mix configs need no extra. `convmerge[fetch]` and
+`convmerge[preset]` still install (they add nothing) so existing commands
+keep working.
+
 | Command / feature | Extra |
 |-------------------|--------|
-| `convert`, `dedupe`, `filter`, `decontam` (local eval files), `turns`, `split`, `llamafactory-info`, `axolotl-config` | *(core)* |
+| `convert`, `dedupe`, `filter`, `decontam` (local eval files), `turns`, `split`, `order`, `media`, `report`, `llamafactory-info`, `axolotl-config`, YAML recipes / presets / manifests, `fetch` from GitHub | *(core)* |
 | `normalize` on `.parquet` | `[parquet]` |
 | `normalize` on `.xlsx` | `[xlsx]` |
-| `fetch` with YAML manifest or GitHub | `[fetch]` |
 | `fetch` with HuggingFace manifest entries | `[fetch-all]` or `[fetch-hf]` |
-| `convert --preset`, `preset` | `[preset]` |
-| `tokens` | `[tokens]` |
+| `tokens`, `render` | `[tokens]` |
 | `dedupe --near` | `[quality]` |
 | `decontam --against hf:...` | `[fetch-all]` or `[fetch-hf]` |
 | Everything above | `[all]` |
@@ -208,7 +209,7 @@ convmerge convert -i ./jsonl/alpaca.jsonl -o ./train/alpaca.messages.jsonl \
 convmerge convert -i ./jsonl/mixed.jsonl -o ./train/mixed.messages.jsonl \
   --from auto --format messages         # auto-detecting chat adapter
 
-# Optional: YAML preset (pip install "convmerge[preset]")
+# Optional: a YAML preset
 convmerge preset init -o convert_preset.yaml
 convmerge preset validate convert_preset.yaml
 convmerge convert -i ./jsonl/mixed.jsonl -o ./out.jsonl --preset convert_preset.yaml
@@ -280,7 +281,7 @@ convmerge mix \
      ./train/general.messages.jsonl:0.3 \
   -o ./train/mixed.jsonl --total 100000 --seed 42
 
-# Or via a config file (YAML requires convmerge[preset])
+# Or via a YAML or JSON config file
 convmerge mix mix.yaml
 ```
 

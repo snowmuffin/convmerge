@@ -23,8 +23,7 @@ def _add_convert(sub: argparse._SubParsersAction) -> None:
     p = sub.add_parser(
         "convert",
         help="Convert a JSONL file using a source adapter and output format",
-        description="Convert a JSONL file using a source adapter and output format. "
-        "YAML presets require convmerge[preset].",
+        description="Convert a JSONL file using a source adapter and output format.",
     )
     p.add_argument("--input", "-i", type=Path, required=True, help="Input JSONL path")
     p.add_argument("--output", "-o", type=Path, required=True, help="Output JSONL path")
@@ -32,7 +31,7 @@ def _add_convert(sub: argparse._SubParsersAction) -> None:
         "--preset",
         type=Path,
         default=None,
-        help="YAML/JSON preset file (install convmerge[preset] for YAML)",
+        help="YAML/JSON preset file",
     )
     p.add_argument(
         "--from",
@@ -551,8 +550,8 @@ def _cmd_formats(args: argparse.Namespace) -> None:
 def _add_preset(sub: argparse._SubParsersAction) -> None:
     p = sub.add_parser(
         "preset",
-        help="Create or validate convert preset files (install convmerge[preset] for YAML)",
-        description="Create or validate convert preset files. YAML requires convmerge[preset].",
+        help="Create or validate convert preset files (YAML or JSON)",
+        description="Create or validate convert preset files (YAML or JSON).",
     )
     subp = p.add_subparsers(dest="preset_action", required=True)
     pi = subp.add_parser("init", help="Write a commented YAML template")

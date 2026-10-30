@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- PyYAML is a core dependency: YAML recipes, presets, fetch manifests, mix
+  configs and rules files work with `pip install convmerge`. The `[fetch]`
+  and `[preset]` extras add nothing now and are kept so existing install
+  commands keep working.
+
 ### Added
 
 - `convert --keep-fields helpfulness,correctness` (`keep_fields` in a recipe

@@ -28,13 +28,14 @@ convmerge fetch manifest.yaml -o ./raw
 
 | Extra         | Pulls in              | Required for                   |
 |---------------|-----------------------|--------------------------------|
-| `fetch`       | `pyyaml`              | manifest parsing, GitHub only  |
-| `fetch-hf`    | `pyyaml`, `datasets`  | HuggingFace entries            |
+| *(core)*      | `pyyaml`              | manifest parsing, GitHub only  |
+| `fetch-hf`    | `datasets`            | HuggingFace entries            |
 | `fetch-all`   | same as `fetch-hf`    | alias; kept for compatibility   |
-| `all`         | `pyyaml`, `datasets`, `pyarrow` | full CLI (includes fetch + parquet + presets) |
+| `fetch`       | nothing new           | kept for compatibility (PyYAML is core since 1.8) |
+| `all`         | `datasets`, `pyarrow`, … | full CLI |
 
-Raw GitHub URLs and the Trees API use Python's `urllib.request` — no extra
-dependency for pure-GitHub manifests beyond PyYAML.
+Raw GitHub URLs and the Trees API use Python's `urllib.request`, so
+pure-GitHub manifests need only the core install.
 
 Downloads are streamed to disk. When a `raw.githubusercontent.com` URL (or a
 file in `mode: tree`) turns out to be a Git LFS pointer, the real object is

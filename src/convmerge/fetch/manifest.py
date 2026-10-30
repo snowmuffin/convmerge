@@ -72,17 +72,8 @@ def sanitize_name(name: str) -> str:
 
 
 def load_manifest(path: str | Path) -> Manifest:
-    """Parse a YAML manifest file into a :class:`Manifest`.
-
-    Raises ``ImportError`` with an install hint if PyYAML is not available.
-    """
-    try:
-        import yaml
-    except ImportError as e:
-        raise ImportError(
-            "pyyaml is required for fetch manifests. "
-            "Install with: pip install 'convmerge[fetch]' (or [all])"
-        ) from e
+    """Parse a YAML manifest file into a :class:`Manifest`."""
+    import yaml
 
     with open(path, encoding="utf-8") as f:
         raw = yaml.safe_load(f) or {}

@@ -665,13 +665,8 @@ def load_rules_file(path: str | Path) -> dict[str, Any]:
     if p.suffix.lower() == ".json":
         raw = json.loads(text)
     else:
-        try:
-            import yaml
-        except ImportError as e:
-            raise ImportError(
-                "YAML rules files need PyYAML: pip install 'convmerge[preset]', "
-                "or write the file as JSON"
-            ) from e
+        import yaml
+
         raw = yaml.safe_load(text)
     if not isinstance(raw, dict):
         raise ValueError(f"{path}: expected a mapping")

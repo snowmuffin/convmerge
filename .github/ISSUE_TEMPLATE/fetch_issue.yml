@@ -23,7 +23,7 @@ body:
       description: Which extras did you install? (select all that apply)
       multiple: true
       options:
-        - "[fetch] (GitHub only)"
+        - "[fetch] (GitHub only; adds nothing to the core since 1.8)"
         - "[fetch-hf] or [fetch-all] (HuggingFace; same deps)"
         - "[all]"
         - "[parquet]"
