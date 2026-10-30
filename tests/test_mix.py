@@ -516,3 +516,114 @@ def test_config_sampler_key(tmp_path):
     cfg.write_text(json.dumps({"sampler": "fast", "sources": [{"path": str(src), "weight": 1}]}))
     with pytest.raises(ValueError, match="sampler"):
         load_mix_config(cfg)
+
+
+def _mix_digest_sources(tmp_path):
+    a, b = tmp_path / "a.jsonl", tmp_path / "b.jsonl"
+    a.write_text("".join(json.dumps({"s": "a", "i": i}) + "\n" + ("{bad\n" if i % 50 == 7 else "")
+                         for i in range(400)))  # fmt: skip
+    b.write_text("".join(json.dumps({"s": "b", "i": i}) + "\n" for i in range(90)))
+    return [MixSource(a, 3.0), MixSource(b, 1.0)]
+
+
+# sha256 of the output lines joined by "\n", as written by convmerge 1.6.5:
+# the v2 sampler's output for a seed must not change between releases.
+_V2_DIGESTS = {
+    "skip": ({"total": 600}, "2179a491becc26ed5b330e1336b85e05403f6cd6810f2a87e3d460e7260d38fb"),
+    "extra": ({"total": 200}, "5fbd1e6e7aca459bf620163d628417a375e220bf27b0a10cc4b641843afddcea"),
+    "over": ({"total": 1500, "oversample": True},
+             "39f4bf98c5baa7c5fd07cf1bd5673965ac54c684e2bef647e0df393083e99940"),
+}  # fmt: skip
+
+
+@pytest.mark.parametrize("max_open", [None, 2, 3])
+@pytest.mark.parametrize("case", sorted(_V2_DIGESTS))
+def test_v2_output_is_pinned_across_open_file_limits(tmp_path, monkeypatch, case, max_open):
+    import hashlib
+
+    import convmerge.mix as mixmod
+
+    monkeypatch.setattr(mixmod, "_BUCKET_LINES", 40)  # 5 to 38 buckets
+    if max_open is not None:  # buckets share files, split in several stages
+        monkeypatch.setattr(mixmod, "_MAX_OPEN_FILES", max_open)
+    kwargs, digest = _V2_DIGESTS[case]
+    out = tmp_path / "out.jsonl"
+    mix_files(_mix_digest_sources(tmp_path), out, seed=7, **kwargs)
+    lines = out.read_text().splitlines()
+    assert hashlib.sha256("\n".join(lines).encode()).hexdigest() == digest
+
+
+def test_v2_many_buckets_under_a_low_open_file_limit(tmp_path, monkeypatch):
+    """More buckets than open files: they share files instead of failing."""
+    resource = pytest.importorskip("resource")
+    import os
+
+    import convmerge.mix as mixmod
+
+    if not os.path.isdir("/proc/self/fd"):
+        pytest.skip("needs /proc/self/fd to count open files")
+    monkeypatch.setattr(mixmod, "_BUCKET_LINES", 2)
+    monkeypatch.setattr(mixmod, "_MAX_OPEN_FILES", 16)
+    src = tmp_path / "src.jsonl"
+    write_jsonl(src, [{"x": i} for i in range(1000)])  # 500 buckets
+    soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
+    limit = len(os.listdir("/proc/self/fd")) + 32
+    resource.setrlimit(resource.RLIMIT_NOFILE, (limit, hard))
+    try:
+        result = mix_files([MixSource(src, 1.0)], tmp_path / "out.jsonl", seed=3)
+    finally:
+        resource.setrlimit(resource.RLIMIT_NOFILE, (soft, hard))
+    rows = sorted(json.loads(x)["x"] for x in _lines(tmp_path / "out.jsonl"))
+    assert result.total_written == 1000 and rows == list(range(1000))
+
+
+@pytest.mark.parametrize("stage", ["write", "split"])
+def test_v2_failure_leaves_no_temp_files_or_output(tmp_path, monkeypatch, stage):
+    import convmerge.mix as mixmod
+
+    monkeypatch.setattr(mixmod, "_BUCKET_LINES", 5)
+    monkeypatch.setattr(mixmod, "_MAX_OPEN_FILES", 3)  # 10 buckets in 3 files
+    if stage == "write":
+        target, name = mixmod._Buckets, "write"
+    else:
+        target, name = mixmod, "_bucket_lines"
+    real, calls = getattr(target, name), []
+
+    def full(*args):
+        calls.append(1)
+        if len(calls) == 7:
+            raise OSError(28, "No space left on device")
+        return real(*args)
+
+    monkeypatch.setattr(target, name, full)
+    src = tmp_path / "src.jsonl"
+    write_jsonl(src, [{"x": i} for i in range(50)])
+    out = tmp_path / "out.jsonl"
+    out.write_text("previous\n")
+    with pytest.raises(OSError, match="No space"):
+        mix_files([MixSource(src, 1.0)], out, seed=1)
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["out.jsonl", "src.jsonl"]
+    assert out.read_text() == "previous\n"
+
+
+def test_v2_buckets_free_disk_while_the_output_grows(tmp_path, monkeypatch):
+    import convmerge.mix as mixmod
+
+    monkeypatch.setattr(mixmod, "_BUCKET_LINES", 10)
+    monkeypatch.setattr(mixmod, "_MAX_OPEN_FILES", 4)
+    left: list[int] = []
+    real = mixmod._Buckets.contents
+
+    def contents(self):
+        for lines in real(self):
+            left.append(sum(p.stat().st_size for p in tmp_path.glob(".convmerge-mix-*/*")))
+            yield lines
+
+    monkeypatch.setattr(mixmod._Buckets, "contents", contents)
+    src = tmp_path / "src.jsonl"
+    write_jsonl(src, [{"x": i} for i in range(200)])
+    mix_files([MixSource(src, 1.0)], tmp_path / "out.jsonl", seed=2)
+    size = (tmp_path / "out.jsonl").stat().st_size
+    # Read buckets are deleted at once: nothing is left by the last bucket, and
+    # splitting a shared file never needs a second copy of the whole output.
+    assert len(left) == 20 and left[-1] == 0 and max(left) < 1.6 * size
