@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Documentation
+
+- [Score-filter study results](docs/score-filter.md): training SmolLM2-135M
+  on the best human-rated HelpSteer2 rows gave the same eval loss as random
+  rows at the same token count (2.605 against 2.601, inside the seed
+  spread), and no behaviour metric differed. Gate A fails, as the
+  pre-registered design defines it: model-based features stay at labeling,
+  and score-based filtering is not promoted as a quality step.
+  `docs/quality.md` and the README say so.
+
 ## [1.8.0] - 2026-10-30
 
 Steps around the conversion that used to need a script of your own: score

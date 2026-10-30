@@ -85,7 +85,10 @@ sources prepared by common scripts and by a convmerge recipe. It found no
 behaviour difference, and a slightly lower eval loss for the scripts, which
 put 1.7 times as many tokens into the same number of steps. convmerge saves
 the conversion work and shows what the data contains. This study found no
-sign that it makes a small model better.
+sign that it makes a small model better. A second study
+([docs/score-filter.md](docs/score-filter.md)) trained on the best
+human-rated rows of a dataset against random rows at the same token count,
+and found no difference either.
 
 Three complete recipes with real datasets are in
 [examples/recipes](examples/recipes): a Korean SFT mix, a DPO mix of three

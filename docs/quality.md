@@ -89,8 +89,11 @@ is below the minimum is dropped, and its sample in the report reads like
 same; a minimum given on the command line wins for that field.
 
 The rule checks the row's own values; it does not say whether higher-scored
-rows train a better model. That is what the
-[score-filter study](design/score-filter-study.md) tests.
+rows train a better model. The [score-filter study](score-filter.md) tested
+that with human helpfulness ratings: a small model trained only on the
+best-rated rows did no better than one trained on random rows with the same
+token count. Use `--meta-min` to apply a threshold you have a reason for,
+not as a general quality step.
 
 ### Report
 
