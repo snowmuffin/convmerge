@@ -68,6 +68,13 @@ What the command adapts to:
   Nemotron's `metadata.train_turns`); the entry gets the same
   `message_field_training: train`.
 
+- **Rendered text:** `{"text": ...}` files from
+  [`convmerge render`](../format.md#rendered-text-convmerge-render) get
+  `type: completion` (`field: text`). Completion trains on every token,
+  prompts included, and axolotl does not read `assistant_spans`; the
+  snippet says so in a comment. For answer-only loss, point axolotl at the
+  `messages` file with `type: chat_template`.
+
 ## DPO
 
 ```bash

@@ -373,6 +373,10 @@ def _cmd_llamafactory_info(args: argparse.Namespace) -> None:
     except ValueError as e:
         print(f"error: {e}", file=sys.stderr)
         sys.exit(1)
+    if entry.get("columns") == {"prompt": "text"}:
+        print("note: rendered text is read by stage: pt, which trains on every token; "
+              "for supervised fine-tuning, use a sharegpt or messages file",
+              file=sys.stderr)  # fmt: skip
     if args.info is None:
         print(json.dumps({args.name: entry}, ensure_ascii=False, indent=2))
         return
