@@ -1,7 +1,7 @@
 name: Datasets
 
 # Converts real rows of every dataset in tests/datasets/catalog.json, streamed
-# from the Hugging Face Hub, the way the README table says. Catches dataset
+# from the Hugging Face Hub, the way the catalog says. Catches dataset
 # schema changes and catalog records that do not match the real data.
 # Gated datasets are checked only when the HF_TOKEN secret is set.
 

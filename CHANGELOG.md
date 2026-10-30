@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Documentation
+
+- The README no longer carries the tested-datasets table, Hub dataset IDs in
+  its examples, or other projects named as alternatives; examples use
+  placeholders (`your-org/your-dataset`). The catalog
+  (`tests/datasets/catalog.json`) and its weekly check on real rows stay;
+  `scripts/datasets.py table`, which only wrote that README table, is removed.
+
 ## [1.7.0] - 2026-10-30
 
 Bounded memory for near-duplicate removal and for large mixes, written

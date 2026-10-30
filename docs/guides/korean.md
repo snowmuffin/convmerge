@@ -8,8 +8,7 @@ convmerge로 흩어져 있는 한국어 데이터셋을 모아 하나의 학습 
 ## 검증된 한국어 데이터셋
 
 아래 데이터셋은 테스트에서 변환하고, 매주 도는 `Datasets` 워크플로가 Hugging Face의
-실제 행으로 다시 확인합니다([README의 표](../../README.md#tested-datasets)에서
-`ko`로 표시됨).
+실제 행으로 다시 확인합니다(`tests/datasets/catalog.json`에서 `lang`이 `ko`인 항목).
 
 | 데이터셋 | 형태 | 라이선스(카드 기준) |
 |---|---|---|
