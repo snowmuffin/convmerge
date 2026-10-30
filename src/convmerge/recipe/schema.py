@@ -151,6 +151,17 @@ class TokensSpec:
 
 
 @dataclass(frozen=True)
+class RenderSpec:
+    tokenizer: str
+    """A Hub model name, or a local directory (then a path relative to the recipe)."""
+    revision: str | None = None
+    chat_template: Path | None = None
+    local: Path | None = None
+    """The tokenizer directory when ``tokenizer`` names one on disk."""
+    assistant_spans: bool = False
+
+
+@dataclass(frozen=True)
 class SplitSpec:
     val_output: Path
     val: float | None = None
@@ -175,6 +186,7 @@ class Recipe:
     tokens: TokensSpec | None = None
     filter: FilterStep | None = None
     decontam: DecontamStep | None = None
+    render: RenderSpec | None = None
 
 
 def load_recipe(path: str | Path) -> Recipe:
@@ -216,6 +228,7 @@ def parse_recipe(raw: Any, *, path: Path) -> Recipe:
             "filter",
             "decontam",
             "tokens",
+            "render",
             "split",
         },  # fmt: skip
         "",
@@ -240,6 +253,7 @@ def parse_recipe(raw: Any, *, path: Path) -> Recipe:
         sources[name] = _source(name, spec, base)
 
     output = base / _str(top["output"], "output")
+    tokens = _tokens(top.get("tokens"), base)
     return Recipe(
         path=path,
         base_dir=base,
@@ -254,9 +268,10 @@ def parse_recipe(raw: Any, *, path: Path) -> Recipe:
         dedupe=_dedupe(top.get("dedupe")),
         auth=auth,
         split=_split(top.get("split"), base, output),
-        tokens=_tokens(top.get("tokens"), base),
+        tokens=tokens,
         filter=_filter(top.get("filter"), base),
         decontam=_decontam(top.get("decontam"), base),
+        render=_render(top.get("render"), base, tokens),
     )
 
 
@@ -663,6 +678,40 @@ def _tokens(raw: Any, base: Path) -> TokensSpec | None:
         revision=revision,
         chat_template=base / _str(template, "tokens.chat_template") if template else None,
         local=local if local.is_dir() else None,
+    )
+
+
+def _render(raw: Any, base: Path, tokens: TokensSpec | None) -> RenderSpec | None:
+    """``render: true`` reuses the ``tokens`` tokenizer; a mapping may name its own."""
+    if raw is None or raw is False:
+        return None
+    spec = {} if raw is True else _mapping(raw, "render")
+    _only(spec, {"tokenizer", "revision", "chat_template", "assistant_spans"}, "render")
+    if "tokenizer" in spec:
+        tokenizer = _str(spec["tokenizer"], "render.tokenizer")
+        revision = spec.get("revision")
+        template = spec.get("chat_template")
+    elif tokens is not None:
+        tokenizer, revision = tokens.tokenizer, spec.get("revision", tokens.revision)
+        template = spec.get("chat_template")
+        if template is None and tokens.chat_template is not None:
+            template = tokens.chat_template.relative_to(base).as_posix()
+    else:
+        raise RecipeError(
+            "render.tokenizer: required unless the recipe has a tokens step to take it from"
+        )
+    if revision is not None:
+        revision = _str(revision, "render.revision")
+    spans = spec.get("assistant_spans", False)
+    if not isinstance(spans, bool):
+        raise RecipeError("render.assistant_spans: expected true or false")
+    local = base / tokenizer
+    return RenderSpec(
+        tokenizer=tokenizer,
+        revision=revision,
+        chat_template=base / _str(template, "render.chat_template") if template else None,
+        local=local if local.is_dir() else None,
+        assistant_spans=spans,
     )
 
 

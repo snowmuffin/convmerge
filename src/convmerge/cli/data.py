@@ -457,6 +457,79 @@ def _add_tokens(sub: argparse._SubParsersAction) -> None:
     p.add_argument("--rejects", type=Path, default=None, help="Write the other rows here")
 
 
+def _add_render(sub: argparse._SubParsersAction) -> None:
+    p = sub.add_parser(
+        "render",
+        help='Write chat-template-rendered text ({"text": ...}) for trainers that take '
+        "plain text, optionally with the assistant spans to train on",
+        description="Render every conversation with the model's chat template into "
+        '{"text": ...} rows (meta is kept). Run it last: filter, decontam and tokens read '
+        'conversations, not text. Needs pip install "convmerge[tokens]" (no PyTorch).',
+    )
+    p.add_argument("--input", "-i", type=Path, required=True)
+    p.add_argument("--output", "-o", type=Path, required=True)
+    p.add_argument(
+        "--tokenizer", required=True, help="Model name on the Hub or a local tokenizer directory"
+    )
+    p.add_argument("--revision", default=None, help="Tokenizer revision (branch, tag, commit)")
+    p.add_argument("--hf-token", default=None, help="Token for gated tokenizers (or HF_TOKEN)")
+    p.add_argument(
+        "--chat-template", type=Path, default=None, metavar="JINJA",
+        help="Use this chat template file instead of the tokenizer's",
+    )  # fmt: skip
+    p.add_argument(
+        "--assistant-spans", action="store_true",
+        help="Add assistant_spans: [start, end) character offsets of the assistant turns to "
+        "train on (rows whose template cannot be split into turns are dropped)",
+    )  # fmt: skip
+
+
+def _cmd_render(args: argparse.Namespace) -> None:
+    from convmerge._paths import protect_paths
+    from convmerge.convert import REPORT_VERSION
+
+    local = Path(args.tokenizer).expanduser()
+    protect_paths(
+        [args.input, args.chat_template, local if local.exists() else None], [args.output]
+    )
+    from convmerge.render import RenderStats, render_jsonl
+    from convmerge.tokens import load_tokenizer
+
+    if not args.input.is_file():
+        print(f"error: input file not found: {args.input}", file=sys.stderr)
+        sys.exit(1)
+    try:
+        template = args.chat_template.read_text(encoding="utf-8") if args.chat_template else None
+        tok = load_tokenizer(args.tokenizer, revision=args.revision, token=args.hf_token)
+    except (ImportError, OSError, ValueError) as e:
+        print(f"error: {e}", file=sys.stderr)
+        sys.exit(2)
+    stats = RenderStats()
+    try:
+        render_jsonl(args.input, args.output, tokenizer=tok, chat_template=template,
+                     assistant_spans=args.assistant_spans, stats=stats)  # fmt: skip
+    except ValueError as e:
+        print(f"error: {e}", file=sys.stderr)
+        sys.exit(2)
+    stats.tokenizer = args.tokenizer
+    print(json.dumps({"version": REPORT_VERSION, **stats.to_report()}, ensure_ascii=False,
+                     indent=2))  # fmt: skip
+    failed = sum(stats.template_errors.values())
+    if failed:
+        top = max(stats.template_errors, key=stats.template_errors.__getitem__)
+        print(f"warning: {count(failed, 'row')} {agree(failed, 'fails', 'fail')} the chat "
+              f"template (most common: {top})", file=sys.stderr)  # fmt: skip
+    if stats.unstable_spans:
+        print(f"warning: {count(stats.unstable_spans, 'row')} dropped: the template does not "
+              "render each turn as a prefix of the next, so assistant spans cannot be placed "
+              "(it drops earlier reasoning: convert with --reasoning-turns last first)",
+              file=sys.stderr)  # fmt: skip
+    if stats.pairs:
+        print(f"warning: {count(stats.pairs, 'preference row')} not rendered; preference "
+              "trainers apply the chat template themselves", file=sys.stderr)  # fmt: skip
+    print(f"wrote {stats.written:,} of {stats.rows:,} rows -> {args.output}", file=sys.stderr)
+
+
 def _cmd_tokens(args: argparse.Namespace) -> None:
     from convmerge._paths import protect_paths
     from convmerge.convert import REPORT_VERSION

@@ -57,6 +57,8 @@ _EXPORTS: dict[str, str] = {
     "SplitStats": "convmerge.split",
     "check_tokens": "convmerge.tokens",
     "TokenStats": "convmerge.tokens",
+    "render_jsonl": "convmerge.render",
+    "RenderStats": "convmerge.render",
     # quality
     "filter_jsonl": "convmerge.quality",
     "FilterSpec": "convmerge.quality",
@@ -96,6 +98,7 @@ __all__ = [
     "MixSource",
     "NearDedupeStats",
     "ReadStats",
+    "RenderStats",
     "SharegptAdapterOptions",
     "SplitStats",
     "TokenStats",
@@ -122,6 +125,7 @@ __all__ = [
     "profile_schema",
     "register_adapter",
     "register_emitter",
+    "render_jsonl",
     "split_by_turns",
     "split_jsonl",
     "validate_example",
@@ -176,6 +180,7 @@ if TYPE_CHECKING:  # pragma: no cover - for type checkers and IDEs only
     from convmerge.normalize.schema import profile_schema
     from convmerge.normalize.turns import analyze_turn_distribution, split_by_turns
     from convmerge.quality import FilterSpec, FilterStats, filter_jsonl
+    from convmerge.render import RenderStats, render_jsonl
     from convmerge.split import SplitStats, split_jsonl
     from convmerge.tokens import TokenStats, check_tokens
     from convmerge.transforms import TransformOptions
