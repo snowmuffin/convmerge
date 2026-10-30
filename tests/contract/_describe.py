@@ -14,7 +14,7 @@ import importlib
 import inspect
 from typing import Any
 
-PUBLIC_MODULES = ("convmerge", "convmerge.recipe", "convmerge.fetch")
+PUBLIC_MODULES = ("convmerge", "convmerge.recipe", "convmerge.fetch", "convmerge.report")
 # Values that change every release rather than by design.
 _VALUE_NOT_PINNED = {"__version__"}
 

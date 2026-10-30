@@ -82,6 +82,14 @@ train = Dataset.from_list(list(convert_records(raw)))
 the message names the key), and `RecipeRunError` (a step failed). See
 [recipes.md](recipes.md).
 
+`convmerge.report` turns a run into something to read:
+`summarize_run(recipe, *, scan=True)` (a dict of sources, steps with rows in
+and out, drop reasons and samples, and, unless `scan=False`, the output's
+turn and answer-length distributions), `render_markdown(summary)`,
+`render_html(summary)` (one self-contained page), and
+`dataset_card(summary, *, title=None)` (`README.md` text with Hub front
+matter). See [recipes.md](recipes.md#reading-a-run-convmerge-report).
+
 ## Fetch
 
 `convmerge.fetch` is public as a module: `load_manifest(path)` parses a

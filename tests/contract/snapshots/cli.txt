@@ -155,3 +155,10 @@
   --github-token
   --init (switch)
   -o, --output
+[convmerge report]
+  recipe
+  --html
+  --markdown
+  --card
+  --title
+  --no-scan (switch)

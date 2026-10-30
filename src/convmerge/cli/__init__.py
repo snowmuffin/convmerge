@@ -55,6 +55,7 @@ _COMMANDS: dict[str, tuple[Callable, Callable]] = {
     "preset": (_convert._add_preset, _convert._cmd_preset),
     "mix": (_mix._add_mix, _mix._cmd_mix),
     "run": (_run._add_run, _run._cmd_run),
+    "report": (_run._add_report, _run._cmd_report),
 }
 
 

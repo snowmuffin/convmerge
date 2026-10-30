@@ -397,12 +397,16 @@ split: { val: 0.02 }                                                 # optional
 convmerge run recipe.yaml --plan     # what would run, and why
 convmerge run recipe.yaml            # fetch → normalize → convert → mix → dedupe → filter → decontam → tokens → split
 convmerge run recipe.yaml --frozen   # CI: fail unless the lock file is current
+convmerge report recipe.yaml --html report.html --card README.md   # read the last run
 ```
 
 Each step is the same command you would type by hand, so the result is
 identical. `recipe.lock.json` records options, convmerge version, and
 input/output digests; the next run repeats only the steps whose inputs or
-options changed. See [docs/recipes.md](docs/recipes.md).
+options changed. `convmerge report` turns the last run's `report.json` into
+a page you can read (sources and licenses, rows kept and dropped at each
+step and why, with examples, turn and answer-length distributions) and a
+dataset card for the output. See [docs/recipes.md](docs/recipes.md).
 
 ## Out of scope
 

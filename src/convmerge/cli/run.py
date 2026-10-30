@@ -137,3 +137,56 @@ def _cmd_run(args: argparse.Namespace) -> None:
         f"report: {recipe.report_path.name}",
         file=sys.stderr,
     )
+
+
+def _add_report(sub: argparse._SubParsersAction) -> None:
+    p = sub.add_parser(
+        "report",
+        help="Render a recipe's last run as readable Markdown or HTML, or write a dataset "
+        "card for its output (nothing is uploaded)",
+    )
+    p.add_argument("recipe", type=Path, help="Recipe YAML/JSON file that has been run")
+    p.add_argument("--html", type=Path, default=None, metavar="PATH",
+                   help="Write a self-contained HTML page here")  # fmt: skip
+    p.add_argument("--markdown", type=Path, default=None, metavar="PATH",
+                   help="Write Markdown here (default: print it if no file is named)")  # fmt: skip
+    p.add_argument("--card", type=Path, default=None, metavar="PATH",
+                   help="Write a dataset card (README.md with Hub front matter) here")  # fmt: skip
+    p.add_argument("--title", default=None, help="--card: dataset name (default: output file stem)")
+    p.add_argument("--no-scan", action="store_true",
+                   help="Skip reading the output for turn and length distributions")  # fmt: skip
+
+
+def _cmd_report(args: argparse.Namespace) -> None:
+    from convmerge._output import atomic_text_writer
+    from convmerge.io import refuse_overwrite
+    from convmerge.recipe import RecipeError, load_recipe
+    from convmerge.report import dataset_card, render_html, render_markdown, summarize_run
+
+    if not Path(args.recipe).is_file():
+        print(f"error: recipe file not found: {args.recipe}", file=sys.stderr)
+        sys.exit(2)
+    try:
+        recipe = load_recipe(args.recipe)
+    except (RecipeError, OSError, ImportError, ValueError) as e:
+        print(f"error: {args.recipe}: {e}", file=sys.stderr)
+        sys.exit(2)
+    outputs = [args.html, args.markdown, args.card]
+    refuse_overwrite([args.recipe, recipe.output, recipe.report_path, recipe.lock_path], outputs)
+    try:
+        summary = summarize_run(recipe, scan=not args.no_scan)
+    except FileNotFoundError:
+        print(f"error: no report at {recipe.report_path}; run the recipe first "
+              f"(convmerge run {args.recipe})", file=sys.stderr)  # fmt: skip
+        sys.exit(1)
+    if not any(outputs):
+        print(render_markdown(summary), end="")
+        return
+    for path, text in ((args.html, lambda: render_html(summary)),
+                       (args.markdown, lambda: render_markdown(summary)),
+                       (args.card, lambda: dataset_card(summary, title=args.title))):  # fmt: skip
+        if path is None:
+            continue
+        with atomic_text_writer(path) as f:
+            f.write(text())
+        print(f"wrote {path}", file=sys.stderr)

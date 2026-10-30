@@ -18,6 +18,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   filter block, `FilterSpec(meta_min=...)`. Rows whose meta value is
   missing, not a number, or below the minimum are dropped; `--meta-key`
   names the key the values are under.
+- `convmerge report recipe.yaml` renders the last run's `report.json` as
+  Markdown (stdout or `--markdown`) or one self-contained HTML page
+  (`--html`): sources with licenses and warnings, rows in and out of every
+  step with drop reasons and examples, and the output's turn and
+  answer-length distributions. `--card README.md` writes a dataset card with
+  Hub front matter (license, size, sources, steps, how to rebuild); nothing
+  is uploaded. The functions are in `convmerge.report`.
 
 ### Documentation
 
