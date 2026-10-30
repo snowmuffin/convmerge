@@ -14,6 +14,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   placeholders (`your-org/your-dataset`). The catalog
   (`tests/datasets/catalog.json`) and its weekly check on real rows stay;
   `scripts/datasets.py table`, which only wrote that README table, is removed.
+- [Score-filter study](docs/design/score-filter-study.md): the draft
+  pre-registered design for testing whether training on the best-scored rows
+  beats random rows at the same token count, the gate before model-based
+  scoring features.
 
 ## [1.7.0] - 2026-10-30
 
