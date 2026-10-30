@@ -280,3 +280,33 @@ def test_fast_loads_matches_json_loads(raw: str) -> None:
             assert depth(got) == depth(expected)
         else:
             assert got == expected
+
+
+def test_json_semantics_baseline(tmp_path: Path) -> None:
+    """What the standard-library parser accepts today (issue #61).
+
+    A faster optional JSON engine must keep these results or document and
+    test each difference; see docs/design/large-scale-strategy.md.
+    """
+    import math
+
+    lines = [
+        '{"v": NaN}', '{"v": Infinity}', '{"v": -Infinity}',
+        '{"v": 1e400}',  # overflows to infinity
+        '{"v": 18446744073709551616}',  # 2**64 stays an exact int
+        '{"v": 1, "v": 2}',  # the last duplicate key wins
+        '\t{"v": "x"}  ',
+        '﻿{"v": 1}',  # a BOM inside the file (not at its start) is unreadable
+    ]  # fmt: skip
+    src = tmp_path / "in.jsonl"
+    src.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    stats = ReadStats()
+    values = [line.value["v"] for line in iter_jsonl(src, stats=stats)]
+    assert math.isnan(values[0]) and values[1:4] == [math.inf, -math.inf, math.inf]
+    assert values[4] == 2**64 and type(values[4]) is int
+    assert values[5:] == [2, "x"]
+    assert (stats.invalid_json, stats.first_invalid_line) == (1, 8)
+    # Rows are written with json.dumps(..., ensure_ascii=False): the same tokens come back.
+    out = [json.dumps({"v": v}, ensure_ascii=False) for v in values[:5]]
+    assert out == ['{"v": NaN}', '{"v": Infinity}', '{"v": -Infinity}', '{"v": Infinity}',
+                   '{"v": 18446744073709551616}']  # fmt: skip
