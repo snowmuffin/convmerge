@@ -59,6 +59,8 @@ _EXPORTS: dict[str, str] = {
     "TokenStats": "convmerge.tokens",
     "render_jsonl": "convmerge.render",
     "check_media": "convmerge.media",
+    "order_jsonl": "convmerge.order",
+    "OrderStats": "convmerge.order",
     "MediaStats": "convmerge.media",
     "RenderStats": "convmerge.render",
     # quality
@@ -100,6 +102,7 @@ __all__ = [
     "MixResult",
     "MixSource",
     "NearDedupeStats",
+    "OrderStats",
     "ReadStats",
     "RenderStats",
     "SharegptAdapterOptions",
@@ -126,6 +129,7 @@ __all__ = [
     "iter_jsonl",
     "mix_files",
     "normalize_to_jsonl",
+    "order_jsonl",
     "profile_schema",
     "register_adapter",
     "register_emitter",
@@ -184,6 +188,7 @@ if TYPE_CHECKING:  # pragma: no cover - for type checkers and IDEs only
     from convmerge.normalize.near_dedup import NearDedupeStats, deduplicate_near_jsonl
     from convmerge.normalize.schema import profile_schema
     from convmerge.normalize.turns import analyze_turn_distribution, split_by_turns
+    from convmerge.order import OrderStats, order_jsonl
     from convmerge.quality import FilterSpec, FilterStats, filter_jsonl
     from convmerge.render import RenderStats, render_jsonl
     from convmerge.split import SplitStats, split_jsonl

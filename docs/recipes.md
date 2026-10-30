@@ -157,7 +157,7 @@ decontam:
 ### Tokens and split
 
 Stages run in this order: sources → `mix` → `dedupe` → `filter` →
-`decontam` → `tokens` → `render` → `split`.
+`decontam` → `tokens` → `order` → `render` → `split`.
 
 | Key | Default | Meaning |
 |-----|---------|---------|
@@ -165,6 +165,7 @@ Stages run in this order: sources → `mix` → `dedupe` → `filter` →
 | `tokens.max_tokens` | — | Drop rows longer than this (a preference pair counts as its longer side). |
 | `tokens.revision` | — | Tokenizer revision; pin it for fully reproducible builds. |
 | `tokens.chat_template` | the tokenizer's | A Jinja file to render with instead (a step input). |
+| `order` | — | `true`, or a mapping with `by` (`length`, `turns`, `meta:FIELD`), `descending`, `stages`, `seed`: curriculum order (see `convmerge order`). `split` keeps the order on both sides. |
 | `render` | — | `true`, or a mapping: write `{"text": ...}` rows rendered with the chat template (see `convmerge render`). The other stages read conversations, so it runs after them. |
 | `render.tokenizer`, `render.revision`, `render.chat_template` | the `tokens` step's | Required when the recipe has no `tokens` step. |
 | `render.assistant_spans` | `false` | Add `assistant_spans`, the character offsets of the assistant turns to train on. |

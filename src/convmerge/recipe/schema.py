@@ -151,6 +151,14 @@ class TokensSpec:
 
 
 @dataclass(frozen=True)
+class OrderSpec:
+    by: str = "length"
+    descending: bool = False
+    stages: int | None = None
+    seed: int = 0
+
+
+@dataclass(frozen=True)
 class RenderSpec:
     tokenizer: str
     """A Hub model name, or a local directory (then a path relative to the recipe)."""
@@ -187,6 +195,7 @@ class Recipe:
     filter: FilterStep | None = None
     decontam: DecontamStep | None = None
     render: RenderSpec | None = None
+    order: OrderSpec | None = None
 
 
 def load_recipe(path: str | Path) -> Recipe:
@@ -228,6 +237,7 @@ def parse_recipe(raw: Any, *, path: Path) -> Recipe:
             "filter",
             "decontam",
             "tokens",
+            "order",
             "render",
             "split",
         },  # fmt: skip
@@ -272,6 +282,7 @@ def parse_recipe(raw: Any, *, path: Path) -> Recipe:
         filter=_filter(top.get("filter"), base),
         decontam=_decontam(top.get("decontam"), base),
         render=_render(top.get("render"), base, tokens),
+        order=_order(top.get("order")),
     )
 
 
@@ -679,6 +690,27 @@ def _tokens(raw: Any, base: Path) -> TokensSpec | None:
         chat_template=base / _str(template, "tokens.chat_template") if template else None,
         local=local if local.is_dir() else None,
     )
+
+
+def _order(raw: Any) -> OrderSpec | None:
+    if raw is None or raw is False:
+        return None
+    spec = {} if raw is True else _mapping(raw, "order")
+    _only(spec, {"by", "descending", "stages", "seed"}, "order")
+    by = _str(spec.get("by", "length"), "order.by")
+    if by not in ("length", "turns") and not (by.startswith("meta:") and by[5:]):
+        raise RecipeError(f"order.by: expected length, turns, or meta:FIELD, got {by!r}")
+    descending = spec.get("descending", False)
+    if not isinstance(descending, bool):
+        raise RecipeError("order.descending: expected true or false")
+    stages = spec.get("stages")
+    if stages is not None and (isinstance(stages, bool) or not isinstance(stages, int)
+                               or stages < 1):  # fmt: skip
+        raise RecipeError("order.stages: expected a positive integer")
+    seed = spec.get("seed", 0)
+    if isinstance(seed, bool) or not isinstance(seed, int):
+        raise RecipeError("order.seed: expected an integer")
+    return OrderSpec(by=by, descending=descending, stages=stages, seed=seed)
 
 
 def _render(raw: Any, base: Path, tokens: TokensSpec | None) -> RenderSpec | None:

@@ -100,6 +100,8 @@ def build_steps(
         stages.append(("decontaminated", lambda src, out: _decontam_step(recipe, src, out)))
     if recipe.tokens is not None:
         stages.append(("filtered", lambda src, out: _tokens_step(recipe, src, out)))
+    if recipe.order is not None:
+        stages.append(("ordered", lambda src, out: _order_step(recipe, src, out)))
     if recipe.render is not None:
         stages.append(("rendered", lambda src, out: _render_step(recipe, src, out)))
     last = converted[names[0]]
@@ -421,6 +423,21 @@ def _tokens_step(recipe: Recipe, src: Path, out: Path) -> Step:
         else None,
     }
     return Step("tokens", "tokens", inputs, out, options, run)
+
+
+def _order_step(recipe: Recipe, src: Path, out: Path) -> Step:
+    from convmerge.order import OrderStats, order_jsonl
+
+    spec = recipe.order
+    assert spec is not None
+
+    def run(stage: Path) -> dict[str, Any]:
+        st = OrderStats()
+        order_jsonl(src, stage, by=spec.by, descending=spec.descending, stages=spec.stages,
+                    seed=spec.seed, stats=st)  # fmt: skip
+        return st.to_report()
+
+    return Step("order", "order", [src], out, dataclasses.asdict(spec), run)
 
 
 def _render_step(recipe: Recipe, src: Path, out: Path) -> Step:

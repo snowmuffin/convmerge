@@ -118,6 +118,13 @@
   --workers default=8
   --output, -o
   --rejects
+[convmerge order]
+  --input, -i required
+  --output, -o required
+  --by default='length'
+  --descending (switch)
+  --stages
+  --seed
 [convmerge llamafactory-info]
   --input, -i required
   --name required

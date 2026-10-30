@@ -457,6 +457,47 @@ def _add_tokens(sub: argparse._SubParsersAction) -> None:
     p.add_argument("--rejects", type=Path, default=None, help="Write the other rows here")
 
 
+def _add_order(sub: argparse._SubParsersAction) -> None:
+    p = sub.add_parser(
+        "order",
+        help="Order rows for curriculum training: by length, turns, or a meta score, "
+        "optionally in stages shuffled within (deterministic for a seed)",
+        description="Rows are written byte-for-byte in the new order. Ties are broken by a "
+        "seeded hash, so the same rows in any order give the same file. Turn off the "
+        "trainer's shuffling for the order to matter.",
+    )
+    p.add_argument("--input", "-i", type=Path, required=True)
+    p.add_argument("--output", "-o", type=Path, required=True)
+    p.add_argument("--by", default="length", metavar="KEY",
+                   help="length (characters), turns (user turns), or meta:FIELD (a number "
+                   "under meta); default length")  # fmt: skip
+    p.add_argument("--descending", action="store_true", help="Largest first")
+    p.add_argument("--stages", type=_positive_int, default=None, metavar="N",
+                   help="Cut the ranked rows into N stages, shuffled within each")  # fmt: skip
+    p.add_argument("--seed", type=int, default=0, help="Tie-break and in-stage shuffle seed")
+
+
+def _cmd_order(args: argparse.Namespace) -> None:
+    from convmerge.convert import REPORT_VERSION
+    from convmerge.order import OrderStats, order_jsonl
+
+    if not args.input.is_file():
+        print(f"error: input file not found: {args.input}", file=sys.stderr)
+        sys.exit(1)
+    stats = OrderStats()
+    try:
+        order_jsonl(args.input, args.output, by=args.by, descending=args.descending,
+                    stages=args.stages, seed=args.seed, stats=stats)  # fmt: skip
+    except ValueError as e:
+        print(f"error: {e}", file=sys.stderr)
+        sys.exit(2)
+    print(json.dumps({"version": REPORT_VERSION, **stats.to_report()}, indent=2))
+    if stats.unranked:
+        print(f"warning: {count(stats.unranked, 'row')} could not be ranked by {args.by} and "
+              "went last", file=sys.stderr)  # fmt: skip
+    print(f"wrote {stats.rows:,} rows -> {args.output}", file=sys.stderr)
+
+
 def _add_media(sub: argparse._SubParsersAction) -> None:
     p = sub.add_parser(
         "media",

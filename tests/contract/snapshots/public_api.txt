@@ -37,6 +37,8 @@ class MediaStats(rows: 'int' = 0, rows_with_media: 'int' = 0, kept: 'int' = 0, r
 class MixResult(total_written: 'int', seed: 'int', output: 'Path', sources: 'list[SourceStats]' = <factory>, sampler: 'str' = 'v2', by: 'str' = 'rows', by_sample: 'int | None' = None, max_tokens: 'int | None' = None) -> None
 class MixSource(path: 'Path', weight: 'float') -> None
 class NearDedupeStats(total: 'int' = 0, kept: 'int' = 0, near_duplicates: 'int' = 0, invalid_json: 'int' = 0, first_invalid_line: 'int | None' = None, threshold: 'float' = 0.8) -> None
+class OrderStats(rows: 'int' = 0, unranked: 'int' = 0, by: 'str' = '', stages: 'list[dict[str, Any]]' = <factory>) -> None
+    def to_report(self) -> 'dict[str, Any]'
 class ReadStats(lines_read: 'int' = 0, blank: 'int' = 0, invalid_json: 'int' = 0, first_invalid_line: 'int | None' = None) -> None
 class RenderStats(rows: 'int' = 0, written: 'int' = 0, unreadable: 'int' = 0, invalid_json: 'int' = 0, pairs: 'int' = 0, template_errors: 'dict[str, int]' = <factory>, unstable_spans: 'int' = 0, no_trained_turn: 'int' = 0, tokenizer: 'str | None' = None) -> None
     def to_report(self) -> 'dict[str, Any]'
@@ -70,6 +72,7 @@ def filter_jsonl(path: 'str | Path', *, spec: 'FilterSpec | None' = None, output
 def iter_jsonl(path: 'str | Path', *, encoding: 'str' = 'utf-8', on_error: 'OnError' = 'skip', stats: 'ReadStats | None' = None, on_invalid: 'Callable[[JsonlDecodeError], None] | None' = None) -> 'Iterator[JsonlLine]'
 def mix_files(sources: 'list[MixSource]', output_path: 'str | Path', *, total: 'int | None' = None, seed: 'int' = 42, oversample: 'bool' = False, encoding: 'str' = 'utf-8', sampler: 'Sampler' = 'v2', by: 'MixUnit' = 'rows', tokenizer: 'Any' = None, by_sample: 'int | None' = None, max_tokens: 'int | None' = None) -> 'MixResult'
 def normalize_to_jsonl(src: 'str | Path', dst: 'str | Path', *, array_key: 'str' = 'conversation') -> 'int'
+def order_jsonl(src: 'str | Path', dst: 'str | Path', *, by: 'str' = 'length', descending: 'bool' = False, stages: 'int | None' = None, seed: 'int' = 0, encoding: 'str' = 'utf-8', stats: 'OrderStats | None' = None) -> 'OrderStats'
 def profile_schema(records: 'Iterable[dict[str, Any]] | str | Path', *, max_rows: 'int | None' = None, max_examples: 'int' = 3) -> 'dict[str, Any]'
 def register_adapter(name: 'str', fn: 'AdapterFn', *, replace: 'bool' = False) -> 'None'
 def register_emitter(name: 'str', fn: 'EmitterFn', *, replace: 'bool' = False) -> 'None'
@@ -82,7 +85,7 @@ def validate_file(input_path: 'str | Path', *, adapter_name: 'str' = 'chat', ada
 [convmerge.recipe]
 class PlannedStep(step: 'Step', action: 'str', reason: 'str') -> None
 RECIPE_TEMPLATE: str
-class Recipe(path: 'Path', base_dir: 'Path', workdir: 'Path', output: 'Path', lock_path: 'Path', report_path: 'Path', sources: 'dict[str, SourceSpec]', mix: 'MixSpec | None', dedupe: 'DedupeSpec | None', auth: 'AuthConfig', split: 'SplitSpec | None' = None, tokens: 'TokensSpec | None' = None, filter: 'FilterStep | None' = None, decontam: 'DecontamStep | None' = None, render: 'RenderSpec | None' = None) -> None
+class Recipe(path: 'Path', base_dir: 'Path', workdir: 'Path', output: 'Path', lock_path: 'Path', report_path: 'Path', sources: 'dict[str, SourceSpec]', mix: 'MixSpec | None', dedupe: 'DedupeSpec | None', auth: 'AuthConfig', split: 'SplitSpec | None' = None, tokens: 'TokensSpec | None' = None, filter: 'FilterStep | None' = None, decontam: 'DecontamStep | None' = None, render: 'RenderSpec | None' = None, order: 'OrderSpec | None' = None) -> None
 class RecipeError(ValueError)
 class RecipeRunError(RuntimeError)
 class RunResult(ran: 'list[str]' = <factory>, skipped: 'list[str]' = <factory>, report: 'dict[str, Any]' = <factory>) -> None
