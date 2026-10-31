@@ -24,10 +24,18 @@ from typing import Any
 
 from convmerge import __version__
 from convmerge._output import _warn_cleanup, atomic_text_writer
-from convmerge.recipe.schema import Recipe, RecipeError, SourceSpec, convert_config_kwargs
+from convmerge.recipe.schema import (
+    LabelSpec,
+    Recipe,
+    RecipeError,
+    SourceSpec,
+    convert_config_kwargs,
+)
 
 LOCK_VERSION = 1
 REPORT_VERSION = 1
+LABEL_CACHE = Path(".convmerge-cache") / "llm.sqlite"
+"""Where ``label`` steps cache model answers, under the recipe's workdir."""
 
 LogFn = Callable[[str], None]
 
@@ -100,6 +108,8 @@ def build_steps(
         stages.append(("decontaminated", lambda src, out: _decontam_step(recipe, src, out)))
     if recipe.tokens is not None:
         stages.append(("filtered", lambda src, out: _tokens_step(recipe, src, out)))
+    for spec in recipe.label:  # after every step that drops rows, before order reads meta
+        stages.append((f"labeled.{spec.name}", _label_maker(recipe, spec)))
     if recipe.order is not None:
         stages.append(("ordered", lambda src, out: _order_step(recipe, src, out)))
     if recipe.render is not None:
@@ -138,6 +148,8 @@ def _check_recipe_paths(recipe: Recipe, steps: list[Step]) -> None:
         inputs.extend([recipe.tokens.local, recipe.tokens.chat_template])
     if recipe.render is not None:
         inputs.extend([recipe.render.local, recipe.render.chat_template])
+    for spec in recipe.label:
+        inputs.extend([spec.rubric, spec.prompt])
     if recipe.mix is not None and recipe.mix.tokenizer:
         local = Path(recipe.mix.tokenizer).expanduser()
         if local.exists():
@@ -438,6 +450,48 @@ def _order_step(recipe: Recipe, src: Path, out: Path) -> Step:
         return st.to_report()
 
     return Step("order", "order", [src], out, dataclasses.asdict(spec), run)
+
+
+def _label_maker(recipe: Recipe, spec: LabelSpec) -> Callable[[Path, Path], Step]:
+    return lambda src, out: _label_step(recipe, spec, src, out)
+
+
+def _label_step(recipe: Recipe, spec: LabelSpec, src: Path, out: Path) -> Step:
+    """``label.NAME``: model answers into meta; the answers are cached under the workdir."""
+    from convmerge.label import LabelStats, label_jsonl
+    from convmerge.llm import Endpoint
+
+    inputs = [src, *(p for p in (spec.rubric, spec.prompt) if p is not None)]
+
+    def run(stage: Path) -> dict[str, Any]:
+        st = LabelStats()
+        label_jsonl(
+            src, stage, endpoint=spec.endpoint, model=spec.model, name=spec.name,
+            classes=spec.classes, scale=spec.scale, question=spec.question,
+            rubric=spec.rubric.read_text(encoding="utf-8") if spec.rubric else None,
+            prompt=spec.prompt.read_text(encoding="utf-8") if spec.prompt else None,
+            meta_key=spec.meta_key, overwrite=spec.overwrite, max_chars=spec.max_chars,
+            cache=recipe.workdir / LABEL_CACHE, api_key_env=spec.api_key_env,
+            allow_external=spec.allow_external, workers=spec.workers, timeout=spec.timeout,
+            max_calls=spec.max_calls, stats=st,
+        )  # fmt: skip
+        return st.to_report()
+
+    # The host, never the URL or a key; workers, timeout and the budget do not
+    # change the output, so changing them does not re-run the step.
+    options = {
+        "host": Endpoint(spec.endpoint, spec.model).host,
+        "model": spec.model,
+        "classes": list(spec.classes) if spec.classes is not None else None,
+        "scale": f"{spec.scale[0]}-{spec.scale[1]}" if spec.scale is not None else None,
+        "question": spec.question,
+        "rubric": _display(spec.rubric, recipe.base_dir) if spec.rubric else None,
+        "prompt": _display(spec.prompt, recipe.base_dir) if spec.prompt else None,
+        "meta_key": spec.meta_key,
+        "overwrite": spec.overwrite,
+        "max_chars": spec.max_chars,
+    }
+    return Step(f"label.{spec.name}", "label", inputs, out, options, run)
 
 
 def _render_step(recipe: Recipe, src: Path, out: Path) -> Step:

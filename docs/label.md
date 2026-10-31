@@ -144,6 +144,14 @@ Exit code 2 means a bad invocation:
 - an external host without `--allow-external`;
 - existing labels without `--overwrite`.
 
+## In a recipe
+
+`label:` takes a list of these steps; each is its own step, `label.NAME`,
+after `tokens` and before `order`. See
+[recipes.md](recipes.md#label). `convmerge report` shows the model, the
+counts and the distribution of values for each one, and the dataset card
+lists the fields a model wrote.
+
 ## Python
 
 ```python

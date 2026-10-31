@@ -1,9 +1,10 @@
 # Design: model labeling (`convmerge label`)
 
 Status: **draft design**. Changes after merge are made by later PRs that cite
-this page. Implemented: the model call layer (`src/convmerge/llm.py`) and
-`convmerge label` ([docs/label.md](../label.md)). Not yet: the recipe
-`label:` step, the `report` section and `mix --group-by`.
+this page. Implemented: the model call layer (`src/convmerge/llm.py`),
+`convmerge label` ([docs/label.md](../label.md)), the recipe `label:` step
+and the `report` section. Not yet: `mix --group-by` and the `run --plan`
+call counts.
 
 ## Why, and what changed
 
@@ -252,9 +253,12 @@ label:
   meta:difficulty}` can read the labels.
 - **One step per entry.** Each list entry is its own step (`label.topic`,
   `label.difficulty`), with its own lock entry.
-- **Step options:** host, model, task, classes or scale, the template hash,
-  and the generation parameters. Changing any of them re-runs that step.
-  Calls the cache already answered cost nothing.
+- **Step options:** host, model, classes or scale, question, the rubric and
+  prompt file names, `meta_key`, `overwrite` and `max_chars`. Changing any
+  of them, a rubric or prompt file's contents (step inputs), or the
+  convmerge version (which carries the built-in prompts and the generation
+  parameters) re-runs that step. Calls the cache already answered cost
+  nothing.
 - **Step inputs:** `rubric` and `prompt` files.
 - **Recipe keys:**
   - `allow_external` and `api_key_env` are recipe keys, never values
@@ -306,7 +310,8 @@ are settled in that release's PR.
 2. The call layer, with the fake-server tests, and `requests` in the core.
    Done: `src/convmerge/llm.py`.
 3. `label`, the recipe step, and the report section. Then release 1.9.0.
-   Done: `label` (`src/convmerge/label.py`).
+   Done: `label` (`src/convmerge/label.py`), the recipe step and the report
+   section.
 4. `mix --group-by` and the `run --plan` cost line. Then release 1.10.0.
 
 ## Decided
