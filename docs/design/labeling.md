@@ -309,7 +309,8 @@ are settled in that release's PR.
 1. This design (docs only). Done.
 2. The call layer, with the fake-server tests, and `requests` in the core.
    Done: `src/convmerge/llm.py`.
-3. `label`, the recipe step, and the report section. Then release 1.9.0.
+3. `label`, the recipe step, and the report section. Then release 1.9.0
+   (released 2026-10-31).
    Done: `label` (`src/convmerge/label.py`), the recipe step and the report
    section.
 4. `mix --group-by` and the `run --plan` cost line. Then release 1.10.0.
