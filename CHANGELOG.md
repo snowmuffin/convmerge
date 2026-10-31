@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- `requests` is a core dependency (lower bound only). It carries the calls of
+  the new internal model call layer (`convmerge.llm`), which talks to an
+  OpenAI-compatible endpoint with a SQLite cache, a host policy (only local
+  and private hosts unless external calls are allowed), retries, an early
+  stop and a call budget. No command uses it yet; `convmerge label` builds on
+  it ([design](docs/design/labeling.md)).
+
 ### Documentation
 
 - [Score-filter study results](docs/score-filter.md): training SmolLM2-135M

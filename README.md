@@ -113,7 +113,8 @@ pip install "convmerge[xlsx]"            # Excel (.xlsx) input for ``normalize``
 ```
 
 PyYAML is part of the core install since 1.8, so YAML recipes, presets,
-manifests and mix configs need no extra. `convmerge[fetch]` and
+manifests and mix configs need no extra. `requests` is also in the core: it
+carries the calls to a model endpoint for the planned labeling step. `convmerge[fetch]` and
 `convmerge[preset]` still install (they add nothing) so existing commands
 keep working.
 

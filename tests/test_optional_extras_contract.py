@@ -90,7 +90,7 @@ def test_error_hints_include_narrow_and_umbrella_extras() -> None:
 def test_yaml_needs_no_extra() -> None:
     # PyYAML is a core dependency since 1.8; [fetch] and [preset] stay as aliases.
     text = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
-    assert 'dependencies = ["pyyaml>=6.0"]' in text
+    assert 'dependencies = ["pyyaml>=6.0", "requests>=2.28"]' in text
     extras = _optional_dependencies()
     assert extras["fetch"] == extras["preset"] == ["pyyaml>=6.0"]
 
