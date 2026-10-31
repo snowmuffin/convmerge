@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.9.0] - 2026-10-31
+
+Model labels, the stage that the score-filter study left in the plan. A
+model answers one question per row (a class, or a point on an integer scale)
+through any OpenAI-compatible server, and the answer goes to `meta`, where
+`report`, `order` and `filter --meta-min` can use it. Answers are cached,
+only local and private hosts are reached unless external calls are allowed,
+and no row is dropped. `requests` joins the core install. Existing commands,
+flags and outputs are unchanged.
+
 ### Added
 
 - `convmerge label` (and `label_jsonl` / `LabelStats`) asks a model one
@@ -61,8 +71,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   stage. It has an OpenAI-compatible call layer with a SQLite cache, a host
   policy (external APIs only when allowed), retries and a call budget. It
   adds `convmerge label` and a recipe `label:` step that write a class or an
-  integer scale to `meta`. No step drops rows by a model score. Not
-  implemented yet.
+  integer scale to `meta`. No step drops rows by a model score. Implemented
+  in this release, except `mix --group-by` and the `run --plan` call counts,
+  which are planned for 1.10.
 
 ## [1.8.0] - 2026-10-30
 
