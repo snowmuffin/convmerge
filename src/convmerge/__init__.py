@@ -61,6 +61,8 @@ _EXPORTS: dict[str, str] = {
     "check_media": "convmerge.media",
     "order_jsonl": "convmerge.order",
     "OrderStats": "convmerge.order",
+    "label_jsonl": "convmerge.label",
+    "LabelStats": "convmerge.label",
     "MediaStats": "convmerge.media",
     "RenderStats": "convmerge.render",
     # quality
@@ -97,6 +99,7 @@ __all__ = [
     "InvalidExampleError",
     "JsonlDecodeError",
     "JsonlLine",
+    "LabelStats",
     "MapSpec",
     "MediaStats",
     "MixResult",
@@ -127,6 +130,7 @@ __all__ = [
     "deduplicate_near_jsonl",
     "filter_jsonl",
     "iter_jsonl",
+    "label_jsonl",
     "mix_files",
     "normalize_to_jsonl",
     "order_jsonl",
@@ -180,6 +184,7 @@ if TYPE_CHECKING:  # pragma: no cover - for type checkers and IDEs only
         register_emitter,
     )
     from convmerge.io import JsonlDecodeError, JsonlLine, ReadStats, iter_jsonl
+    from convmerge.label import LabelStats, label_jsonl
     from convmerge.media import MediaStats, check_media
     from convmerge.mix import MixResult, MixSource, mix_files
     from convmerge.models import ChatMessage, ContentPart, ToolCall, TrainingExample

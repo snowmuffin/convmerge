@@ -1,8 +1,9 @@
 # Design: model labeling (`convmerge label`)
 
 Status: **draft design**. Changes after merge are made by later PRs that cite
-this page. The model call layer is implemented (`src/convmerge/llm.py`);
-`convmerge label` and the rest are not yet.
+this page. Implemented: the model call layer (`src/convmerge/llm.py`) and
+`convmerge label` ([docs/label.md](../label.md)). Not yet: the recipe
+`label:` step, the `report` section and `mix --group-by`.
 
 ## Why, and what changed
 
@@ -91,14 +92,14 @@ can be replaced without touching callers.
   The row's own bytes are not part of the key: the same conversation in
   another file reuses the answer.
 - **Value:**
-  - the raw response text;
-  - the parsed value;
+  - the raw response text, parsed again on every run (a change to the
+    parse rules applies to cached answers);
   - the `model` and `system_fingerprint` fields the server returned, if
     any;
   - the time.
-- **Reuse:** a cached key is never sent again. `--cache-only` makes a missed
-  key a parse failure instead of a call, so a run with a full cache needs no
-  network and no endpoint.
+- **Reuse:** a cached key is never sent again. `--cache-only` turns a missed
+  key into a row with no answer (`null`, counted as a call failure) instead
+  of a call, so a run with a full cache needs no network and no endpoint.
 - **Writes:** one transaction per batch of answers. An interrupted run keeps
   every answer that came back.
 
@@ -305,6 +306,7 @@ are settled in that release's PR.
 2. The call layer, with the fake-server tests, and `requests` in the core.
    Done: `src/convmerge/llm.py`.
 3. `label`, the recipe step, and the report section. Then release 1.9.0.
+   Done: `label` (`src/convmerge/label.py`).
 4. `mix --group-by` and the `run --plan` cost line. Then release 1.10.0.
 
 ## Decided

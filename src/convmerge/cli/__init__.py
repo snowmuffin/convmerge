@@ -1,7 +1,7 @@
 """CLI entrypoint for convmerge.
 
 Each command group lives in its own module (``convert``, ``data``, ``fetch``,
-``mix``) exposing ``_add_<command>`` parser builders and ``_cmd_<command>``
+``label``, ``mix``) exposing ``_add_<command>`` parser builders and ``_cmd_<command>``
 handlers; this module wires them together.
 """
 
@@ -16,6 +16,7 @@ from convmerge import __version__
 from convmerge.cli import convert as _convert
 from convmerge.cli import data as _data
 from convmerge.cli import fetch as _fetch
+from convmerge.cli import label as _label
 from convmerge.cli import mix as _mix
 from convmerge.cli import quality as _quality
 from convmerge.cli import run as _run
@@ -52,6 +53,7 @@ _COMMANDS: dict[str, tuple[Callable, Callable]] = {
     "render": (_data._add_render, _data._cmd_render),
     "media": (_data._add_media, _data._cmd_media),
     "order": (_data._add_order, _data._cmd_order),
+    "label": (_label._add_label, _label._cmd_label),
     "llamafactory-info": (_data._add_llamafactory_info, _data._cmd_llamafactory_info),
     "axolotl-config": (_data._add_axolotl_config, _data._cmd_axolotl_config),
     "fetch": (_fetch._add_fetch, _fetch._cmd_fetch),
