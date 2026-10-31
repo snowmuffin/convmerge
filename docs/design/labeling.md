@@ -1,7 +1,8 @@
 # Design: model labeling (`convmerge label`)
 
 Status: **draft design**. Changes after merge are made by later PRs that cite
-this page. Nothing here is implemented yet.
+this page. The model call layer is implemented (`src/convmerge/llm.py`);
+`convmerge label` and the rest are not yet.
 
 ## Why, and what changed
 
@@ -50,7 +51,8 @@ carries:
 - `messages`: one system turn and one user turn;
 - `temperature: 0`;
 - `max_tokens` (small, set per task);
-- `seed`, when the server reports supporting it.
+- `seed` (0 by default; `seed=None` leaves it out for a server that rejects
+  it).
 
 Nothing else is assumed: no JSON mode, no guided decoding, no tool calls.
 Every server above speaks this subset.
@@ -299,8 +301,9 @@ are settled in that release's PR.
 
 ## Order of work
 
-1. This design (docs only).
+1. This design (docs only). Done.
 2. The call layer, with the fake-server tests, and `requests` in the core.
+   Done: `src/convmerge/llm.py`.
 3. `label`, the recipe step, and the report section. Then release 1.9.0.
 4. `mix --group-by` and the `run --plan` cost line. Then release 1.10.0.
 
