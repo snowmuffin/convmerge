@@ -16,6 +16,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   pre-registered design defines it: model-based features stay at labeling,
   and score-based filtering is not promoted as a quality step.
   `docs/quality.md` and the README say so.
+- [Labeling design](docs/design/labeling.md): the plan for the reduced model
+  stage. It has an OpenAI-compatible call layer with a SQLite cache, a host
+  policy (external APIs only when allowed), retries and a call budget. It
+  adds `convmerge label` and a recipe `label:` step that write a class or an
+  integer scale to `meta`. No step drops rows by a model score. Not
+  implemented yet.
 
 ## [1.8.0] - 2026-10-30
 
