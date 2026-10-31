@@ -125,6 +125,27 @@
   --descending (switch)
   --stages
   --seed
+[convmerge label]
+  --input, -i required
+  --output, -o required
+  --endpoint required
+  --model required
+  --name required
+  --classes
+  --scale
+  --question
+  --rubric
+  --prompt
+  --meta-key default='meta'
+  --overwrite (switch)
+  --max-chars default=8000
+  --cache
+  --cache-only (switch)
+  --api-key-env
+  --allow-external (switch)
+  --workers default=4
+  --timeout default=60.0
+  --max-calls
 [convmerge llamafactory-info]
   --input, -i required
   --name required

@@ -7,14 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `convmerge label` (and `label_jsonl` / `LabelStats`) asks a model one
+  question per row and writes the answer to `meta[NAME]` without dropping
+  rows ([docs](docs/label.md)).
+  - **Tasks:** one class from `--classes`, or an integer on `--scale LO-HI`
+    (with `--question` or `--rubric FILE`). `--prompt FILE` takes a
+    custom template.
+  - **Parsing:** strict, with one retry that quotes the answer; a second
+    failure writes `null`.
+  - **Long rows:** conversations over `--max-chars` (8,000) are cut from the
+    middle.
+  - **Existing labels:** the run refuses to replace them without
+    `--overwrite`.
+  - **Calls:** through the call layer below, with only local and private
+    hosts unless `--allow-external`, a SQLite cache next to the output,
+    `--cache-only`, `--max-calls`, and a stop on 401/403/404.
+  - **Report:** counts, the value distribution and failed answers; the key
+    and full URL are never written.
+
 ### Changed
 
 - `requests` is a core dependency (lower bound only). It carries the calls of
   the new internal model call layer (`convmerge.llm`), which talks to an
   OpenAI-compatible endpoint with a SQLite cache, a host policy (only local
   and private hosts unless external calls are allowed), retries, an early
-  stop and a call budget. No command uses it yet; `convmerge label` builds on
-  it ([design](docs/design/labeling.md)).
+  stop and a call budget. `convmerge label` uses it
+  ([design](docs/design/labeling.md)).
 
 ### Documentation
 

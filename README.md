@@ -114,13 +114,13 @@ pip install "convmerge[xlsx]"            # Excel (.xlsx) input for ``normalize``
 
 PyYAML is part of the core install since 1.8, so YAML recipes, presets,
 manifests and mix configs need no extra. `requests` is also in the core: it
-carries the calls to a model endpoint for the planned labeling step. `convmerge[fetch]` and
+carries the calls `label` makes to a model endpoint. `convmerge[fetch]` and
 `convmerge[preset]` still install (they add nothing) so existing commands
 keep working.
 
 | Command / feature | Extra |
 |-------------------|--------|
-| `convert`, `dedupe`, `filter`, `decontam` (local eval files), `turns`, `split`, `order`, `media`, `report`, `llamafactory-info`, `axolotl-config`, YAML recipes / presets / manifests, `fetch` from GitHub | *(core)* |
+| `convert`, `dedupe`, `filter`, `decontam` (local eval files), `turns`, `split`, `order`, `label`, `media`, `report`, `llamafactory-info`, `axolotl-config`, YAML recipes / presets / manifests, `fetch` from GitHub | *(core)* |
 | `normalize` on `.parquet` | `[parquet]` |
 | `normalize` on `.xlsx` | `[xlsx]` |
 | `fetch` with HuggingFace manifest entries | `[fetch-all]` or `[fetch-hf]` |
@@ -369,6 +369,13 @@ convmerge media -i ./train/vl.jsonl --root ./data -o ./train/vl.ok.jsonl
 # shuffled within (deterministic for --seed). Turn off the trainer's shuffling.
 convmerge order -i ./train/train.jsonl -o ./train/train.ordered.jsonl --by length --stages 3
 
+# Label rows with a model (one class, or a point on a 1-5 scale) into meta, through
+# an OpenAI-compatible server. Local and private hosts only unless --allow-external;
+# answers are cached, so a re-run makes no calls. Nothing is dropped (docs/label.md).
+convmerge label -i ./train/train.jsonl -o ./train/train.labeled.jsonl \
+  --endpoint http://localhost:8000/v1 --model Qwen/Qwen2.5-7B-Instruct \
+  --name topic --classes code,math,writing,other --question "What is this mainly about?"
+
 # For trainers that take plain text: {"text": ...} rendered with the model's chat
 # template (meta kept). --assistant-spans adds the [start, end) character offsets
 # of the assistant turns to train on. Run it last. Needs convmerge[tokens].
@@ -386,7 +393,8 @@ convmerge turns -i ./train/train.jsonl --single-out single.jsonl --multi-out mul
 ```
 
 See [docs/quality.md](docs/quality.md) for the `filter` rules, `decontam`, and
-near dedupe, [docs/format.md](docs/format.md) for adapter / emitter schemas,
+near dedupe, [docs/label.md](docs/label.md) for model labels,
+[docs/format.md](docs/format.md) for adapter / emitter schemas,
 [docs/fetch.md](docs/fetch.md) for manifest details, and
 [docs/api.md](docs/api.md) for the Python API and writing plugins
 (custom adapters / output formats via entry points).
