@@ -159,6 +159,29 @@ class OrderSpec:
 
 
 @dataclass(frozen=True)
+class LabelSpec:
+    """One entry of the ``label:`` list: a ``label.NAME`` step (see docs/label.md)."""
+
+    name: str
+    endpoint: str
+    model: str
+    classes: tuple[str, ...] | None = None
+    scale: tuple[int, int] | None = None
+    question: str | None = None
+    rubric: Path | None = None
+    prompt: Path | None = None
+    meta_key: str = "meta"
+    overwrite: bool = False
+    max_chars: int = 8000
+    # Recipe keys that do not change the output: not step options, never in the lock.
+    api_key_env: str | None = None
+    allow_external: bool = False
+    max_calls: int | None = None
+    workers: int = 4
+    timeout: float = 60.0
+
+
+@dataclass(frozen=True)
 class RenderSpec:
     tokenizer: str
     """A Hub model name, or a local directory (then a path relative to the recipe)."""
@@ -196,6 +219,7 @@ class Recipe:
     decontam: DecontamStep | None = None
     render: RenderSpec | None = None
     order: OrderSpec | None = None
+    label: tuple[LabelSpec, ...] = ()
 
 
 def load_recipe(path: str | Path) -> Recipe:
@@ -232,6 +256,7 @@ def parse_recipe(raw: Any, *, path: Path) -> Recipe:
             "filter",
             "decontam",
             "tokens",
+            "label",
             "order",
             "render",
             "split",
@@ -259,6 +284,14 @@ def parse_recipe(raw: Any, *, path: Path) -> Recipe:
 
     output = base / _str(top["output"], "output")
     tokens = _tokens(top.get("tokens"), base)
+    labels = _labels(top.get("label"), base)
+    clash = [s.name for s in labels if "label" in sources
+             and s.name in ("fetch", "normalize", "convert")]  # fmt: skip
+    if clash:
+        raise RecipeError(
+            f"label: the step label.{clash[0]} would share its name with the source "
+            "'label'; rename one of them"
+        )
     return Recipe(
         path=path,
         base_dir=base,
@@ -278,6 +311,7 @@ def parse_recipe(raw: Any, *, path: Path) -> Recipe:
         decontam=_decontam(top.get("decontam"), base),
         render=_render(top.get("render"), base, tokens),
         order=_order(top.get("order")),
+        label=labels,
     )
 
 
@@ -706,6 +740,109 @@ def _order(raw: Any) -> OrderSpec | None:
     if isinstance(seed, bool) or not isinstance(seed, int):
         raise RecipeError("order.seed: expected an integer")
     return OrderSpec(by=by, descending=descending, stages=stages, seed=seed)
+
+
+_LABEL_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]*$")
+_LABEL_KEYS = {"name", "endpoint", "model", "classes", "scale", "question", "rubric", "prompt",
+               "meta_key", "overwrite", "max_chars", "api_key_env", "allow_external",
+               "max_calls", "workers", "timeout"}  # fmt: skip
+
+
+def _labels(raw: Any, base: Path) -> tuple[LabelSpec, ...]:
+    """``label:`` is a list; each entry becomes its own ``label.NAME`` step."""
+    if raw is None:
+        return ()
+    if not isinstance(raw, list) or not raw:
+        raise RecipeError("label: expected a non-empty list of label steps")
+    specs = [_label(entry, base, f"label[{i}]") for i, entry in enumerate(raw)]
+    seen: set[str] = set()
+    for spec in specs:
+        if spec.name in seen:
+            raise RecipeError(f"label: the name {spec.name!r} is used twice")
+        seen.add(spec.name)
+    return tuple(specs)
+
+
+def _label(raw: Any, base: Path, where: str) -> LabelSpec:
+    from convmerge.label import parse_scale
+    from convmerge.llm import host_allowed
+
+    spec = _mapping(raw, where)
+    _only(spec, _LABEL_KEYS, where)
+    for key in ("name", "endpoint", "model"):
+        if key not in spec:
+            raise RecipeError(f"{where}.{key}: required")
+    name = _str(spec["name"], f"{where}.name")
+    if not _LABEL_NAME_RE.match(name):
+        raise RecipeError(f"{where}.name: use letters, digits, '_' and '-' (got {name!r})")
+    where = f"label.{name}"
+    endpoint = _str(spec["endpoint"], f"{where}.endpoint")
+    if not endpoint.startswith(("http://", "https://")):
+        raise RecipeError(f"{where}.endpoint: expected an http(s) URL, got {endpoint!r}")
+    allow_external = spec.get("allow_external", False)
+    if not isinstance(allow_external, bool):
+        raise RecipeError(f"{where}.allow_external: expected true or false")
+    if not allow_external and not host_allowed(endpoint):
+        raise RecipeError(
+            f"{where}.endpoint: {endpoint} is not a local or private host; set "
+            "allow_external: true to send rows to it"
+        )
+    if ("classes" in spec) == ("scale" in spec):
+        raise RecipeError(f"{where}: set exactly one of 'classes' or 'scale'")
+    classes: tuple[str, ...] | None = None
+    scale: tuple[int, int] | None = None
+    if "classes" in spec:
+        raw_classes = spec["classes"]
+        if isinstance(raw_classes, str):
+            raw_classes = raw_classes.split(",")
+        if not isinstance(raw_classes, list) or not all(isinstance(c, str) for c in raw_classes):
+            raise RecipeError(f"{where}.classes: expected a list of class names")
+        classes = tuple(c.strip() for c in raw_classes)
+    else:
+        raw_scale = spec["scale"]
+        try:
+            if isinstance(raw_scale, str):
+                scale = parse_scale(raw_scale)
+            elif (isinstance(raw_scale, list) and len(raw_scale) == 2
+                  and all(isinstance(v, int) and not isinstance(v, bool) for v in raw_scale)
+                  and raw_scale[0] < raw_scale[1]):  # fmt: skip
+                scale = (raw_scale[0], raw_scale[1])
+            else:
+                raise ValueError
+        except ValueError:
+            raise RecipeError(f"{where}.scale: expected LO-HI (e.g. 1-5) or [LO, HI]") from None
+    question = spec.get("question")
+    if question is not None:
+        question = _str(question, f"{where}.question")
+
+    def path(key: str) -> Path | None:
+        return base / _str(spec[key], f"{where}.{key}") if key in spec else None
+
+    def number(key: str, default: Any, minimum: float, fractional: bool = False) -> Any:
+        value = spec.get(key, default)
+        if value is None and default is None:
+            return None
+        kinds = (int, float) if fractional else (int,)
+        if isinstance(value, bool) or not isinstance(value, kinds) or value < minimum:
+            what = "a number" if fractional else "an integer"
+            raise RecipeError(f"{where}.{key}: expected {what} of at least {minimum}")
+        return value
+
+    overwrite = spec.get("overwrite", False)
+    if not isinstance(overwrite, bool):
+        raise RecipeError(f"{where}.overwrite: expected true or false")
+    api_key_env = spec.get("api_key_env")
+    if api_key_env is not None:
+        api_key_env = _str(api_key_env, f"{where}.api_key_env")
+    return LabelSpec(
+        name=name, endpoint=endpoint, model=_str(spec["model"], f"{where}.model"),
+        classes=classes, scale=scale, question=question, rubric=path("rubric"),
+        prompt=path("prompt"), meta_key=_str(spec.get("meta_key", "meta"), f"{where}.meta_key"),
+        overwrite=overwrite, max_chars=number("max_chars", 8000, 100),
+        api_key_env=api_key_env, allow_external=allow_external,
+        max_calls=number("max_calls", None, 1), workers=number("workers", 4, 1),
+        timeout=float(number("timeout", 60.0, 0.001, fractional=True)),
+    )  # fmt: skip
 
 
 def _render(raw: Any, base: Path, tokens: TokensSpec | None) -> RenderSpec | None:

@@ -73,6 +73,7 @@ class LabelStats:
     """Counts for one :func:`label_jsonl` call."""
 
     name: str = ""
+    meta_key: str = "meta"
     task: str = ""
     """``classes`` or ``scale``."""
     host: str = ""
@@ -102,6 +103,7 @@ class LabelStats:
     def to_report(self) -> dict[str, Any]:
         return {
             "name": self.name,
+            "meta_key": self.meta_key,
             "task": self.task,
             "host": self.host,
             "model": self.model,
@@ -182,7 +184,7 @@ def label_jsonl(
     ep = Endpoint(endpoint, model, api_key_env=api_key_env, allow_external=allow_external,
                   timeout=timeout, max_tokens=task.max_tokens)  # fmt: skip
     st = stats if stats is not None else LabelStats()
-    st.name, st.task, st.host, st.model = name, task.kind, ep.host, model
+    st.name, st.meta_key, st.task, st.host, st.model = name, meta_key, task.kind, ep.host, model
     st.prompt_sha256 = hashlib.sha256(task.template.encode("utf-8")).hexdigest()
     st.params = ep.params()
     st.values = {str(v): 0 for v in task.points}

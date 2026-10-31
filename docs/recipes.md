@@ -157,7 +157,7 @@ decontam:
 ### Tokens and split
 
 Stages run in this order: sources → `mix` → `dedupe` → `filter` →
-`decontam` → `tokens` → `order` → `render` → `split`.
+`decontam` → `tokens` → `label` → `order` → `render` → `split`.
 
 | Key | Default | Meaning |
 |-----|---------|---------|
@@ -183,10 +183,64 @@ rows whose turns cannot be located (see [format.md](format.md#rendered-text-conv
 by content hash, so duplicates never straddle train and validation; it runs
 as two steps, `split.train` and `split.val`, that re-run independently.
 
+### Label
+
+`label:` is a list. Each entry is its own step, `label.NAME`, which asks a
+model one question per row and writes the answer to `meta.NAME`
+(see [label.md](label.md)). The steps run after every step that drops rows,
+so no call is spent on a row dropped later. They also run before `order`,
+so `order: {by: meta:difficulty}` can read the labels.
+
+```yaml
+label:
+  - name: topic
+    endpoint: http://localhost:8000/v1
+    model: Qwen/Qwen2.5-7B-Instruct
+    classes: [code, math, writing, other]
+    question: What is this conversation mainly about?
+  - name: difficulty
+    endpoint: http://localhost:8000/v1
+    model: Qwen/Qwen2.5-7B-Instruct
+    scale: 1-5
+    rubric: prompts/difficulty.md      # a step input
+    max_calls: 20000
+
+order: {by: "meta:difficulty"}
+```
+
+| Key | Default | Meaning |
+|-----|---------|---------|
+| `name` | *(required)* | The `meta` field to write, and the step name `label.NAME` (letters, digits, `_`, `-`). |
+| `endpoint`, `model` | *(required)* | An OpenAI-compatible base URL and the model it serves. |
+| `classes` / `scale` | *(one required)* | A list of class names (or `a,b,c`), or an integer scale (`1-5` or `[1, 5]`). |
+| `question` | — | What to ask; needed with `classes`, and with `scale` when there is no `rubric`. |
+| `rubric`, `prompt` | — | Files relative to the recipe (step inputs): the scale's rubric, and a custom prompt template. |
+| `meta_key` | `meta` | Write under another key. |
+| `overwrite` | `false` | Replace a label the rows already have; without it, the step fails. |
+| `max_chars` | `8000` | Cut longer conversations from the middle. |
+| `allow_external` | `false` | Allow an endpoint that is not a local or private host. Without it, loading the recipe fails. |
+| `api_key_env` | — | Read the API key from this environment variable. |
+| `max_calls`, `workers`, `timeout` | none, `4`, `60` | The call budget, concurrent requests, and seconds per request. |
+
+The lock records each step's host (never the full URL or a key), model,
+task, classes or scale, question, rubric and prompt files, `meta_key`,
+`overwrite` and `max_chars`. Changing any of these, or the contents of the
+rubric or prompt file, re-runs that step. `allow_external`, `api_key_env`,
+`max_calls`, `workers` and `timeout` do not change the output. They are not
+recorded, and changing them re-runs nothing.
+
+Answers are cached in `WORKDIR/.convmerge-cache/llm.sqlite`. A step that
+re-runs (because the step before it changed, or under `--force`) sends only
+the requests the cache has not seen. When a step stops, the run fails
+naming it, and the answers it received stay cached for the next run. A step
+stops on HTTP 401/403/404, when its first 20 calls all fail, or when it
+reaches `max_calls`.
+
 ## How re-runs are decided
 
 Steps run in order — per source `fetch`/`normalize`/`convert`, then `mix`,
-`dedupe`, `filter`, `decontam`, `tokens`, `split`, and `output` (a copy, when no other step writes the final file).
+`dedupe`, `filter`, `decontam`, `tokens`, `label.NAME`, `order`, `render`, `split`, and
+`output` (a copy, when no other step writes the final file).
 The lock file records, per step, the options, the convmerge version, the
 SHA-256 of every input, and the SHA-256 of the output. A step runs when:
 
@@ -234,13 +288,18 @@ file, and the output) and shows:
   removed.
 - **Examples of removed rows**: the samples the steps recorded. Line numbers
   are lines of that step's input file.
+- **Labels**: for each `label.NAME` step, the model and host that answered
+  (and the model name the server reported), how many rows were labeled,
+  parse and call failures, calls and cache hits, and the count and share of
+  each value. Rows left without a label are listed as `(no label)`.
 - **Output**: user turns per row and final-answer length in characters,
   read from the output file (`--no-scan` skips that).
 
 `--card PATH` writes a dataset card: a `README.md` with Hub front matter
 (`license` is the sources' license when they share one, else `other`;
 `size_categories`; the `convmerge` tag), the source table with licenses, the
-step table, and how to rebuild the file from the recipe and its lock. The
+step table, the fields a model wrote (`label` steps), and how to rebuild the
+file from the recipe and its lock. The
 card is written locally only; convmerge does not upload anything. Review it
 and add what only you know (intended use, known gaps) before you publish it.
 

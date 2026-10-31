@@ -26,6 +26,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     `--cache-only`, `--max-calls`, and a stop on 401/403/404.
   - **Report:** counts, the value distribution and failed answers; the key
     and full URL are never written.
+- Recipe `label:` step: a list where each entry is its own `label.NAME` step,
+  run after `tokens` and before `order` ([recipes.md](docs/recipes.md#label)).
+  - **Lock:** records the host (never the URL or a key), the model, the task
+    and the prompt inputs; a changed rubric or prompt file re-runs the step.
+  - **Recipe keys:** `workers`, `timeout`, `max_calls`, `api_key_env` and
+    `allow_external` are not step options and re-run nothing.
+  - **Cache:** answers are kept in `WORKDIR/.convmerge-cache/llm.sqlite`, so
+    a re-run or `--force` only calls for requests not yet seen.
+  - **Host policy:** an external endpoint without `allow_external: true`
+    fails when the recipe is loaded.
+- `convmerge report` has a section per label step: who answered, counts, and
+  the share of each value. The dataset card lists the fields a model wrote.
 
 ### Changed
 

@@ -68,6 +68,9 @@ def summarize_run(recipe: Any, *, scan: bool = True) -> dict[str, Any]:
         "output": output,
         "sources": sources,
         "steps": [s for name, entry in steps.items() if (s := _step(name, entry)) is not None],
+        "labels": [
+            _label(name, entry) for name, entry in steps.items() if name.startswith("label.")
+        ],
         "license_warnings": list(report.get("license_warnings", [])),
         "shape": None,
     }
@@ -103,7 +106,10 @@ def _step(name: str, entry: dict[str, Any]) -> dict[str, Any] | None:
     reasons: dict[str, int] = {}
     samples: list[dict[str, Any]] = []
     note = None
-    if kind == "convert":
+    if name.startswith("label."):  # before the kind checks: a label may be named "convert"
+        rows_in = rows_out = st.get("rows")
+        note = f"{_n(st.get('labeled'))} labeled into {st.get('meta_key', 'meta')}.{name[6:]}"
+    elif kind == "convert":
         rows_in, rows_out = st.get("lines_read"), st.get("written")
         reasons = dict(st.get("drop_reasons", {}))
         reasons.update(_nonzero(st, "invalid_json", "non_object", "no_example"))
@@ -179,6 +185,44 @@ def _step(name: str, entry: dict[str, Any]) -> dict[str, Any] | None:
         "note": note,
         "samples": samples,
     }
+
+
+def _label(name: str, entry: dict[str, Any]) -> dict[str, Any]:
+    """What a ``label.NAME`` step wrote: who answered, and the distribution of values."""
+    st = entry.get("stats") or {}
+    rows, labeled = st.get("rows") or 0, st.get("labeled") or 0
+    values = [(str(k), v) for k, v in (st.get("values") or {}).items()]
+    if rows > labeled:
+        values.append(("(no label)", rows - labeled))
+    return {
+        "step": name,
+        "field": f"{st.get('meta_key', 'meta')}.{st.get('name') or name[6:]}",
+        "task": st.get("task"),
+        "model": st.get("model"),
+        "served_models": list(st.get("served_models") or []),
+        "host": st.get("host"),
+        "rows": rows,
+        "labeled": labeled,
+        "parse_failures": st.get("parse_failures", 0),
+        "call_failures": st.get("call_failures", 0),
+        "truncated": st.get("truncated", 0),
+        "calls": st.get("calls", 0),
+        "cache_hits": st.get("cache_hits", 0),
+        "values": [{"value": k, "rows": v, "share": v / rows if rows else 0.0} for k, v in values],
+    }
+
+
+def _label_caption(lab: dict[str, Any]) -> str:
+    served = [m for m in lab["served_models"] if m != lab["model"]]
+    by = f"model {lab['model']}" + (f" (served as {', '.join(served)})" if served else "")
+    failures = [f"{_n(lab[k])} {k.replace('_', ' ')}" for k in
+                ("parse_failures", "call_failures", "truncated") if lab[k]]  # fmt: skip
+    return (
+        f"{lab['task'] or '?'} by {by} at {lab['host'] or '?'}: {_n(lab['labeled'])} of "
+        f"{_n(lab['rows'])} rows labeled"
+        + (f" ({', '.join(failures)})" if failures else "")
+        + f"; {_n(lab['calls'])} calls, {_n(lab['cache_hits'])} answers from the cache."
+    )
 
 
 def _nonzero(st: dict[str, Any], *keys: str) -> dict[str, int]:
@@ -315,6 +359,11 @@ def render_markdown(summary: dict[str, Any]) -> str:
         for name, s in examples:
             text = f": {_cell(s['text'])}" if s.get("text") else ""
             lines.append(f"- {name} · {s['reason']} · line {_n(s.get('line'))}{text}")
+    for lab in summary.get("labels", []):
+        lines += ["", f"## Labels: `{lab['field']}`", "", _cell(_label_caption(lab)), "",
+                  "| Value | Rows | Share |", "|---|---:|---:|"]  # fmt: skip
+        lines += [f"| {_cell(v['value'])} | {_n(v['rows'])} | {v['share']:.1%} |"
+                  for v in lab["values"]]  # fmt: skip
     shape = summary.get("shape")
     if shape:
         lines += [
@@ -420,6 +469,20 @@ def render_html(summary: dict[str, Any]) -> str:
                 f"<li><b>{_e(name)}</b> · {_e(s['reason'])} · line {_e(s.get('line'))}{text}</li>"
             )
         body.append("</ul>")
+    for lab in summary.get("labels", []):
+        whole = max((v["rows"] for v in lab["values"]), default=0) or 1
+        body += [
+            f"<h2>Labels: <code>{_e(lab['field'])}</code></h2>",
+            f'<p class="meta">{_e(_label_caption(lab))}</p>',
+            '<div class="scroll"><table><tr><th>Value</th><th class="n">Rows</th>'
+            '<th class="n">Share</th><th></th></tr>',
+        ]
+        body += [
+            f"<tr><td>{_e(v['value'])}</td><td class=n>{_e(v['rows'])}</td>"
+            f"<td class=n>{v['share']:.1%}</td><td>{_bar(v['rows'], whole)}</td></tr>"
+            for v in lab["values"]
+        ]
+        body.append("</table></div>")
     shape = summary.get("shape")
     if shape:
         body += [
@@ -524,6 +587,12 @@ def dataset_card(summary: dict[str, Any], *, title: str | None = None) -> str:
             f"| {_cell(st['name'])} | {_n(st['rows_in'])} | {_n(st['rows_out'])} | "
             f"{_n(st['removed'])} | {_cell(_why(st))} |"
         )
+    if summary.get("labels"):
+        lines += ["", "## Model labels", "",
+                  "These fields were written by a model, not by people:", ""]  # fmt: skip
+        for lab in summary["labels"]:
+            shares = ", ".join(f"{v['value']} {v['share']:.0%}" for v in lab["values"])
+            lines.append(f"- `{lab['field']}`: {_cell(_label_caption(lab))} Values: {shares}.")
     lines += [
         "",
         "## Rebuild",
